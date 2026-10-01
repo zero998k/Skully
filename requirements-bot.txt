@@ -1,0 +1,7 @@
+# Discord bot (run with: python -m bot). The Streamlit radar uses requirements.txt.
+discord.py>=2.4,<3
+httpx>=0.27,<1
+ddgs>=9.0
+beautifulsoup4>=4.12
+python-dotenv>=1.0
+tzdata
