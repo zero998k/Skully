@@ -214,7 +214,8 @@
       symbol: text(pair.baseToken.symbol, 32) || 'Unknown', name: text(pair.baseToken.name, 80) || 'Unknown',
       price: num(pair.priceUsd), liquidity: num(pair.liquidity.usd),
       change5m: num(change.m5), change1h: num(change.h1), change24h: num(change.h24),
-      volume5m: num(volume.m5), volume24h: num(volume.h24), buys5m: num(activity.buys), sells5m: num(activity.sells),
+      volume5m: num(volume.m5), volume1h: num(volume.h1), volume24h: num(volume.h24), change6h: num(change.h6),
+      buys5m: num(activity.buys), sells5m: num(activity.sells),
       marketCap, fdv, valuationUsd: marketCap > 0 ? marketCap : fdv > 0 ? fdv : null,
       valuationKind: marketCap > 0 ? 'market cap' : fdv > 0 ? 'fully diluted value' : null,
       createdAt: num(pair.pairCreatedAt), fetchedAt: now,
@@ -612,6 +613,101 @@
         notes: items.filter(item => !['pass', 'fail'].includes(item.status)).length}};
   }
 
+  // Discover: the coin database and its signals ---------------------------------------
+  // Alert settings: which signals notify you, and how strong they must be.
+  const ALERT_DEFAULTS = {catalyst: true, comeback: true, minLiquidity: 10000, strength: 4,
+    narratives: 'AI, agent, Trump, Elon, cat, dog, frog, pepe, robot, China'};
+  function alertSettings(saved) {
+    const s = saved && typeof saved === 'object' ? saved : {};
+    const liquidity = num(s.minLiquidity), strength = num(s.strength);
+    return {catalyst: s.catalyst !== false, comeback: s.comeback !== false,
+      minLiquidity: liquidity !== null && liquidity >= 0 && liquidity <= 100000000 ? liquidity : ALERT_DEFAULTS.minLiquidity,
+      strength: strength !== null && Number.isInteger(strength) && strength >= 2 && strength <= 8 ? strength : ALERT_DEFAULTS.strength,
+      narratives: typeof s.narratives === 'string' ? s.narratives.slice(0, 400) : ALERT_DEFAULTS.narratives};
+  }
+  function narrativeList(value) {
+    return [...new Set(String(value || '').split(/[,\n]/).map(word => word.trim().toLowerCase()).filter(word => word.length >= 2 && word.length <= 30))].slice(0, 30);
+  }
+  function mentions(haystack, word) {
+    const safe = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('(^|[^a-z0-9])' + safe + (word.length >= 4 ? '' : '([^a-z0-9]|$)')).test(haystack);
+  }
+  const MARKET_FIELDS = ['price', 'liquidity', 'valuationUsd', 'change5m', 'change1h', 'change6h', 'change24h', 'volume5m', 'volume1h', 'volume24h',
+    'buys5m', 'sells5m', 'hasSocials', 'dexId', 'labels', 'fetchedAt', 'sourceUrl'];
+  // Adds a fresh market reading to a coin's record (creates the record the first time).
+  function trackCoin(record, market, now) {
+    const rec = record || {key: market.key, firstSeen: now, history: [], tags: {}};
+    const reading = {};
+    for (const field of MARKET_FIELDS) {
+      const value = market[field];
+      reading[field] = value === undefined || (value === null && rec.market && field === 'hasSocials') ? (rec.market ? rec.market[field] : null) : value;
+    }
+    Object.assign(rec, {chain: market.chain, address: market.address, pair: market.pair, symbol: market.symbol, name: market.name,
+      imageUrl: market.imageUrl || rec.imageUrl || null, createdAt: market.createdAt || rec.createdAt || null, market: reading, seenAt: now});
+    const last = rec.history[rec.history.length - 1];
+    if (last && now - last[0] < 20000) last[1] = market.price;
+    else rec.history = rec.history.concat([[now, market.price]]).slice(-60);
+    if (!(rec.peak > 0) || market.price > rec.peak) Object.assign(rec, {peak: market.price, peakAt: now, low: market.price, lowAt: now});
+    else if (market.price < rec.low) Object.assign(rec, {low: market.price, lowAt: now});
+    return rec;
+  }
+  // Why a coin might move, scored. Plain data signals plus the narratives you follow; Scout can't read X or Telegram.
+  function signals(rec, settings, now) {
+    const m = rec.market || {}, t = rec.tags || {}, reasons = [];
+    let score = 0;
+    const add = (points, text) => { score += points; reasons.push(text); };
+    if (t.cto) add(2, 'Community takeover: a new community team took the project over and is pushing it.');
+    if (t.boost > 0) add(t.boost >= 100 ? 2 : 1, `Paid DexScreener boosts (${t.boost}). Ads bring buyers, but someone paid for them.`);
+    if (t.profile && t.links && t.links.length) add(1, 'Just added a website or socials on DexScreener.');
+    const pace = m.volume1h > 0 ? m.volume1h / 12 : null;
+    if (m.volume5m >= 10000 && pace && m.volume5m >= pace * 3) add(2, `Volume spike: ${compactUsd(m.volume5m)} in 5 minutes, ${(m.volume5m / pace).toFixed(1)}× its pace this hour.`);
+    if (m.buys5m >= 40 && m.buys5m >= 1.8 * Math.max(1, m.sells5m)) add(1, `Buyers rushing in: ${m.buys5m} buys vs ${m.sells5m} sells in 5 minutes.`);
+    if (m.change1h >= 50 && m.liquidity >= 20000) add(1, `Up ${pct(m.change1h)} in the last hour.`);
+    const haystack = [rec.symbol, rec.name, t.description].filter(Boolean).join(' ').toLowerCase();
+    const hit = narrativeList(settings.narratives).find(word => mentions(haystack, word));
+    if (hit) add(2, `Fits a narrative you follow: "${hit}".`);
+    let risky = null;
+    if (!(m.liquidity >= settings.minLiquidity)) risky = `Only ${compactUsd(m.liquidity || 0)} in the pool; your alerts need ${compactUsd(settings.minLiquidity)}.`;
+    else if (m.buys5m >= 30 && m.sells5m < 3) risky = 'Lots of buys and almost no sells: people may not be able to sell (honeypot).';
+    let comeback = null;
+    if (m.change24h !== null && m.change24h <= -40 && m.change1h >= 15 && m.change5m >= 0 && m.buys5m > m.sells5m) {
+      comeback = `Fell ${pct(-m.change24h)} over 24 hours, now up ${pct(m.change1h)} in the last hour with more buyers than sellers.`;
+    } else if (rec.peak > 0 && rec.low <= rec.peak * 0.6 && rec.lowAt > rec.peakAt && m.price >= rec.low * 1.2 && m.change5m > 0) {
+      comeback = `Dropped ${pct((1 - rec.low / rec.peak) * 100)} from its high while Scout watched, now ${pct((m.price / rec.low - 1) * 100)} back up from the low.`;
+    }
+    const age = rec.createdAt ? now - rec.createdAt : null;
+    return {score, reasons, risky, strong: !risky && score >= settings.strength, comeback: risky ? null : comeback,
+      comebackSeen: comeback, isNew: age !== null && age < 3600000};
+  }
+  // What the Discover grid shows for a filter and a search.
+  function feed(records, filter, query, ctx) {
+    const q = String(query || '').trim().toLowerCase();
+    let rows = records.filter(rec => rec.market && rec.market.price > 0 && (!ctx.chain || rec.chain === ctx.chain));
+    if (q) rows = rows.filter(rec => rec.address.toLowerCase() === q || (rec.symbol || '').toLowerCase().includes(q) || (rec.name || '').toLowerCase().includes(q));
+    const sig = rec => ctx.signals(rec);
+    const volume = rec => rec.market.volume5m || 0;
+    if (filter === 'new') rows = rows.filter(rec => rec.createdAt).sort((a, b) => b.createdAt - a.createdAt);
+    else if (filter === 'trending') rows = rows.sort((a, b) => (b.market.volume1h || 0) - (a.market.volume1h || 0));
+    else if (filter === 'catalysts') rows = rows.filter(rec => sig(rec).score >= 2).sort((a, b) => sig(b).score - sig(a).score || volume(b) - volume(a));
+    else if (filter === 'comebacks') rows = rows.filter(rec => sig(rec).comebackSeen).sort((a, b) => volume(b) - volume(a));
+    else if (filter === 'watch') rows = rows.filter(rec => ctx.watch.includes(rec.key)).sort((a, b) => volume(b) - volume(a));
+    else {
+      const rank = rec => { const s = sig(rec); return (s.strong ? 100 : 0) + (s.comeback ? 60 : 0) + s.score * 5 - (s.risky ? 40 : 0); };
+      rows = rows.sort((a, b) => rank(b) - rank(a) || volume(b) - volume(a));
+    }
+    return rows;
+  }
+  // Which alerts a coin earns now; each kind fires at most once per coin every two hours.
+  function alertsFor(rec, sig, settings, sent, now) {
+    const out = [];
+    const fresh = kind => !(sent[rec.key + '|' + kind] > now - 7200000);
+    if (settings.catalyst && sig.strong && fresh('catalyst')) {
+      out.push({kind: 'catalyst', title: `${rec.symbol}: strong catalyst (${sig.score})`, body: sig.reasons.slice(0, 2).join(' ')});
+    }
+    if (settings.comeback && sig.comeback && fresh('comeback')) out.push({kind: 'comeback', title: `${rec.symbol} is coming back`, body: sig.comeback});
+    return out;
+  }
+
   // Steps 4-7: your trades (trade_session.py) ------------------------------------
   function buyBreaks(body, trades, rules, now) {
     const guardState = guard(trades, rules, now), breaks = [];
@@ -774,5 +870,6 @@
     validMint, addressOk, poolIdOk, sameAddress, findAddress, safeImage, axiomUrl,
     normalizeMarket, pickMarket, geckoPairs, geckoChain, poolPrice, riskUnavailable, parseRugcheck, parseGoplus,
     strategyConfig, rulesConfig, costPct, dayKey, guard, planFor, grade,
-    buyBreaks, openTrade, signal, mark, catchUp, closeTrade, liveView, stats, review};
+    buyBreaks, openTrade, signal, mark, catchUp, closeTrade, liveView, stats, review,
+    ALERT_DEFAULTS, alertSettings, narrativeList, trackCoin, signals, feed, alertsFor};
 });

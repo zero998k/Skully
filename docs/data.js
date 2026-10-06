@@ -92,28 +92,63 @@
     }
   }
 
-  // Radar: trending or new pools on one chain (GeckoTerminal), with a DexScreener fallback.
-  async function radar(chain, kind) {
-    const now = Date.now();
-    const list = kind === 'new' ? 'new_pools' : 'trending_pools';
-    try {
-      const payload = await getJson('https://api.geckoterminal.com/api/v2/networks/' + C.GECKO[chain] + '/' + list + '?include=base_token&page=1');
-      const rows = C.geckoPairs(payload, chain).map(pair => C.normalizeMarket([pair], chain, pair.baseToken.address, now)).filter(Boolean);
-      return {rows: dedupe(rows), source: 'GeckoTerminal'};
-    } catch (error) {
-      if (kind === 'new') throw error;
-      const profiles = await getJson('https://api.dexscreener.com/token-profiles/latest/v1');
-      const addresses = [...new Set((Array.isArray(profiles) ? profiles : []).filter(row => row && row.chainId === chain && C.addressOk(chain, row.tokenAddress))
-        .map(row => row.tokenAddress))].slice(0, 30);
-      if (!addresses.length) throw error;
-      const pairs = await getJson('https://api.dexscreener.com/tokens/v1/' + chain + '/' + addresses.join(','));
-      const rows = addresses.map(address => C.normalizeMarket(pairs, chain, address, now)).filter(Boolean);
-      return {rows, source: 'DexScreener (newest token pages: paid listings, not a quality signal)'};
+  // Discover: DexScreener's newest token pages, community takeovers and boosts mark coins with fresh attention.
+  function cleanLinks(row) {
+    const links = [];
+    for (const item of [].concat(row && Array.isArray(row.links) ? row.links : [])) {
+      const url = item && typeof item.url === 'string' && item.url.startsWith('https://') && item.url.length < 300 ? item.url : null;
+      if (url) links.push({label: C.text(item.label || item.type || 'Link', 30) || 'Link', url});
     }
+    return links.slice(0, 6);
   }
-  function dedupe(rows) {
-    const seen = new Set();
-    return rows.filter(row => (seen.has(row.key) ? false : seen.add(row.key)));
+  async function listings(chain) {
+    const urls = {profile: 'https://api.dexscreener.com/token-profiles/latest/v1', cto: 'https://api.dexscreener.com/community-takeovers/latest/v1',
+      boost: 'https://api.dexscreener.com/token-boosts/latest/v1'};
+    const tags = {};
+    let reached = 0;
+    await Promise.all(Object.entries(urls).map(async ([kind, url]) => {
+      let rows;
+      try { rows = await getJson(url, 10000); reached += 1; } catch (error) { return; }
+      for (const row of Array.isArray(rows) ? rows : rows ? [rows] : []) {
+        if (!row || row.chainId !== chain || !C.addressOk(chain, row.tokenAddress)) continue;
+        const tag = tags[row.tokenAddress] = tags[row.tokenAddress] || {};
+        if (kind === 'boost') tag.boost = Math.max(tag.boost || 0, C.num(row.totalAmount) || C.num(row.amount) || 0);
+        else tag[kind] = true;
+        if (!tag.description && row.description) tag.description = C.text(row.description, 280);
+        const links = cleanLinks(row);
+        if (links.length && !(tag.links && tag.links.length)) tag.links = links;
+        if (!tag.imageUrl) tag.imageUrl = C.safeImage(row.icon);
+      }
+    }));
+    if (!reached) throw new DataError('network', "Couldn't reach dexscreener.com.");
+    return tags;
+  }
+  async function geckoList(chain, list, page) {
+    const payload = await getJson('https://api.geckoterminal.com/api/v2/networks/' + C.GECKO[chain] + '/' + list + '?include=base_token&page=' + page, 12000);
+    const now = Date.now();
+    return C.geckoPairs(payload, chain).map(pair => C.normalizeMarket([pair], chain, pair.baseToken.address, now)).filter(Boolean);
+  }
+  // Fresh DexScreener readings for many coins at once (30 per request).
+  async function markets(chain, addresses) {
+    const out = {}, list = [...new Set(addresses)].slice(0, 300);
+    const batches = [];
+    for (let i = 0; i < list.length; i += 30) batches.push(list.slice(i, i + 30));
+    let lastError = null, reached = 0;
+    await Promise.all(batches.map(async batch => {
+      try {
+        const pairs = await getJson('https://api.dexscreener.com/tokens/v1/' + chain + '/' + batch.join(','), 12000);
+        reached += 1;
+        const now = Date.now();
+        for (const address of batch) {
+          const found = C.normalizeMarket(pairs, chain, address, now);
+          if (found) out[address] = found;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+    }));
+    if (batches.length && !reached && lastError) throw lastError;
+    return out;
   }
 
   // Live prices for open trades: DexScreener (exact pool, then the coin's busiest pool), GeckoTerminal as backup.
@@ -173,5 +208,5 @@
       .map(row => [row[0] * 1000, row[1], row[2], row[3], row[4], row[5] || 0]).sort((a, b) => a[0] - b[0]);
   }
 
-  root.ScoutData = {DataError, getJson, market, risk, radar, prices, candles};
+  root.ScoutData = {DataError, getJson, market, risk, listings, geckoList, markets, prices, candles};
 })(typeof self !== 'undefined' ? self : this);

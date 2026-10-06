@@ -4,10 +4,12 @@
 (function () {
   'use strict';
   const C = window.ScoutCore, D = window.ScoutData;
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const STORE = 'scout-ipad-v1';
+  const DB_STORE = 'scout-ipad-coins-v1';
+  const FEED_EVERY = 40000;
   const PRICE_EVERY = 8000;
-  const PAGES = ['trade', 'radar', 'live', 'journal', 'rules'];
+  const PAGES = ['discover', 'alerts', 'trade', 'live', 'journal', 'rules'];
   const STEPS = [['find', 'Find'], ['check', 'Check'], ['plan', 'Plan'], ['buy', 'Buy'], ['watch', 'Watch'], ['review', 'Review']];
   const FEELING_LABELS = {calm: 'Calm', fomo: 'FOMO', scared: 'Scared', greedy: 'Greedy', revenge: 'Revenge', bored: 'Bored'};
   const STATUS_ICON = {pass: '✓', fail: '✕', warn: '!', unknown: '?', info: 'i'};
@@ -49,11 +51,12 @@
     if (typeof href !== 'string' || !href.startsWith('https://')) return null;
     return h('a', {href, target: '_blank', rel: 'noopener noreferrer', class: cls || 'link'}, label);
   }
-  function avatar(symbol, url) {
-    const letters = h('span', {class: 'avatar', 'aria-hidden': 'true'}, String(symbol || '?').replace(/[^\w]/g, '').slice(0, 2).toUpperCase() || '?');
+  function avatar(symbol, url, extra) {
+    const cls = 'avatar' + (extra ? ' ' + extra : '');
+    const letters = h('span', {class: cls, 'aria-hidden': 'true'}, String(symbol || '?').replace(/[^\w]/g, '').slice(0, 2).toUpperCase() || '?');
     const safe = C.safeImage(url);
     if (!safe) return letters;
-    const img = h('img', {class: 'avatar', src: safe, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer'});
+    const img = h('img', {class: cls, src: safe, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer'});
     img.addEventListener('error', () => img.replaceWith(letters), {once: true});
     return img;
   }
@@ -68,7 +71,8 @@
 
   // Saved data (this iPad only) ---------------------------------------------------
   function blank() {
-    return {v: 1, rules: {}, strategy: {preset: 'blitz', edits: {}}, trades: [], checks: [], alerts: [], prefs: {sound: true, awake: true}, hints: {}};
+    return {v: 1, rules: {}, strategy: {preset: 'blitz', edits: {}}, trades: [], checks: [], alerts: [], prefs: {sound: true, awake: true}, hints: {},
+      signalAlerts: C.alertSettings({}), watch: [], inbox: [], sent: {}};
   }
   function cleanTrade(t) {
     if (!t || typeof t !== 'object' || typeof t.id !== 'string' || !/^[\w-]{6,64}$/.test(t.id)) return null;
@@ -111,6 +115,14 @@
       .map(row => ({at: row.at, id: C.text(row.id, 64), symbol: C.text(row.symbol, 24), signal: row.signal, text: C.text(row.text, 300)})).slice(-50);
     data.prefs = {sound: !(saved.prefs && saved.prefs.sound === false), awake: !(saved.prefs && saved.prefs.awake === false)};
     data.hints = {install: Boolean(saved.hints && saved.hints.install)};
+    data.signalAlerts = C.alertSettings(saved.signalAlerts);
+    data.watch = (Array.isArray(saved.watch) ? saved.watch : []).filter(key => typeof key === 'string' && /^[a-z]+:\w{20,70}$/.test(key)).slice(0, 200);
+    data.inbox = (Array.isArray(saved.inbox) ? saved.inbox : []).filter(row => row && finite(row.at) && typeof row.key === 'string' && ['catalyst', 'comeback'].includes(row.kind))
+      .map(row => ({id: C.text(row.id, 40), at: row.at, key: row.key.slice(0, 80), kind: row.kind, symbol: C.text(row.symbol, 24), title: C.text(row.title, 120),
+        body: C.text(row.body, 400), read: Boolean(row.read)})).slice(0, 100);
+    const day = Date.now() - 86400000;
+    data.sent = {};
+    for (const [key, at] of Object.entries(saved.sent && typeof saved.sent === 'object' ? saved.sent : {})) if (finite(at) && at > day) data.sent[key.slice(0, 90)] = at;
     return data;
   }
   function load() {
@@ -127,9 +139,10 @@
   }
 
   const S = {
-    data: load(), page: 'trade',
+    data: load(), page: 'discover',
     flow: {step: 'find', input: '', token: 0},
-    radar: {chain: 'solana', kind: 'trending', rows: null, source: '', at: 0, busy: false, error: null, token: 0},
+    disc: {chain: 'solana', filter: 'foryou', query: '', busy: false, error: null, at: 0, round: 0, shown: 120, lastChain: null},
+    sheet: null,
     live: {error: null, at: 0, reviewed: null},
     alert: null, update: null};
   const rules = () => C.rulesConfig(S.data.rules);
@@ -140,7 +153,8 @@
 
   // Pages -----------------------------------------------------------------------
   function go(page) {
-    if (!PAGES.includes(page)) page = 'trade';
+    if (page === 'radar') page = 'discover';
+    if (!PAGES.includes(page)) page = 'discover';
     S.page = page;
     document.querySelectorAll('.page').forEach(el => { el.hidden = el.dataset.page !== page; });
     document.querySelectorAll('#tabbar [data-go]').forEach(el => {
@@ -150,12 +164,13 @@
     try { history.replaceState(null, '', '#' + page); } catch (error) { /* not important */ }
     renderPage();
     window.scrollTo(0, 0);
-    if (page === 'radar' && !S.radar.busy && (!S.radar.rows || Date.now() - S.radar.at > 60000)) loadRadar();
+    if (page === 'alerts') markAlertsSeen();
   }
   function renderPage() {
     renderTop();
     if (S.page === 'trade') renderFlow();
-    else if (S.page === 'radar') renderRadar();
+    else if (S.page === 'discover') renderDiscover();
+    else if (S.page === 'alerts') renderAlerts();
     else if (S.page === 'live') renderLive();
     else if (S.page === 'journal') renderJournal();
     else if (S.page === 'rules') renderRules();
@@ -179,6 +194,9 @@
     badge.hidden = !count;
     badge.textContent = String(count);
     $('#live-dot').hidden = !count;
+    const unread = S.data.inbox.filter(row => !row.read).length, alertBadge = $('#alert-badge');
+    alertBadge.hidden = !unread;
+    alertBadge.textContent = unread > 99 ? '99+' : String(unread);
     const tab = document.querySelector('#tabbar [data-go="live"]');
     tab.dataset.alarm = openTrades().some(trade => trade.signal !== 'hold') ? 'true' : 'false';
   }
@@ -233,8 +251,8 @@
         h('div', {class: 'chips'}, recent.map(row => h('button', {type: 'button', class: 'chip', 'data-verdict': row.verdict, onclick: () => startCheck(row.address)},
           h('b', {}, row.symbol), h('span', {}, row.title || ''))))) : null,
       h('div', {class: 'card card-quiet split'},
-        h('div', {}, h('h2', {}, 'Need ideas?'), h('p', {}, 'Radar lists coins people are trading right now, with a quick read against your rules.')),
-        h('button', {type: 'button', class: 'secondary', onclick: () => go('radar')}, 'Open Radar')));
+        h('div', {}, h('h2', {}, 'Need ideas?'), h('p', {}, 'Discover shows hundreds of coins, with catalysts and comebacks marked.')),
+        h('button', {type: 'button', class: 'secondary', onclick: () => go('discover')}, 'Open Discover')));
   }
   async function pasteInto(input) {
     try {
@@ -288,6 +306,8 @@
     S.flow.result = C.grade(market, S.flow.risk, s, {now, trades: S.data.trades, sizeUsd: size, costPct: C.costPct(market.chain, size, market.liquidity, r, s)});
     S.flow.plan = plan;
     S.flow.busy = false;
+    DB.coins[market.key] = C.trackCoin(DB.coins[market.key], market, now);
+    saveDb();
     S.flow.revealed = motionOk ? 0 : S.flow.result.counts.total;
     const result = S.flow.result;
     S.data.checks = S.data.checks.filter(row => !(row.chain === result.chain && C.sameAddress(row.address, result.address, result.chain)))
@@ -573,10 +593,9 @@
     return {ctx, width, height};
   }
   const CHART_FONT = '600 11px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif';
-  function drawCheckChart() {
-    const canvas = $('#check-chart'), note = $('#check-chart-note');
+  function drawCheckChart() { drawCandles($('#check-chart'), $('#check-chart-note'), S.flow.candles); }
+  function drawCandles(canvas, note, rows) {
     if (!canvas || !note) return;
-    const rows = S.flow.candles;
     if (rows === null || rows === undefined) { canvas.hidden = true; note.hidden = false; note.textContent = 'Loading the last hour…'; return; }
     if (!rows.length) { canvas.hidden = true; note.hidden = false; note.textContent = 'No candle data for this pool yet. Use the Chart button to see it.'; return; }
     canvas.hidden = false;
@@ -936,7 +955,7 @@
   }
   function beep(signal) {
     if (!audio || !S.data.prefs.sound) return;
-    const tones = signal === 'target' ? [660, 880, 1175] : signal === 'time' ? [740, 740] : [988, 740, 988, 740];
+    const tones = signal === 'signal' ? [523, 659, 784] : signal === 'target' ? [660, 880, 1175] : signal === 'time' ? [740, 740] : [988, 740, 988, 740];
     const start = audio.currentTime + 0.02;
     tones.forEach((frequency, i) => {
       const osc = audio.createOscillator(), gain = audio.createGain(), at = start + i * 0.2;
@@ -968,62 +987,341 @@
     renderLiveStatus();
   }
 
-  // Radar ---------------------------------------------------------------------------
-  async function loadRadar() {
-    const token = S.radar.token + 1;
-    Object.assign(S.radar, {token, busy: true, error: null});
-    renderRadarStatus();
+  // Discover: hundreds of coins, a coin database, catalysts and comebacks -----------------
+  const alertPrefs = () => C.alertSettings(S.data.signalAlerts);
+  const keyFor = (chain, address) => chain + ':' + (chain === 'solana' ? address : address.toLowerCase());
+  function cleanRecord(rec) {
+    if (!rec || typeof rec !== 'object' || !C.addressOk(rec.chain, rec.address) || !rec.market || !(rec.market.price > 0)) return null;
+    const tags = rec.tags && typeof rec.tags === 'object' ? rec.tags : {};
+    return {...rec, key: keyFor(rec.chain, rec.address), symbol: C.text(rec.symbol, 32) || 'COIN', name: C.text(rec.name, 80), imageUrl: C.safeImage(rec.imageUrl),
+      pair: C.poolIdOk(rec.chain, rec.pair) ? rec.pair : null, seenAt: finite(rec.seenAt) ? rec.seenAt : 0, firstSeen: finite(rec.firstSeen) ? rec.firstSeen : 0,
+      createdAt: finite(rec.createdAt) ? rec.createdAt : null, peak: finite(rec.peak) ? rec.peak : null, low: finite(rec.low) ? rec.low : null,
+      peakAt: finite(rec.peakAt) ? rec.peakAt : 0, lowAt: finite(rec.lowAt) ? rec.lowAt : 0,
+      history: Array.isArray(rec.history) ? rec.history.filter(row => Array.isArray(row) && finite(row[0]) && finite(row[1])).slice(-60) : [],
+      tags: {cto: Boolean(tags.cto), profile: Boolean(tags.profile), boost: finite(tags.boost) ? tags.boost : 0, description: C.text(tags.description, 280),
+        imageUrl: C.safeImage(tags.imageUrl), seenAt: finite(tags.seenAt) ? tags.seenAt : 0,
+        links: (Array.isArray(tags.links) ? tags.links : []).filter(row => row && typeof row.url === 'string' && row.url.startsWith('https://')).slice(0, 6)
+          .map(row => ({label: C.text(row.label, 30) || 'Link', url: row.url.slice(0, 300)}))}};
+  }
+  function loadDb() {
     try {
-      const result = await D.radar(S.radar.chain, S.radar.kind);
-      if (token !== S.radar.token) return;
-      Object.assign(S.radar, {rows: result.rows, source: result.source, at: Date.now()});
+      const raw = JSON.parse(localStorage.getItem(DB_STORE) || 'null');
+      const coins = {};
+      for (const rec of Object.values(raw && raw.coins && typeof raw.coins === 'object' ? raw.coins : {})) {
+        const clean = cleanRecord(rec);
+        if (clean) coins[clean.key] = clean;
+      }
+      return {coins};
     } catch (error) {
-      if (token !== S.radar.token) return;
-      S.radar.error = error.message;
-      if (!S.radar.rows) S.radar.rows = [];
-      S.radar.at = Date.now();
-    } finally {
-      if (token === S.radar.token) {
-        S.radar.busy = false;
-        if (S.page === 'radar') renderRadar();
+      return {coins: {}};
+    }
+  }
+  const DB = loadDb();
+  function pruneDb(now) {
+    const watched = new Set(S.data.watch);
+    for (const rec of Object.values(DB.coins)) {
+      if (rec.tags.seenAt && now - rec.tags.seenAt > 6 * 3600000) Object.assign(rec.tags, {cto: false, profile: false, boost: 0});
+      if (!watched.has(rec.key) && now - rec.seenAt > 12 * 3600000) delete DB.coins[rec.key];
+    }
+    const list = Object.values(DB.coins).filter(rec => !watched.has(rec.key)).sort((a, b) => a.seenAt - b.seenAt);
+    for (const rec of list.slice(0, Math.max(0, list.length - 700))) delete DB.coins[rec.key];
+  }
+  function saveDb() {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { localStorage.setItem(DB_STORE, JSON.stringify(DB)); return; } catch (error) {
+        const list = Object.values(DB.coins).filter(rec => !S.data.watch.includes(rec.key)).sort((a, b) => a.seenAt - b.seenAt);
+        for (const rec of list.slice(0, Math.ceil(list.length / 3))) delete DB.coins[rec.key];
       }
     }
   }
-  function renderRadarStatus() {
-    const box = $('#radar-status');
-    if (S.radar.busy) box.textContent = 'Loading…';
-    else if (S.radar.error) box.textContent = "Couldn't load this list: " + S.radar.error;
-    else if (S.radar.at) box.textContent = `From ${S.radar.source} · updated ${timeText(S.radar.at)} · refreshes every minute`;
-    else box.textContent = '';
-    box.dataset.bad = S.radar.error ? 'true' : 'false';
+  let sigCache = new Map();
+  function signalsOf(rec) {
+    let sig = sigCache.get(rec.key);
+    if (!sig) { sig = C.signals(rec, alertPrefs(), Date.now()); sigCache.set(rec.key, sig); }
+    return sig;
   }
-  function renderRadar() {
-    document.querySelectorAll('#radar-chain button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.chain === S.radar.chain)));
-    document.querySelectorAll('#radar-kind button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.kind === S.radar.kind)));
-    renderRadarStatus();
-    const list = $('#radar-list');
-    if (!S.radar.rows) { list.replaceChildren(...Array.from({length: 6}, () => h('div', {class: 'radar-row skeleton', 'aria-hidden': 'true'}))); return; }
-    if (!S.radar.rows.length) { list.replaceChildren(h('p', {class: 'empty-line'}, S.radar.error ? 'Nothing to show. Tap Refresh to try again.' : 'No coins in this list right now.')); return; }
-    const s = strategy(), r = rules(), now = Date.now(), cap = r.bankrollUsd * r.maxTradePct / 100;
-    list.replaceChildren(...S.radar.rows.map(m => radarRow(m, s, r, now, cap)));
+  let feedBusy = false, lastFeedAt = 0;
+  async function refreshFeed() {
+    if (feedBusy) return;
+    feedBusy = true;
+    lastFeedAt = Date.now();
+    const chain = S.disc.chain, first = S.disc.lastChain !== chain, round = ++S.disc.round, now = Date.now();
+    S.disc.lastChain = chain;
+    S.disc.busy = true;
+    renderDiscStatus();
+    const problems = [];
+    const soft = promise => promise.catch(error => { problems.push(error); return null; });
+    try {
+      const pages = first ? [1, 2, 3] : [((round - 1) % 5) + 1];
+      const [tags, ...lists] = await Promise.all([soft(D.listings(chain)),
+        ...pages.flatMap(page => ['new_pools', 'trending_pools'].map(list => soft(D.geckoList(chain, list, page))))]);
+      let found = 0;
+      for (const market of lists.filter(Boolean).flat()) { DB.coins[market.key] = C.trackCoin(DB.coins[market.key], market, now); found += 1; }
+      const watched = new Set(S.data.watch);
+      const known = Object.values(DB.coins).filter(rec => rec.chain === chain)
+        .sort((a, b) => (watched.has(b.key) - watched.has(a.key)) || (signalsOf(b).score - signalsOf(a).score) || (b.seenAt - a.seenAt));
+      const wanted = [...new Set([...Object.keys(tags || {}), ...known.slice(0, 240).map(rec => rec.address)])].slice(0, 300);
+      const fresh = (await soft(D.markets(chain, wanted))) || {};
+      for (const market of Object.values(fresh)) { DB.coins[market.key] = C.trackCoin(DB.coins[market.key], market, now); found += 1; }
+      for (const [address, tag] of Object.entries(tags || {})) {
+        const rec = DB.coins[keyFor(chain, address)];
+        if (rec) rec.tags = {...rec.tags, ...tag, links: tag.links || rec.tags.links || [], seenAt: now};
+      }
+      pruneDb(now);
+      sigCache = new Map();
+      S.disc.error = found ? null : (problems[0] && problems[0].message) || 'No coins came back. Try again in a minute.';
+      if (found) {
+        S.disc.at = now;
+        checkSignals(chain, now);
+        saveDb();
+      }
+    } finally {
+      feedBusy = false;
+      S.disc.busy = false;
+      if (S.page === 'discover') renderDiscover(); else renderDiscStatus();
+      if (S.page === 'alerts') renderAlerts();
+      if (S.sheet) renderSheet(false);
+      renderTop();
+      renderSide();
+    }
   }
-  function pctText(value) {
-    if (value === null || value === undefined) return h('span', {class: 'muted'}, '—');
-    return h('span', {'data-sign': value >= 0 ? 'up' : 'down'}, `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(Math.abs(value) >= 100 ? 0 : 1)}%`);
+  function checkSignals(chain, now) {
+    const prefs = alertPrefs(), fired = [], candidates = [];
+    for (const rec of Object.values(DB.coins)) {
+      if (rec.chain !== chain || rec.seenAt !== now) continue;
+      for (const alert of C.alertsFor(rec, signalsOf(rec), prefs, S.data.sent, now)) candidates.push({rec, alert});
+    }
+    // At most five alerts per refresh, strongest first, so a busy minute can't flood you.
+    candidates.sort((a, b) => signalsOf(b.rec).score - signalsOf(a.rec).score);
+    for (const {rec, alert} of candidates.slice(0, 5)) {
+      {
+        S.data.sent[rec.key + '|' + alert.kind] = now;
+        const row = {id: newId(), at: now, key: rec.key, kind: alert.kind, symbol: rec.symbol, title: alert.title, body: alert.body, read: false};
+        S.data.inbox = [row].concat(S.data.inbox).slice(0, 100);
+        fired.push({row, rec});
+      }
+    }
+    if (!fired.length) return;
+    save();
+    const top = fired.find(item => item.row.kind === 'catalyst') || fired[0];
+    showSignalPop(top.rec, top.row, fired.length);
+    beep('signal');
+    fired.slice(0, 3).forEach(item => notify(item.row.title, item.row.body, item.row.key + item.row.kind));
   }
-  function radarRow(m, s, r, now, cap) {
-    const graded = C.grade(m, {status: 'skipped'}, s, {now, trades: S.data.trades, sizeUsd: cap, costPct: C.costPct(m.chain, cap, m.liquidity, r, s)});
-    const fails = graded.groups.flatMap(group => group.items).filter(item => item.status === 'fail');
-    const chip = fails.length
-      ? h('span', {class: 'fit-chip', 'data-fit': 'no'}, `Breaks ${fails.length}: ` + fails.slice(0, 2).map(item => item.label.toLowerCase()).join(', ') + (fails.length > 2 ? '…' : ''))
-      : h('span', {class: 'fit-chip', 'data-fit': 'yes'}, 'Fits market rules');
-    const cell = (label, value) => h('span', {class: 'cell'}, h('small', {}, label), typeof value === 'string' ? h('span', {class: 'num'}, value) : value);
-    return h('button', {type: 'button', class: 'radar-row', onclick: () => startCheck(m.address)},
-      avatar(m.symbol, m.imageUrl),
-      h('span', {class: 'radar-id'}, h('b', {}, m.symbol), h('span', {}, m.name)),
-      h('span', {class: 'radar-cells'}, cell('Age', m.createdAt ? C.shortAge(now - m.createdAt) : '—'), cell('Mcap', C.compactUsd(m.valuationUsd)),
-        cell('Liq', C.compactUsd(m.liquidity)), cell('5m', pctText(m.change5m)), cell('1h', pctText(m.change1h))),
-      chip);
+  let popTimer = null;
+  function showSignalPop(rec, row, count) {
+    const pop = $('#signal-pop');
+    fill(pop, avatar(rec.symbol, rec.imageUrl || rec.tags.imageUrl), h('span', {class: 'pop-text'},
+      h('b', {}, row.title), h('span', {}, count > 1 ? `${row.body} (+${count - 1} more in Alerts)` : row.body)));
+    pop.dataset.kind = row.kind;
+    pop.onclick = () => { pop.hidden = true; openSheet(rec.key); };
+    pop.hidden = false;
+    clearTimeout(popTimer);
+    popTimer = setTimeout(() => { pop.hidden = true; }, 9000);
+  }
+  async function notify(title, body, tag) {
+    if (!('Notification' in window) || Notification.permission !== 'granted' || !navigator.serviceWorker) return;
+    try {
+      const registration = (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.register('sw.js'));
+      await registration.showNotification(title, {body, tag, icon: 'icon-192.png'});
+    } catch (error) {
+      // Notifications are a bonus; the Alerts tab always has the alert.
+    }
+  }
+  async function enableNotifications() {
+    if (!('Notification' in window) || !navigator.serviceWorker) {
+      toast('Notifications need Scout on your Home Screen (iPadOS 16.4 or newer). Add it from Safari\'s Share menu, then open it from the icon.');
+      return;
+    }
+    try { await navigator.serviceWorker.register('sw.js'); } catch (error) { /* permission still works without it on some devices */ }
+    const answer = await Notification.requestPermission();
+    toast(answer === 'granted' ? 'Notifications are on.' : 'Notifications are off. Allow them in Settings, Notifications, Scout.');
+    if (answer === 'granted') notify('Scout notifications are on', 'You\'ll hear about strong catalysts and comebacks while Scout is open.', 'scout-test');
+    renderAlerts();
+  }
+  // Opening Alerts marks everything read; this first view still highlights what was new.
+  function markAlertsSeen() {
+    if (!S.data.inbox.some(row => !row.read)) return;
+    S.data.inbox.forEach(row => { row.read = true; });
+    save();
+  }
+  function pctText(value, label) {
+    if (value === null || value === undefined) return h('span', {class: 'muted'}, (label ? label + ' ' : '') + '—');
+    return h('span', {'data-sign': value >= 0 ? 'up' : 'down'}, (label ? label + ' ' : '') + `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(Math.abs(value) >= 100 ? 0 : 1)}%`);
+  }
+  function discRows() {
+    return C.feed(Object.values(DB.coins), S.disc.filter, S.disc.query, {chain: S.disc.chain, watch: S.data.watch, signals: signalsOf});
+  }
+  function renderDiscStatus(count) {
+    const box = $('#disc-status');
+    const total = count === undefined ? Object.values(DB.coins).filter(rec => rec.chain === S.disc.chain).length : count;
+    const ago = S.disc.at ? Math.round((Date.now() - S.disc.at) / 1000) : null;
+    const parts = [];
+    if (S.disc.busy && !S.disc.at) parts.push('Loading coins…');
+    else if (S.disc.error && !total) parts.push("Couldn't load coins: " + S.disc.error);
+    else parts.push(`${total} coin${total !== 1 ? 's' : ''}` + (ago !== null ? ` · updated ${ago < 5 ? 'just now' : ago < 120 ? ago + 's ago' : Math.round(ago / 60) + ' min ago'}` : '') + (S.disc.busy ? ' · refreshing…' : ''));
+    if (S.disc.error && total) parts.push('Some sources failed: ' + S.disc.error);
+    const text = parts.join(' · ');
+    if (box.textContent !== text) box.textContent = text;
+    box.dataset.bad = S.disc.error && !total ? 'true' : 'false';
+  }
+  function renderDiscover() {
+    document.querySelectorAll('#disc-chain button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.chain === S.disc.chain)));
+    document.querySelectorAll('#disc-filters button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.filter === S.disc.filter)));
+    const rows = discRows(), grid = $('#disc-grid');
+    renderDiscStatus(S.disc.query || S.disc.filter !== 'foryou' ? rows.length : undefined);
+    if (!rows.length) {
+      const query = S.disc.query.trim(), address = C.findAddress(query);
+      if (query && (C.validMint(address) || C.EVM_RE.test(address))) {
+        fill(grid, h('div', {class: 'card empty grid-wide'}, h('h2', {}, 'Not in the list yet'), h('p', {}, 'Check this address with your rules. It gets added to Discover after the check.'),
+          h('button', {type: 'button', onclick: () => startCheck(address)}, 'Check this coin')));
+      } else if (!S.disc.at && (S.disc.busy || !S.disc.error)) {
+        fill(grid, Array.from({length: 9}, () => h('div', {class: 'coin-card skeleton', 'aria-hidden': 'true'})));
+      } else {
+        const empty = {watch: 'Tap Watch on a coin and it shows up here.', catalysts: 'No catalysts right now. They appear as volume spikes, takeovers and new listings happen.',
+          comebacks: 'No comebacks right now. A comeback is a coin that dumped and is bouncing back with buyers.'}[S.disc.filter];
+        fill(grid, h('p', {class: 'empty-line grid-wide'}, query ? `No coins match "${query}".` : empty || (S.disc.error ? 'Nothing loaded yet. It retries every 40 seconds.' : 'No coins yet.')));
+      }
+      $('#disc-more').hidden = true;
+      return;
+    }
+    fill(grid, rows.slice(0, S.disc.shown).map(coinCard));
+    $('#disc-more').hidden = rows.length <= S.disc.shown;
+  }
+  function coinCard(rec) {
+    const m = rec.market, sig = signalsOf(rec), now = Date.now();
+    const total = (m.buys5m || 0) + (m.sells5m || 0);
+    const buys = h('span', {class: 'cc-flow-buys'});
+    buys.style.width = (total ? Math.round(m.buys5m / total * 100) : 50) + '%';
+    const tags = [];
+    if (sig.strong) tags.push(h('span', {class: 'tag tag-catalyst'}, 'Catalyst ' + sig.score));
+    else if (sig.score >= 2) tags.push(h('span', {class: 'tag tag-soft'}, 'Catalyst ' + sig.score));
+    if (sig.comebackSeen) tags.push(h('span', {class: 'tag tag-comeback'}, 'Comeback'));
+    if (rec.tags.cto) tags.push(h('span', {class: 'tag'}, 'CTO'));
+    if (rec.tags.boost) tags.push(h('span', {class: 'tag'}, 'Boosted'));
+    if (sig.isNew) tags.push(h('span', {class: 'tag tag-new'}, 'New'));
+    if (sig.risky) tags.push(h('span', {class: 'tag tag-risk'}, m.liquidity < alertPrefs().minLiquidity ? 'Thin pool' : 'Risky'));
+    if (S.data.watch.includes(rec.key)) tags.push(h('span', {class: 'tag tag-watch'}, 'Watching'));
+    return h('button', {type: 'button', class: 'coin-card', 'data-signal': sig.strong ? 'catalyst' : sig.comeback ? 'comeback' : null, onclick: () => openSheet(rec.key)},
+      avatar(rec.symbol, rec.imageUrl || rec.tags.imageUrl, 'cc-img'),
+      h('span', {class: 'cc-body'},
+        h('span', {class: 'cc-title'}, h('b', {}, rec.symbol), h('span', {class: 'cc-name'}, rec.name)),
+        h('span', {class: 'cc-stats'}, h('span', {class: 'cc-mc'}, 'MC ', h('b', {class: 'num'}, C.compactUsd(m.valuationUsd))), pctText(m.change5m, '5m'), pctText(m.change1h, '1h'),
+          rec.createdAt ? h('span', {class: 'muted'}, C.shortAge(now - rec.createdAt)) : null),
+        rec.tags.description ? h('span', {class: 'cc-desc'}, rec.tags.description) : null,
+        tags.length ? h('span', {class: 'cc-tags'}, tags) : null,
+        h('span', {class: 'cc-flow', 'aria-label': `${m.buys5m || 0} buys and ${m.sells5m || 0} sells in 5 minutes`}, buys)));
+  }
+
+  // Coin page ------------------------------------------------------------------------
+  function openSheet(key) {
+    if (!DB.coins[key]) return;
+    S.sheet = {key, candles: null};
+    renderSheet(true);
+    $('#sheet').hidden = false;
+    document.body.classList.add('sheet-open');
+    const rec = DB.coins[key];
+    if (rec.pair) {
+      D.candles(rec.chain, rec.pair, 60).then(rows => { if (S.sheet && S.sheet.key === key) { S.sheet.candles = rows; drawSheetChart(); } })
+        .catch(() => { if (S.sheet && S.sheet.key === key) { S.sheet.candles = []; drawSheetChart(); } });
+    } else {
+      S.sheet.candles = [];
+    }
+  }
+  function closeSheet() {
+    S.sheet = null;
+    $('#sheet').hidden = true;
+    document.body.classList.remove('sheet-open');
+  }
+  function drawSheetChart() { if (S.sheet) drawCandles($('#sheet-chart'), $('#sheet-chart-note'), S.sheet.candles); }
+  function quickRead(rec) {
+    const r = rules(), s = strategy(), cap = r.bankrollUsd * r.maxTradePct / 100;
+    const market = {...rec.market, chain: rec.chain, address: rec.address, createdAt: rec.createdAt, symbol: rec.symbol};
+    const graded = C.grade(market, {status: 'skipped'}, s, {now: Date.now(), trades: S.data.trades, sizeUsd: cap, costPct: C.costPct(rec.chain, cap, rec.market.liquidity, r, s)});
+    return graded.groups.flatMap(group => group.items).filter(item => item.status === 'fail').map(item => item.label.toLowerCase());
+  }
+  function renderSheet(scrollTop) {
+    const rec = S.sheet && DB.coins[S.sheet.key];
+    if (!rec) { if (S.sheet) closeSheet(); return; }
+    const m = rec.market, sig = signalsOf(rec), watching = S.data.watch.includes(rec.key), now = Date.now();
+    const axiom = rec.chain === 'solana' && rec.pair && C.validMint(rec.pair) ? 'https://axiom.trade/meme/' + rec.pair : null;
+    const fails = quickRead(rec);
+    const card = $('#sheet-card');
+    const keep = card.scrollTop;
+    fill(card,
+      h('div', {class: 'sheet-top'}, avatar(rec.symbol, rec.imageUrl || rec.tags.imageUrl, 'sheet-img'),
+        h('div', {class: 'grow'}, h('h2', {}, rec.symbol, h('span', {class: 'chain-chip'}, C.CHAINS[rec.chain])), h('p', {class: 'muted'}, rec.name)),
+        h('button', {type: 'button', class: 'icon-button', 'aria-label': 'Close', onclick: closeSheet}, '✕')),
+      h('div', {class: 'sheet-price'}, h('b', {class: 'num'}, C.priceText(m.price)),
+        h('span', {class: 'changes'}, pctText(m.change5m, '5m'), pctText(m.change1h, '1h'), pctText(m.change24h, '24h'))),
+      h('dl', {class: 'stats'},
+        stat('Market cap', C.compactUsd(m.valuationUsd)), stat('Liquidity', C.compactUsd(m.liquidity)), stat('Volume 5m', C.compactUsd(m.volume5m || 0)),
+        stat('Volume 1h', C.compactUsd(m.volume1h || 0)), stat('Age', rec.createdAt ? C.shortAge(now - rec.createdAt) : '—'),
+        stat('5m buys / sells', `${m.buys5m || 0} / ${m.sells5m || 0}`)),
+      h('div', {class: 'chart-box'}, h('canvas', {id: 'sheet-chart', class: 'chart', role: 'img', 'aria-label': 'Price over the last hour in one-minute candles'}),
+        h('p', {class: 'chart-note', id: 'sheet-chart-note'}, 'Loading the last hour…')),
+      h('div', {class: 'why', 'data-strong': sig.strong ? 'true' : 'false'},
+        h('h3', {}, sig.score ? `Catalyst score ${sig.score}` + (sig.strong ? ' · strong' : '') : 'No catalyst signals right now'),
+        sig.reasons.length ? h('ul', {}, sig.reasons.map(reason => h('li', {}, reason))) : h('p', {}, 'No volume spike, takeover, new listing or narrative match at the moment.'),
+        sig.comebackSeen ? h('p', {class: 'comeback-line'}, h('b', {}, 'Comeback: '), sig.comebackSeen) : null,
+        sig.risky ? h('p', {class: 'risk-line'}, h('b', {}, 'Careful: '), sig.risky) : null),
+      h('p', {class: 'quick-read'}, fails.length ? `Quick read against ${strategyName()}: breaks ${fails.length} rule${fails.length !== 1 ? 's' : ''} (${fails.slice(0, 3).join(', ')}${fails.length > 3 ? '…' : ''}).`
+        : `Quick read against ${strategyName()}: no market rule broken. The full check adds the contract scan.`),
+      rec.tags.description ? h('p', {class: 'sheet-desc'}, rec.tags.description) : null,
+      rec.tags.links.length ? h('div', {class: 'link-row'}, rec.tags.links.map(item => link(item.url, item.label + ' ↗', 'button secondary'))) : null,
+      h('div', {class: 'actions sheet-actions'},
+        copyButton(rec.address),
+        axiom ? link(axiom, 'Open in Axiom ↗', 'button secondary') : link(m.sourceUrl, 'Chart ↗', 'button secondary'),
+        h('button', {type: 'button', class: 'secondary', 'aria-pressed': String(watching), onclick: () => toggleWatch(rec.key)}, watching ? '★ Watching' : '☆ Watch'),
+        h('button', {type: 'button', onclick: () => { const address = rec.address; closeSheet(); startCheck(address); }}, 'Check it with my rules →')),
+      h('p', {class: 'fine'}, 'Signals mean attention, not safety. Most coins with catalysts still go to zero. Check before you buy.'));
+    card.scrollTop = scrollTop ? 0 : keep;
+    drawSheetChart();
+  }
+  function toggleWatch(key) {
+    S.data.watch = S.data.watch.includes(key) ? S.data.watch.filter(item => item !== key) : [key].concat(S.data.watch).slice(0, 200);
+    save();
+    renderSheet(false);
+    if (S.page === 'discover') renderDiscover();
+    toast(S.data.watch.includes(key) ? 'Added to your watchlist.' : 'Removed from your watchlist.');
+  }
+
+  // Alerts page ----------------------------------------------------------------------
+  function renderAlerts() {
+    const prefs = alertPrefs();
+    const permission = 'Notification' in window ? Notification.permission : 'unsupported';
+    const setPref = (field, value) => { S.data.signalAlerts = C.alertSettings({...S.data.signalAlerts, [field]: value}); save(); sigCache = new Map(); };
+    const switchRow = (label, field, note) => {
+      const button = h('button', {type: 'button', class: 'switch', role: 'switch', 'aria-checked': String(prefs[field]), 'aria-label': label,
+        onclick: () => { setPref(field, !alertPrefs()[field]); button.setAttribute('aria-checked', String(alertPrefs()[field])); }}, h('span', {class: 'switch-knob', 'aria-hidden': 'true'}));
+      return h('div', {class: 'toggle-row'}, h('div', {}, h('b', {}, label), h('p', {}, note)), button);
+    };
+    const narratives = h('textarea', {id: 'alert-narratives', rows: '2', maxlength: '400', value: prefs.narratives,
+      onchange: () => { setPref('narratives', narratives.value); toast('Narratives saved.'); }});
+    const rows = S.data.inbox.slice(0, 60);
+    fill($('#alerts-body'),
+      h('div', {class: 'card notify-card', 'data-state': permission},
+        h('h2', {}, permission === 'granted' ? 'Notifications are on' : 'Get notified'),
+        h('p', {}, 'Scout checks hundreds of coins every 40 seconds and alerts you about strong catalysts and comebacks. '
+          + 'It can only do that while it is open: on screen, or beside Axiom in Split View. The iPad pauses web apps in the background.'),
+        permission === 'granted' ? null : permission === 'denied'
+          ? h('p', {class: 'risk-line'}, 'Notifications are blocked. Turn them on in the iPad Settings app, Notifications, Scout.')
+          : h('div', {class: 'actions'}, h('button', {type: 'button', onclick: enableNotifications}, permission === 'unsupported' ? 'How to turn on notifications' : 'Turn on notifications'))),
+      h('div', {class: 'card'}, h('h2', {}, 'What to alert me about'),
+        switchRow('Strong catalysts', 'catalyst', 'Volume spikes, buyer rushes, community takeovers, new websites or socials, paid boosts, and coins that fit your narratives.'),
+        switchRow('Comebacks', 'comeback', 'Coins that dumped and are bouncing back with more buyers than sellers.'),
+        h('div', {class: 'field-grid'},
+          numberField('alert-strength', 'Catalyst score needed (2 to 8)', prefs.strength, value => setPref('strength', C.bounded(value, 'Catalyst score', 2, 8, true)), true),
+          numberField('alert-liquidity', 'Smallest pool to alert on ($)', prefs.minLiquidity, value => setPref('minLiquidity', C.bounded(value, 'Smallest pool', 0, 100000000)))),
+        h('label', {class: 'field', for: 'alert-narratives'}, h('span', {}, 'Narratives you follow (comma separated)'), narratives),
+        h('p', {class: 'fine'}, 'Scout reads coin names, tickers and DexScreener descriptions. It can\'t read X or Telegram, so it can\'t judge how strong a story really is.')),
+      h('div', {class: 'card'}, h('h2', {}, rows.length ? 'Recent alerts' : 'No alerts yet'),
+        rows.length ? h('div', {class: 'inbox'}, rows.map(row => h('button', {type: 'button', class: 'inbox-row', 'data-kind': row.kind, 'data-new': row.read ? null : 'true',
+          onclick: () => { row.read = true; save(); if (DB.coins[row.key]) openSheet(row.key); else { const [chain, address] = row.key.split(':'); startCheck(address || chain); } }},
+          h('span', {class: 'inbox-kind'}, row.kind === 'catalyst' ? 'Catalyst' : 'Comeback'),
+          h('span', {class: 'inbox-text'}, h('b', {}, row.title), h('span', {}, row.body)),
+          h('span', {class: 'num muted'}, timeText(row.at)))))
+          : h('p', {}, 'Leave Scout open and alerts land here. Tap one to see the coin.')));
   }
 
   // Step 6: journal -------------------------------------------------------------------
@@ -1289,7 +1587,8 @@
     }
     if (S.page === 'live') tickLive();
     if (S.page === 'trade' && S.flow.step === 'plan') updatePlanLive();
-    if (S.page === 'radar' && !S.radar.busy && S.radar.at && now - S.radar.at > 60000) loadRadar();
+    if (!feedBusy && now - lastFeedAt >= FEED_EVERY && document.visibilityState === 'visible') refreshFeed();
+    if (S.page === 'discover' && now % 5000 < 1000) renderDiscStatus();
     renderTop();
     tickSide();
     const planning = S.page === 'trade' && S.flow.step === 'plan' && S.flow.market;
@@ -1297,21 +1596,24 @@
   }
   function boot() {
     document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => go(el.dataset.go)));
-    $('#radar-refresh').addEventListener('click', loadRadar);
-    $('#radar-chain').addEventListener('click', event => {
+    const search = $('#disc-search');
+    search.addEventListener('input', debounce(() => { S.disc.query = search.value; S.disc.shown = 120; renderDiscover(); }, 150));
+    $('#disc-chain').addEventListener('click', event => {
       const button = event.target.closest('button[data-chain]');
-      if (!button || button.dataset.chain === S.radar.chain) return;
-      Object.assign(S.radar, {chain: button.dataset.chain, rows: null});
-      renderRadar();
-      loadRadar();
+      if (!button || button.dataset.chain === S.disc.chain) return;
+      Object.assign(S.disc, {chain: button.dataset.chain, shown: 120, at: 0, error: null});
+      renderDiscover();
+      refreshFeed();
     });
-    $('#radar-kind').addEventListener('click', event => {
-      const button = event.target.closest('button[data-kind]');
-      if (!button || button.dataset.kind === S.radar.kind) return;
-      Object.assign(S.radar, {kind: button.dataset.kind, rows: null});
-      renderRadar();
-      loadRadar();
+    $('#disc-filters').addEventListener('click', event => {
+      const button = event.target.closest('button[data-filter]');
+      if (!button) return;
+      Object.assign(S.disc, {filter: button.dataset.filter, shown: 120});
+      renderDiscover();
     });
+    $('#disc-more').addEventListener('click', () => { S.disc.shown += 120; renderDiscover(); });
+    $('#alerts-read').addEventListener('click', () => { S.data.inbox.forEach(row => { row.read = true; }); save(); renderAlerts(); renderTop(); });
+    $('#sheet').addEventListener('click', event => { if (event.target.id === 'sheet') closeSheet(); });
     $('#live-refresh').addEventListener('click', () => { if (!priceBusy) refreshPrices(); });
     $('#guard-pill').addEventListener('click', () => {
       const g = guardNow();
@@ -1328,12 +1630,16 @@
     $('#update-go').addEventListener('click', applyUpdate);
     $('#install-ok').addEventListener('click', () => { S.data.hints.install = true; save(); $('#install-banner').hidden = true; });
     document.addEventListener('pointerdown', unlockAudio, {passive: true});
-    document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('#alert').hidden) hideAlert(); });
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape') return;
+      if (!$('#alert').hidden) hideAlert(); else if (S.sheet) closeSheet();
+    });
     window.addEventListener('resize', debounce(() => {
       renderSide();
       cards.forEach(card => { card.drawn = ''; });
       if (S.page === 'live') tickLive();
       if (S.page === 'trade' && S.flow.step === 'check') drawCheckChart();
+      drawSheetChart();
     }, 200));
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return;
@@ -1345,7 +1651,8 @@
     $('#install-banner').hidden = standalone || S.data.hints.install;
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     const start = (location.hash || '').replace('#', '');
-    go(PAGES.includes(start) ? start : openTrades().length ? 'live' : 'trade');
+    go(PAGES.includes(start) || start === 'radar' ? start : openTrades().length ? 'live' : 'discover');
+    if (navigator.serviceWorker && 'Notification' in window && Notification.permission === 'granted') navigator.serviceWorker.register('sw.js').catch(() => {});
     setInterval(everySecond, 1000);
     setTimeout(() => checkUpdate(false), 3000);
     setInterval(() => checkUpdate(false), 30 * 60000);

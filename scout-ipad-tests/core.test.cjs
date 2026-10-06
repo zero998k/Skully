@@ -340,3 +340,83 @@ test('GeckoTerminal backup: chain from the pool id, price from either side of th
   const evm = {attributes: {base_token_price_usd: '0.005'}, relationships: {base_token: {data: {id: 'eth_' + EVM.toUpperCase().replace('0X', '0x')}}}};
   assert.equal(C.poolPrice(evm, 'ethereum', EVM), 0.005);
 });
+
+// Discover: coin database, signals, feed and alerts -------------------------------------
+const PREFS = C.alertSettings({});
+function coin(overrides, marketOverrides) {
+  const rec = C.trackCoin(null, {...market(), ...marketOverrides}, NOW);
+  return Object.assign(rec, overrides || {});
+}
+
+test('alert settings and narratives stay inside their limits', () => {
+  assert.deepEqual(C.alertSettings({}), C.ALERT_DEFAULTS);
+  const custom = C.alertSettings({catalyst: false, strength: 9, minLiquidity: -5, narratives: 'AI, ai ,  Dog,,x'});
+  assert.equal(custom.catalyst, false);
+  assert.equal(custom.strength, 4);
+  assert.equal(custom.minLiquidity, 10000);
+  assert.deepEqual(C.narrativeList(custom.narratives), ['ai', 'dog']);
+});
+
+test('the coin database tracks price history, peak and low', () => {
+  let rec = C.trackCoin(null, market({price: 0.001}), NOW);
+  rec = C.trackCoin(rec, market({price: 0.002}), NOW + 30000);
+  rec = C.trackCoin(rec, market({price: 0.0009}), NOW + 60000);
+  rec = C.trackCoin(rec, market({price: 0.00095}), NOW + 70000);
+  assert.equal(rec.peak, 0.002);
+  assert.equal(rec.low, 0.0009);
+  assert.equal(rec.history.length, 3, 'readings closer than 20 seconds replace the last one');
+  assert.equal(rec.history[2][1], 0.00095);
+  const gecko = C.trackCoin(rec, market({hasSocials: null}), NOW + 90000);
+  assert.equal(gecko.market.hasSocials, true, 'an unknown socials reading keeps the last known one');
+});
+
+test('catalysts: volume spikes, buyer rushes, takeovers and narratives add up', () => {
+  const quiet = C.signals(coin({}, {volume5m: 500, volume1h: 6000, buys5m: 10, sells5m: 8, change1h: 2}), PREFS, NOW);
+  assert.equal(quiet.score, 0);
+  assert.equal(quiet.strong, false);
+  const hot = C.signals(coin({tags: {cto: true, description: 'The first AI agent on Solana'}}, {volume5m: 30000, volume1h: 40000, buys5m: 120, sells5m: 30}), PREFS, NOW);
+  assert.equal(hot.score, 7);
+  assert.equal(hot.strong, true);
+  assert.match(hot.reasons.join(' '), /Volume spike: \$30K in 5 minutes, 9\.0× its pace/);
+  assert.match(hot.reasons.join(' '), /narrative you follow: "ai"/);
+  const thin = C.signals(coin({tags: {cto: true}}, {liquidity: 4000, volume5m: 30000, volume1h: 40000, buys5m: 120, sells5m: 30}), PREFS, NOW);
+  assert.equal(thin.strong, false);
+  assert.match(thin.risky, /Only \$4\.0K in the pool/);
+  const trap = C.signals(coin({tags: {cto: true}}, {volume5m: 30000, volume1h: 40000, buys5m: 120, sells5m: 1}), PREFS, NOW);
+  assert.match(trap.risky, /honeypot/);
+  assert.equal(C.signals(coin({name: 'Catwalk'}, {buys5m: 10, sells5m: 8}), {...PREFS, narratives: 'cat'}, NOW).score, 0, 'short words match whole words only');
+  assert.equal(C.signals(coin({name: 'Agentic Dog'}, {buys5m: 10, sells5m: 8}), {...PREFS, narratives: 'agent'}, NOW).score, 2, 'longer words match the start of a word');
+});
+
+test('comebacks: from the 24-hour change, or from what Scout watched', () => {
+  const bounce = C.signals(coin({}, {change24h: -60, change1h: 25, change5m: 3, buys5m: 50, sells5m: 30}), PREFS, NOW);
+  assert.match(bounce.comeback, /Fell 60% over 24 hours, now up 25%/);
+  let rec = C.trackCoin(null, market({price: 0.002, change24h: 5}), NOW);
+  rec = C.trackCoin(rec, market({price: 0.0008, change24h: 5}), NOW + 60000);
+  rec = C.trackCoin(rec, market({price: 0.0011, change5m: 4, change24h: 5}), NOW + 120000);
+  assert.match(C.signals(rec, PREFS, NOW + 120000).comeback, /Dropped 60% from its high while Scout watched, now 38% back up/);
+  const falling = C.signals(coin({}, {change24h: -60, change1h: 25, change5m: -2}), PREFS, NOW);
+  assert.equal(falling.comeback, null);
+});
+
+test('feed filters, search and alert limits', () => {
+  const hot = coin({key: 'solana:hot', symbol: 'HOT', tags: {cto: true}}, {volume5m: 30000, volume1h: 40000, buys5m: 120, sells5m: 30});
+  const back = coin({key: 'solana:back', symbol: 'BACK', createdAt: NOW - 600000}, {change24h: -60, change1h: 25, change5m: 3, buys5m: 50, sells5m: 30, volume1h: 900});
+  const plain = coin({key: 'base:plain', chain: 'base', symbol: 'PLAIN'}, {});
+  const ctx = {chain: 'solana', watch: ['solana:back'], signals: rec => C.signals(rec, PREFS, NOW)};
+  const all = [plain, back, hot];
+  assert.deepEqual(C.feed(all, 'foryou', '', ctx).map(rec => rec.symbol), ['HOT', 'BACK']);
+  assert.deepEqual(C.feed(all, 'catalysts', '', ctx).map(rec => rec.symbol), ['HOT']);
+  assert.deepEqual(C.feed(all, 'comebacks', '', ctx).map(rec => rec.symbol), ['BACK']);
+  assert.deepEqual(C.feed(all, 'watch', '', ctx).map(rec => rec.symbol), ['BACK']);
+  assert.deepEqual(C.feed(all, 'new', '', ctx).map(rec => rec.symbol), ['BACK', 'HOT']);
+  assert.deepEqual(C.feed(all, 'foryou', 'ho', ctx).map(rec => rec.symbol), ['HOT']);
+  const sent = {};
+  const alerts = C.alertsFor(hot, ctx.signals(hot), PREFS, sent, NOW);
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].title, 'HOT: strong catalyst (5)');
+  sent['solana:hot|catalyst'] = NOW - 3600000;
+  assert.equal(C.alertsFor(hot, ctx.signals(hot), PREFS, sent, NOW).length, 0, 'no repeat within two hours');
+  assert.equal(C.alertsFor(hot, ctx.signals(hot), {...PREFS, catalyst: false}, {}, NOW).length, 0);
+  assert.equal(C.alertsFor(back, ctx.signals(back), PREFS, {}, NOW)[0].kind, 'comeback');
+});

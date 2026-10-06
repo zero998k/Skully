@@ -27,6 +27,9 @@ test('every file the page or the manifest needs exists', () => {
   assert.equal(manifest.display, 'standalone');
   for (const icon of manifest.icons) assert.ok(fs.existsSync(path.join(docs, icon.src)), icon.src);
   assert.ok(fs.existsSync(path.join(docs, '.nojekyll')), 'GitHub Pages must serve files as they are');
+  assert.match(read('app.js'), /register\('sw\.js'\)/);
+  assert.ok(fs.existsSync(path.join(docs, 'sw.js')), 'the notification worker exists');
+  assert.doesNotMatch(read('sw.js'), /caches\.|addEventListener\('fetch'/, 'the worker never caches, so updates always arrive');
 });
 
 test('the page may only reach the data hosts it needs', () => {

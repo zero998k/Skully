@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-192.png">
-<link rel="stylesheet" href="app.css?v=1.0.0">
+<link rel="stylesheet" href="app.css?v=1.1.0">
 <title>Scout</title>
 </head>
 <body>
@@ -24,6 +24,9 @@
   <div class="topbar-right">
     <span class="live-dot" id="live-dot" hidden></span>
     <button class="guard-pill" id="guard-pill" type="button" data-status="ready">Ready</button>
+    <button class="icon-button" id="rules-button" type="button" data-go="rules" aria-label="Rules and settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+    </button>
   </div>
 </header>
 
@@ -48,26 +51,38 @@
       <div id="flow"></div>
     </section>
 
-    <section class="page" id="page-radar" data-page="radar" aria-label="Radar" hidden>
-      <div class="page-head">
-        <div><p class="eyebrow">Find ideas</p><h1>Radar</h1></div>
-        <button type="button" class="secondary" id="radar-refresh">Refresh</button>
-      </div>
-      <div class="controls">
-        <div class="seg" id="radar-chain" role="group" aria-label="Chain">
+    <section class="page" id="page-discover" data-page="discover" aria-label="Discover">
+      <div class="disc-bar">
+        <label class="search" for="disc-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <input id="disc-search" type="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" placeholder="Search coins, or paste a CA">
+        </label>
+        <div class="seg" id="disc-chain" role="group" aria-label="Chain">
           <button type="button" data-chain="solana" aria-pressed="true">Solana</button>
           <button type="button" data-chain="bsc" aria-pressed="false">BNB</button>
           <button type="button" data-chain="base" aria-pressed="false">Base</button>
-          <button type="button" data-chain="ethereum" aria-pressed="false">Ethereum</button>
-        </div>
-        <div class="seg" id="radar-kind" role="group" aria-label="List">
-          <button type="button" data-kind="trending" aria-pressed="true">Trending</button>
-          <button type="button" data-kind="new" aria-pressed="false">New</button>
+          <button type="button" data-chain="ethereum" aria-pressed="false">ETH</button>
         </div>
       </div>
-      <p class="page-note">Trending means people are trading it, not that it's good. The chip shows how each coin does against your strategy's market rules; tap a coin for the full check, contract scan included.</p>
-      <p class="status-line" id="radar-status" aria-live="polite"></p>
-      <div class="radar-list" id="radar-list"></div>
+      <div class="filters" id="disc-filters" role="group" aria-label="Show">
+        <button type="button" data-filter="foryou" aria-pressed="true">For you</button>
+        <button type="button" data-filter="new" aria-pressed="false">New</button>
+        <button type="button" data-filter="trending" aria-pressed="false">Trending</button>
+        <button type="button" data-filter="catalysts" aria-pressed="false"><i class="dot dot-catalyst" aria-hidden="true"></i>Catalysts</button>
+        <button type="button" data-filter="comebacks" aria-pressed="false"><i class="dot dot-comeback" aria-hidden="true"></i>Comebacks</button>
+        <button type="button" data-filter="watch" aria-pressed="false">Watchlist</button>
+      </div>
+      <p class="status-line" id="disc-status" aria-live="polite"></p>
+      <div class="coin-grid" id="disc-grid"></div>
+      <button type="button" class="secondary more" id="disc-more" hidden>Show more coins</button>
+    </section>
+
+    <section class="page" id="page-alerts" data-page="alerts" aria-label="Alerts" hidden>
+      <div class="page-head">
+        <div><p class="eyebrow">Catalysts and comebacks</p><h1>Alerts</h1></div>
+        <button type="button" class="secondary" id="alerts-read">Mark all read</button>
+      </div>
+      <div id="alerts-body"></div>
     </section>
 
     <section class="page" id="page-live" data-page="live" aria-label="Live trades" hidden>
@@ -105,13 +120,18 @@
 </div>
 
 <nav class="tabbar" id="tabbar" aria-label="Pages">
-  <button type="button" data-go="trade" aria-current="page">
+  <button type="button" data-go="discover" aria-current="page">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
+    <span>Discover</span>
+  </button>
+  <button type="button" data-go="alerts">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>
+    <span>Alerts</span>
+    <b class="badge badge-alert" id="alert-badge" hidden>0</b>
+  </button>
+  <button type="button" data-go="trade">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg>
     <span>Trade</span>
-  </button>
-  <button type="button" data-go="radar">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12 19 5"/><path d="M20.5 12A8.5 8.5 0 1 1 12 3.5"/><path d="M16 12a4 4 0 1 1-4-4"/></svg>
-    <span>Radar</span>
   </button>
   <button type="button" data-go="live">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h4l2.5-6 4 12 2.5-6H22"/></svg>
@@ -122,11 +142,12 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h11a3 3 0 0 1 3 3v14H8a3 3 0 0 1-3-3z"/><path d="M5 17.5a3 3 0 0 1 3-3h11M9 7.5h6M9 10.5h4"/></svg>
     <span>Journal</span>
   </button>
-  <button type="button" data-go="rules">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
-    <span>Rules</span>
-  </button>
 </nav>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-card" id="sheet-card" role="dialog" aria-modal="true" aria-label="Coin details"></div>
+</div>
+<button type="button" class="signal-pop" id="signal-pop" hidden></button>
 
 <div class="alert" id="alert" hidden>
   <div class="alert-card" role="alertdialog" aria-modal="true" aria-labelledby="alert-title" aria-describedby="alert-text">
@@ -143,8 +164,8 @@
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="core.js?v=1.0.0"></script>
-<script src="data.js?v=1.0.0"></script>
-<script src="app.js?v=1.0.0"></script>
+<script src="core.js?v=1.1.0"></script>
+<script src="data.js?v=1.1.0"></script>
+<script src="app.js?v=1.1.0"></script>
 </body>
 </html>
