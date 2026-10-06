@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://dd.dexscreener.com https://cdn.dexscreener.com https://assets.geckoterminal.com https://coin-images.coingecko.com; connect-src 'self' https://api.dexscreener.com https://api.rugcheck.xyz https://api.gopluslabs.io https://api.geckoterminal.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#05070d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Scout">
+<meta name="format-detection" content="telephone=no">
+<meta name="description" content="Scout for iPad: check a coin before you buy, plan the trade, and get told when to sell. You trade in Axiom; Scout coaches.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="stylesheet" href="app.css?v=1.0.0">
+<title>Scout</title>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Scout</span></div>
+  <div class="topbar-right">
+    <span class="live-dot" id="live-dot" hidden></span>
+    <button class="guard-pill" id="guard-pill" type="button" data-status="ready">Ready</button>
+  </div>
+</header>
+
+<div class="banners">
+  <div class="banner" id="update-banner" hidden>
+    <p><strong id="update-title">A new Scout is ready.</strong> <span id="update-notes"></span></p>
+    <button type="button" id="update-go">Update now</button>
+  </div>
+  <div class="banner banner-quiet" id="install-banner" hidden>
+    <p><strong>Make Scout an app:</strong> tap the Share button in Safari, then <em>Add to Home Screen</em>. It opens full screen, and your journal stays in one place.</p>
+    <button type="button" class="quiet" id="install-ok">Got it</button>
+  </div>
+  <div class="banner banner-bad" id="save-banner" hidden>
+    <p id="save-text"></p>
+  </div>
+</div>
+
+<div class="shell">
+  <main class="main" id="main">
+    <section class="page" id="page-trade" data-page="trade" aria-label="Trade">
+      <ol class="rail" id="rail-trade" aria-label="Trade steps"></ol>
+      <div id="flow"></div>
+    </section>
+
+    <section class="page" id="page-radar" data-page="radar" aria-label="Radar" hidden>
+      <div class="page-head">
+        <div><p class="eyebrow">Find ideas</p><h1>Radar</h1></div>
+        <button type="button" class="secondary" id="radar-refresh">Refresh</button>
+      </div>
+      <div class="controls">
+        <div class="seg" id="radar-chain" role="group" aria-label="Chain">
+          <button type="button" data-chain="solana" aria-pressed="true">Solana</button>
+          <button type="button" data-chain="bsc" aria-pressed="false">BNB</button>
+          <button type="button" data-chain="base" aria-pressed="false">Base</button>
+          <button type="button" data-chain="ethereum" aria-pressed="false">Ethereum</button>
+        </div>
+        <div class="seg" id="radar-kind" role="group" aria-label="List">
+          <button type="button" data-kind="trending" aria-pressed="true">Trending</button>
+          <button type="button" data-kind="new" aria-pressed="false">New</button>
+        </div>
+      </div>
+      <p class="page-note">Trending means people are trading it, not that it's good. The chip shows how each coin does against your strategy's market rules; tap a coin for the full check, contract scan included.</p>
+      <p class="status-line" id="radar-status" aria-live="polite"></p>
+      <div class="radar-list" id="radar-list"></div>
+    </section>
+
+    <section class="page" id="page-live" data-page="live" aria-label="Live trades" hidden>
+      <ol class="rail" id="rail-live" aria-label="Trade steps"></ol>
+      <div class="page-head">
+        <div><p class="eyebrow">Step 5 · Watch</p><h1>Live trades</h1></div>
+        <button type="button" class="secondary" id="live-refresh">Refresh</button>
+      </div>
+      <p class="status-line" id="live-status" aria-live="polite"></p>
+      <div id="live-review"></div>
+      <div class="live-list" id="live-list"></div>
+      <div class="card empty" id="live-empty" hidden>
+        <h2>No open trades</h2>
+        <p>Check a coin, plan it, buy it in Axiom, then log the buy. Scout watches the price from here and tells you when your plan says sell.</p>
+        <button type="button" data-go="trade">Check a coin</button>
+      </div>
+      <div id="live-alerts"></div>
+    </section>
+
+    <section class="page" id="page-journal" data-page="journal" aria-label="Journal" hidden>
+      <div class="page-head">
+        <div><p class="eyebrow">Step 6 · Review</p><h1>Journal</h1></div>
+      </div>
+      <div id="journal-body"></div>
+    </section>
+
+    <section class="page" id="page-rules" data-page="rules" aria-label="Rules" hidden>
+      <div class="page-head">
+        <div><p class="eyebrow">Your plan, written down</p><h1>Rules</h1></div>
+      </div>
+      <div id="rules-body"></div>
+    </section>
+  </main>
+  <aside class="side" id="side" aria-label="Live trades at a glance"></aside>
+</div>
+
+<nav class="tabbar" id="tabbar" aria-label="Pages">
+  <button type="button" data-go="trade" aria-current="page">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg>
+    <span>Trade</span>
+  </button>
+  <button type="button" data-go="radar">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12 19 5"/><path d="M20.5 12A8.5 8.5 0 1 1 12 3.5"/><path d="M16 12a4 4 0 1 1-4-4"/></svg>
+    <span>Radar</span>
+  </button>
+  <button type="button" data-go="live">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h4l2.5-6 4 12 2.5-6H22"/></svg>
+    <span>Live</span>
+    <b class="badge" id="live-badge" hidden>0</b>
+  </button>
+  <button type="button" data-go="journal">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h11a3 3 0 0 1 3 3v14H8a3 3 0 0 1-3-3z"/><path d="M5 17.5a3 3 0 0 1 3-3h11M9 7.5h6M9 10.5h4"/></svg>
+    <span>Journal</span>
+  </button>
+  <button type="button" data-go="rules">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+    <span>Rules</span>
+  </button>
+</nav>
+
+<div class="alert" id="alert" hidden>
+  <div class="alert-card" role="alertdialog" aria-modal="true" aria-labelledby="alert-title" aria-describedby="alert-text">
+    <p class="alert-kicker" id="alert-kicker"></p>
+    <h2 id="alert-title"></h2>
+    <p id="alert-text"></p>
+    <p class="alert-pnl" id="alert-pnl"></p>
+    <div class="alert-actions">
+      <a class="button secondary" id="alert-axiom" target="_blank" rel="noopener noreferrer" href="https://axiom.trade/">Open Axiom</a>
+      <button type="button" id="alert-sold">I sold</button>
+      <button type="button" class="quiet" id="alert-ok">Got it</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="core.js?v=1.0.0"></script>
+<script src="data.js?v=1.0.0"></script>
+<script src="app.js?v=1.0.0"></script>
+</body>
+</html>

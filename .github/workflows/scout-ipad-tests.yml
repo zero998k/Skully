@@ -1,0 +1,33 @@
+name: Scout for iPad tests
+
+on:
+  push:
+    paths:
+      - "docs/**"
+      - "scout-ipad-tests/**"
+      - ".github/workflows/scout-ipad-tests.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "scout-ipad-tests/**"
+      - ".github/workflows/scout-ipad-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Rules and release checks
+        run: node --test "scout-ipad-tests/*.test.cjs"
+      - name: Click through every screen in a browser
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+          PLAYWRIGHT_MODULE="$PWD/node_modules/playwright" node scout-ipad-tests/ui-smoke.cjs
