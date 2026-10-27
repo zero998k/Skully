@@ -1,0 +1,54 @@
+# Builds SolBoy for every computer and publishes it as a GitHub release (tag solboy-v<version>).
+# Running SolBoys check these releases and offer a one-click Update. Only a new version number in
+# solboy/package.json makes a new release; other pushes just check that the build still works.
+name: SolBoy release
+
+on:
+  push:
+    paths: ['solboy/**', '.github/workflows/solboy-release.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: solboy-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: solboy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: npm ci
+      - run: npm run build
+      - name: Check the app starts
+        run: test "$(./dist/SolBoy-Linux-x64 --version)" = "SolBoy $(node -p "require('./package.json').version")"
+      - name: Is this version already released?
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          echo "tag=solboy-v$v" >> "$GITHUB_OUTPUT"
+          if gh release view "solboy-v$v" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Publish
+        if: steps.version.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/package.sh release
+          cp dist/SolBoy-Mac-AppleSilicon dist/SolBoy-Mac-Intel dist/SolBoy-Windows.exe dist/SolBoy-Linux-x64 dist/SolBoy-Linux-arm64 release/
+          (cd release && sha256sum SolBoy-Mac-AppleSilicon SolBoy-Mac-Intel SolBoy-Windows.exe SolBoy-Linux-x64 SolBoy-Linux-arm64 > SHA256SUMS)
+          gh release create "${{ steps.version.outputs.tag }}" release/* \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "SolBoy ${{ steps.version.outputs.tag }}" --notes-file RELEASE_NOTES.md

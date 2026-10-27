@@ -1,0 +1,1049 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SolBoy HQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Mono:wght@500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #050505;
+  --panel: #0d0d0d;
+  --panel-2: #151515;
+  --edge: #2b2b2b;
+  --ink: #fafafa;
+  --ink-2: #b4b4b4;
+  --ink-3: #7a7a7a;
+  --accent: #ff3355;
+  --pink: #ff6bcb;
+  --sky: #5ce1ff;
+  --sun: #ffd23f;
+  --grape: #a98bff;
+  --win: #4ade80;
+  --loss: #ff5470;
+  --warn: #ffb020;
+  --r: 18px;
+  --display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --body: 'DM Sans', system-ui, sans-serif;
+  --mono: 'DM Mono', ui-monospace, Menlo, monospace;
+  --pop: cubic-bezier(.34, 1.56, .64, 1);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); -webkit-font-smoothing: antialiased; }
+body { min-height: 100vh; overflow-x: hidden; }
+/* Matte grain: a faint noise layer so the black reads as matte, not glossy. */
+.bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; background-color: var(--bg); opacity: 1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.06'/%3E%3C/svg%3E"); }
+.flash { position: fixed; inset: 0; z-index: 49; pointer-events: none; opacity: 0; transition: opacity .5s; border: 0 solid transparent; }
+.flash.win { border: 6px solid var(--win); opacity: 1; transition: none; }
+.flash.loss { border: 6px solid var(--loss); opacity: 1; transition: none; }
+.flash.buy { border: 6px solid var(--sun); opacity: 1; transition: none; }
+.wrap { max-width: 1440px; margin: 0 auto; padding: 18px 22px 60px; }
+.cut { } /* sticker style uses rounded corners instead of angled cuts */
+
+/* Sticker look: crisp outline + hard offset shadow in an accent color. */
+.sticker { background: var(--panel); border: 2px solid var(--edge); border-radius: var(--r); box-shadow: 5px 5px 0 var(--shadow, #1f1f1f); }
+
+/* ---------- top bar ---------- */
+.hud { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 16px; position: sticky; top: 12px; z-index: 20;
+  background: rgba(13, 13, 13, .92); backdrop-filter: blur(10px); border: 2px solid var(--edge); border-radius: 22px; box-shadow: 5px 5px 0 var(--accent); }
+.brand { display: flex; align-items: center; gap: 10px; }
+.mascot { width: 54px; height: 54px; animation: bob 2.4s ease-in-out infinite; transform-origin: 50% 90%; }
+.mascot .mouth-happy, .mascot .mouth-sad { opacity: 0; }
+.mascot.happy .mouth-idle, .mascot.sad .mouth-idle { opacity: 0; }
+.mascot.happy .mouth-happy, .mascot.sad .mouth-sad { opacity: 1; }
+.mascot.happy { animation: hop .5s var(--pop) 2; }
+.mascot.sad { animation: droop 1.2s ease-in-out; }
+@keyframes bob { 50% { transform: translateY(-3px) rotate(-2deg); } }
+@keyframes hop { 40% { transform: translateY(-12px) rotate(8deg) scale(1.08); } }
+@keyframes droop { 30% { transform: translateY(3px) rotate(-8deg); } 60% { transform: translateY(3px) rotate(6deg); } }
+.logo { font-family: var(--display); font-weight: 800; font-size: 30px; letter-spacing: -1px; position: relative; line-height: 1; }
+.logo b { color: var(--accent); font-weight: 800; }
+.logo::after { content: attr(data-text); position: absolute; inset: 0; color: var(--pink); opacity: 0; clip-path: inset(45% 0 30% 0); }
+.logo:hover::after, .logo.glitch::after { animation: glitch .3s steps(3) 2; }
+@keyframes glitch { 0% { opacity: 1; transform: translate(-3px, 0); } 50% { opacity: 1; transform: translate(3px, 1px); clip-path: inset(10% 0 65% 0); } 100% { opacity: 0; transform: none; } }
+.chip { font-family: var(--display); font-weight: 800; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 2px solid #000; transform: rotate(-3deg); box-shadow: 3px 3px 0 #000; }
+.chip.paper { color: #0a0a0a; background: var(--sun); }
+.chip.live { color: #fff; background: var(--loss); animation: wiggle 1s infinite; }
+@keyframes wiggle { 50% { transform: rotate(3deg) scale(1.05); } }
+.status { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--win); border: 2px solid #000; animation: breathe 1.6s infinite; }
+.dot.off { background: var(--loss); }
+@keyframes breathe { 50% { transform: scale(.75); } }
+.spacer { flex: 1; }
+.btn { font-family: var(--display); font-weight: 800; font-size: 14px; color: var(--ink); background: var(--panel-2); border: 2px solid var(--edge); border-radius: 12px;
+  padding: 9px 14px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 3px 3px 0 #2b2b2b;
+  transition: transform .15s var(--pop), box-shadow .15s, background .15s, color .15s, border-color .15s; }
+.btn:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--accent); border-color: var(--ink-3); }
+.btn:active { transform: translate(2px, 2px) scale(.97); box-shadow: 0 0 0 transparent; }
+.btn:focus-visible, .tab:focus-visible, input:focus-visible, .report:focus-visible { outline: 3px solid var(--sky); outline-offset: 3px; }
+.btn.primary { background: var(--accent); color: #fff; border-color: #000; box-shadow: 3px 3px 0 #fafafa; }
+.btn.primary:hover { box-shadow: 5px 5px 0 #fafafa; }
+.btn.danger { color: var(--loss); }
+.btn.danger:hover { background: var(--loss); color: #fff; border-color: #000; box-shadow: 5px 5px 0 #fafafa; }
+.btn.update { background: var(--sun); color: #0a0a0a; border-color: #000; box-shadow: 3px 3px 0 #fafafa; animation: wiggle 2.5s infinite; }
+.btn.paused { background: var(--warn); color: #0a0a0a; border-color: #000; box-shadow: 3px 3px 0 #fafafa; }
+kbd { font-family: var(--mono); font-size: 10px; padding: 1px 5px; border: 1.5px solid currentColor; opacity: .55; border-radius: 5px; }
+
+/* ---------- ticker ---------- */
+.ticker { margin-top: 14px; overflow: hidden; font-family: var(--mono); font-size: 12px; white-space: nowrap; color: var(--ink-2);
+  border: 2px solid var(--edge); border-radius: 999px; background: var(--panel); mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
+.ticker .track { display: inline-block; padding: 8px 0; animation: tick 50s linear infinite; }
+.ticker:hover .track { animation-play-state: paused; }
+.ticker span { margin: 0 24px; } .ticker span::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 10px; border: 1.5px solid #000; }
+.ticker .b::before { background: var(--sun); } .ticker .s::before { background: var(--sky); } .ticker .i::before { background: var(--grape); } .ticker .w::before { background: var(--warn); }
+@keyframes tick { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* ---------- stat cards ---------- */
+.stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin: 18px 0; }
+.card { position: relative; padding: 16px 18px; background: var(--panel); border: 2px solid var(--edge); border-radius: var(--r); box-shadow: 5px 5px 0 var(--shadow);
+  transition: transform .2s var(--pop), box-shadow .2s; }
+.card:hover { transform: translate(-2px, -2px) rotate(-.5deg); box-shadow: 7px 7px 0 var(--shadow); }
+.card:nth-child(1) { --shadow: var(--accent); } .card:nth-child(2) { --shadow: var(--sky); } .card:nth-child(3) { --shadow: var(--pink); }
+.card:nth-child(4) { --shadow: var(--sun); } .card:nth-child(5) { --shadow: var(--grape); }
+.label { font-family: var(--display); font-weight: 800; font-size: 13px; color: var(--ink-2); }
+.label .ic { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: var(--shadow); color: #0a0a0a; font-size: 12px; margin-right: 6px; border: 1.5px solid #000; }
+.big { font-family: var(--display); font-weight: 800; font-size: 32px; margin: 10px 0 2px; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.sub { font-size: 13px; color: var(--ink-2); }
+.pos { color: var(--win); } .neg { color: var(--loss); }
+.bar { height: 14px; background: #1c1c1c; border: 2px solid #000; border-radius: 999px; overflow: hidden; margin: 16px 0 10px; box-shadow: inset 0 2px 0 rgba(0, 0, 0, .5); }
+.bar > i { display: block; height: 100%; width: 0; border-radius: 999px; transition: width .8s var(--pop);
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, .25) 0 50%, transparent 50%); background-size: 16px 100%; }
+.hp > i { background-color: var(--win); } .hp.mid > i { background-color: var(--warn); } .hp.low > i { background-color: var(--loss); }
+.xp > i { background-color: var(--grape); }
+.ko { font-family: var(--display); font-weight: 800; color: var(--loss); font-size: 14px; }
+
+/* ---------- panels ---------- */
+.grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; }
+.panel { background: var(--panel); border: 2px solid var(--edge); border-radius: 22px; padding: 18px; min-width: 0; box-shadow: 5px 5px 0 #1f1f1f; }
+.panel h2 { font-family: var(--display); font-size: 20px; font-weight: 800; margin: 0 0 14px; display: flex; align-items: center; gap: 10px; letter-spacing: -.3px; }
+.panel h2 .ic { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; border: 2px solid #000; font-size: 15px; box-shadow: 2px 2px 0 #000; }
+.panel h2 .count { color: var(--ink-3); font-family: var(--mono); font-weight: 500; font-size: 12px; }
+.panel .hint { color: var(--ink-3); font-size: 13px; margin-top: 12px; }
+
+/* positions */
+.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.slot { padding: 14px; background: var(--panel-2); border: 2px solid var(--edge); border-radius: 16px; transition: transform .2s var(--pop); animation: pop .45s var(--pop); }
+.slot:hover { transform: translateY(-3px) rotate(-.6deg); }
+.slot.empty { display: grid; place-items: center; min-height: 150px; color: var(--ink-3); font-family: var(--display); font-weight: 600; font-size: 14px; border-style: dashed; background: transparent; animation: none; }
+.slot .name { font-family: var(--display); font-size: 20px; font-weight: 800; overflow-wrap: anywhere; }
+.slot .meta { color: var(--ink-3); font-size: 12px; margin: 2px 0 10px; }
+.slot .pnl { font-family: var(--display); font-size: 28px; font-weight: 800; }
+.slot .row { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-2); margin: 6px 0; }
+.slot .row span:last-child { font-family: var(--mono); }
+.slot .actions { display: flex; gap: 8px; margin-top: 12px; } .slot .actions .btn { flex: 1; padding: 8px 6px; font-size: 13px; }
+@keyframes pop { from { transform: scale(.85); opacity: 0; } }
+
+/* feed */
+.filters { display: flex; gap: 6px; margin-left: auto; }
+.filters button { font-family: var(--display); font-weight: 600; font-size: 12px; padding: 5px 11px; border-radius: 999px; border: 2px solid var(--edge); background: none; color: var(--ink-3); cursor: pointer; }
+.filters button.on { color: #0a0a0a; background: var(--sky); border-color: #000; }
+.feed { list-style: none; margin: 0; padding: 0; max-height: 520px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.feed li { display: grid; grid-template-columns: 84px 82px 1fr; gap: 10px; align-items: baseline; font-size: 13px; padding: 9px 12px; border-radius: 12px; background: var(--panel-2); animation: slide .35s var(--pop); }
+.feed li .t { white-space: nowrap; color: var(--ink-3); font-family: var(--mono); font-size: 11px; }
+.feed li .k { font-family: var(--display); font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; border: 1.5px solid #000; color: #0a0a0a; background: var(--ink-3); justify-self: start; }
+.feed li.buy .k { background: var(--sun); } .feed li.sell .k { background: var(--sky); } .feed li.spotted .k { background: var(--pink); }
+.feed li.research .k, .feed li.research-done .k { background: var(--grape); } .feed li.warn .k { background: var(--warn); }
+@keyframes slide { from { transform: translateX(16px) scale(.98); opacity: 0; } }
+
+/* chart */
+.chart-wrap { position: relative; }
+.chart-wrap svg { width: 100%; height: 220px; display: block; }
+.tip { position: absolute; pointer-events: none; background: var(--panel-2); border: 2px solid var(--edge); border-radius: 10px; padding: 8px 10px; font-size: 12px; color: var(--ink);
+  white-space: nowrap; transform: translate(-50%, -115%); opacity: 0; transition: opacity .12s; box-shadow: 3px 3px 0 #000; }
+.tip b { font-family: var(--mono); }
+
+/* tabs */
+.tabs { display: flex; gap: 10px; margin: 22px 0 14px; flex-wrap: wrap; }
+.tab { font-family: var(--display); font-weight: 800; font-size: 15px; padding: 10px 16px; border-radius: 14px; border: 2px solid var(--edge); background: var(--panel);
+  color: var(--ink-2); cursor: pointer; display: inline-flex; gap: 8px; align-items: center; box-shadow: 3px 3px 0 #1f1f1f; transition: transform .15s var(--pop), box-shadow .15s; }
+.tab:hover { transform: translate(-1px, -1px); color: var(--ink); }
+.tab.on { color: #fff; background: var(--accent); border-color: #000; box-shadow: 4px 4px 0 #fafafa; transform: rotate(-1.5deg); }
+.tabpage { display: none; animation: pop .3s var(--pop); } .tabpage.on { display: block; }
+
+/* intel */
+.scanbox { display: flex; gap: 10px; margin-bottom: 16px; }
+.scanbox input { flex: 1; font-family: var(--mono); font-size: 14px; color: var(--ink); background: var(--bg); border: 2px solid var(--edge); border-radius: 14px; padding: 12px 14px; }
+.scanbox input::placeholder { color: var(--ink-3); font-family: var(--body); }
+.reports { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; align-items: start; }
+.report { text-align: left; font-family: var(--body); color: var(--ink); cursor: pointer; padding: 16px; background: var(--panel-2); border: 2px solid var(--edge); border-radius: 16px;
+  box-shadow: 4px 4px 0 var(--grape); transition: transform .2s var(--pop), box-shadow .2s; display: block; width: 100%; }
+.report:hover { transform: translate(-2px, -2px) rotate(-.6deg); box-shadow: 6px 6px 0 var(--grape); }
+.report .top { display: flex; justify-content: space-between; align-items: baseline; }
+.report .sym { font-family: var(--display); font-size: 21px; font-weight: 800; }
+.report .when { color: var(--ink-3); font-size: 12px; font-family: var(--mono); }
+.report .tldr { display: inline-block; font-family: var(--display); font-weight: 800; font-size: 11px; color: #0a0a0a; background: var(--grape); border: 1.5px solid #000; border-radius: 999px; padding: 1px 8px; margin-top: 10px; }
+.report p { color: var(--ink-2); font-size: 14px; line-height: 1.55; margin: 8px 0 0; }
+
+/* wallets */
+.wallet-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.wallet-bar .note { color: var(--ink-3); font-size: 13px; }
+.addr { font-family: var(--mono); font-size: 12px; color: var(--ink-3); text-decoration: none; }
+.addr:hover { color: var(--sky); }
+.state { font-family: var(--display); font-weight: 800; font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1.5px solid #000; color: #0a0a0a; background: var(--win); white-space: nowrap; }
+.state.retiring { background: var(--warn); }
+td .btn { padding: 6px 10px; font-size: 12px; }
+.form { display: grid; gap: 14px; }
+.form label { font-family: var(--display); font-weight: 800; font-size: 14px; display: grid; gap: 6px; }
+.form label small { font-family: var(--body); font-weight: 400; color: var(--ink-3); font-size: 12px; }
+.form input { font-family: var(--mono); font-size: 14px; color: var(--ink); background: var(--bg); border: 2px solid var(--edge); border-radius: 12px; padding: 11px 13px; }
+.form .err { color: var(--loss); font-size: 13px; min-height: 1em; }
+.form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form select { font-family: var(--body); font-size: 14px; color: var(--ink); background: var(--bg); border: 2px solid var(--edge); border-radius: 12px; padding: 10px 12px; }
+.quick { background: var(--panel-2); border: 2px solid var(--edge); border-radius: 18px; padding: 18px; margin-bottom: 18px; max-width: 760px; }
+.quick h3, h3.sub { font-family: var(--display); font-weight: 800; font-size: 18px; margin: 0 0 6px; }
+.quick p { color: var(--ink-2); font-size: 14px; margin: 0 0 14px; }
+h3.sub { margin: 6px 0 8px; }
+
+/* account */
+.acct { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; }
+.acct .box2 { background: var(--panel-2); border: 2px solid var(--edge); border-radius: 18px; padding: 18px; }
+.acct h3 { font-family: var(--display); font-weight: 800; font-size: 18px; margin: 0 0 10px; }
+.acct p { color: var(--ink-2); font-size: 14px; line-height: 1.55; margin: 6px 0; }
+.balance { font-family: var(--display); font-weight: 800; font-size: 44px; letter-spacing: -1.5px; margin: 4px 0; }
+.deposit { display: grid; grid-template-columns: 150px 1fr; gap: 16px; align-items: center; margin-top: 12px; }
+.deposit img { width: 150px; height: 150px; border-radius: 14px; border: 3px solid #000; box-shadow: 4px 4px 0 var(--accent); background: #fff; }
+.addrbox { font-family: var(--mono); font-size: 13px; word-break: break-all; background: var(--bg); border: 2px solid var(--edge); border-radius: 12px; padding: 10px 12px; margin: 8px 0; }
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.mode-btn { text-align: left; padding: 14px; border-radius: 16px; border: 2px solid var(--edge); background: var(--panel); color: var(--ink-2); cursor: pointer; font-family: var(--body); transition: transform .15s var(--pop); }
+.mode-btn b { display: block; font-family: var(--display); font-weight: 800; font-size: 17px; color: var(--ink); margin-bottom: 4px; }
+.mode-btn:hover { transform: translateY(-2px); }
+.mode-btn.on.paper { border-color: #000; background: var(--sun); color: #2a2200; box-shadow: 4px 4px 0 #fafafa; } .mode-btn.on.paper b { color: #0a0a0a; }
+.mode-btn.on.live { border-color: #000; background: var(--accent); color: #fff; box-shadow: 4px 4px 0 #fafafa; } .mode-btn.on.live b { color: #fff; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--ink); margin: 12px 0; cursor: pointer; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); margin-top: 1px; }
+.warnbox { background: #2a0d12; border: 2px solid var(--accent); border-radius: 14px; padding: 12px 14px; color: #ffd0d7; font-size: 14px; }
+.keybox { font-family: var(--mono); font-size: 12px; word-break: break-all; background: #2a0d12; border: 2px solid var(--accent); border-radius: 12px; padding: 12px; color: #fff; }
+.balchip { font-family: var(--mono); font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 2px solid var(--edge); background: var(--panel-2); color: var(--ink); cursor: pointer; }
+.balchip:hover { border-color: var(--accent); }
+@media (max-width: 900px) { .acct { grid-template-columns: 1fr; } .deposit { grid-template-columns: 1fr; } }
+
+/* assistant */
+.ask-fab { position: fixed; left: 18px; bottom: 18px; z-index: 64; display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 800; font-size: 15px;
+  color: #fff; background: var(--accent); border: 2px solid #000; border-radius: 999px; padding: 8px 16px 8px 8px; cursor: pointer; box-shadow: 4px 4px 0 #fafafa; transition: transform .15s var(--pop); }
+.ask-fab:hover { transform: translate(-2px, -2px) rotate(-2deg); }
+.ask-fab svg { width: 34px; height: 34px; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100vw); z-index: 66; background: var(--panel); border-left: 2px solid var(--edge);
+  display: flex; flex-direction: column; transform: translateX(105%); transition: transform .35s var(--pop); box-shadow: -8px 0 0 rgba(255, 51, 85, .25); }
+.drawer.on { transform: none; }
+.drawer header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 2px solid var(--edge); }
+.drawer header b { font-family: var(--display); font-size: 19px; display: block; }
+.drawer header small { color: var(--ink-3); font-size: 12px; }
+.drawer header .spacer { flex: 1; }
+.model-row { padding: 10px 16px; border-bottom: 1px solid #1f1f1f; display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-3); }
+.model-row select { flex: 1; font-family: var(--body); font-size: 13px; color: var(--ink); background: var(--panel-2); border: 2px solid var(--edge); border-radius: 10px; padding: 7px 8px; }
+.chat { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 92%; padding: 10px 13px; border-radius: 16px; font-size: 14px; line-height: 1.5; animation: pop .3s var(--pop); overflow-wrap: anywhere; }
+.msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; white-space: pre-wrap; }
+.msg.bot { align-self: flex-start; background: var(--panel-2); border: 2px solid var(--edge); border-bottom-left-radius: 4px; color: var(--ink); }
+.msg.bot p { margin: 4px 0; color: var(--ink); } .msg.bot ul { margin: 4px 0; padding-left: 18px; } .msg.bot h3 { font-size: 15px; margin: 8px 0 4px; }
+.msg.note { align-self: flex-start; color: var(--warn); font-size: 13px; }
+.msg .via { display: block; font-size: 10px; color: var(--ink-3); margin-top: 6px; font-family: var(--mono); }
+.proposal { align-self: stretch; background: #1a1205; border: 2px solid var(--sun); border-radius: 16px; padding: 12px 14px; animation: pop .3s var(--pop); }
+.proposal .what { font-family: var(--display); font-weight: 800; font-size: 14px; margin-bottom: 10px; }
+.proposal .what small { display: block; font-family: var(--body); font-weight: 400; color: var(--ink-3); font-size: 11px; margin-bottom: 2px; }
+.proposal .done { color: var(--win); font-weight: 700; font-size: 13px; } .proposal .skip { color: var(--ink-3); font-size: 13px; }
+.typing { align-self: flex-start; display: flex; gap: 5px; padding: 12px 14px; background: var(--panel-2); border: 2px solid var(--edge); border-radius: 16px; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); animation: dots 1s infinite; } .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes dots { 50% { transform: translateY(-5px); background: var(--accent); } }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 10px; }
+.chips button { font-family: var(--body); font-size: 12px; color: var(--ink-2); background: var(--panel-2); border: 2px solid var(--edge); border-radius: 999px; padding: 6px 10px; cursor: pointer; }
+.chips button:hover { color: var(--ink); border-color: var(--accent); }
+.chatbox { display: flex; gap: 8px; padding: 12px 16px 16px; border-top: 2px solid var(--edge); }
+.chatbox textarea { flex: 1; resize: none; font-family: var(--body); font-size: 14px; color: var(--ink); background: var(--bg); border: 2px solid var(--edge); border-radius: 14px; padding: 10px 12px; }
+.setup-card { background: var(--panel-2); border: 2px solid var(--edge); border-radius: 16px; padding: 14px; font-size: 14px; color: var(--ink-2); }
+.setup-card b { color: var(--ink); } .setup-card input { width: 100%; margin: 8px 0; }
+.setup-card details { margin-top: 10px; } .setup-card summary { cursor: pointer; color: var(--ink); font-weight: 700; }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { font-family: var(--display); font-weight: 800; font-size: 13px; color: var(--ink-3); text-align: left; padding: 10px; border-bottom: 2px solid var(--edge); }
+td { padding: 11px 10px; border-bottom: 1px solid #1f1f1f; }
+td.num { font-family: var(--mono); }
+tr:hover td { background: var(--panel-2); }
+.tag { font-family: var(--display); font-size: 11px; font-weight: 800; padding: 2px 9px; border-radius: 999px; border: 1.5px solid #000; color: #0a0a0a; }
+.tag.buy { background: var(--sun); } .tag.sell { background: var(--sky); }
+.rank { display: inline-grid; place-items: center; min-width: 34px; height: 28px; font-family: var(--display); font-weight: 800; border-radius: 10px; background: var(--panel-2); border: 2px solid var(--edge); }
+.rank.r1 { background: var(--sun); color: #0a0a0a; border-color: #000; } .rank.r2 { background: #e5e5e5; color: #0a0a0a; border-color: #000; } .rank.r3 { background: #e0915a; color: #0a0a0a; border-color: #000; }
+.kv { display: grid; grid-template-columns: 260px 1fr; }
+.kv div { padding: 11px 10px; border-bottom: 1px solid #1f1f1f; }
+.kv div:nth-child(odd) { color: var(--ink-3); }
+code { font-family: var(--mono); font-size: 12px; color: var(--sky); word-break: break-all; }
+.empty-msg { color: var(--ink-3); padding: 24px 4px; }
+
+/* modal + toasts */
+.modal { position: fixed; inset: 0; z-index: 60; display: none; place-items: center; background: rgba(0, 0, 0, .8); padding: 20px; }
+.modal.on { display: grid; animation: pop .3s var(--pop); }
+.modal .box { width: min(720px, 100%); max-height: 86vh; overflow-y: auto; background: var(--panel); border: 2px solid var(--edge); border-radius: 24px; padding: 26px; line-height: 1.6; box-shadow: 8px 8px 0 var(--grape); }
+.modal h3 { font-family: var(--display); font-weight: 800; font-size: 18px; color: var(--ink); margin: 22px 0 6px; }
+.modal h3:first-child { margin-top: 0; font-size: 28px; letter-spacing: -.5px; }
+.modal li { margin: 6px 0; color: var(--ink-2); } .modal p { color: var(--ink-2); margin: 8px 0; } .modal strong { color: var(--ink); }
+.modal .tldr-box { background: #1a1528; border: 2px solid var(--grape); border-radius: 14px; padding: 12px 14px; color: var(--ink); }
+.modal .foot { display: flex; gap: 10px; margin-top: 20px; }
+.toasts { position: fixed; right: 18px; bottom: 18px; z-index: 70; display: flex; flex-direction: column; gap: 10px; width: min(360px, calc(100vw - 36px)); }
+.toast { padding: 12px 14px; background: var(--panel-2); border: 2px solid #000; border-radius: 16px; font-size: 13px; color: var(--ink-2); box-shadow: 4px 4px 0 var(--accent, var(--grape));
+  animation: toast-in .45s var(--pop); }
+.toast .h { font-family: var(--display); font-weight: 800; font-size: 15px; margin-bottom: 2px; color: var(--accent, var(--grape)); }
+.toast.buy { --accent: var(--sun); } .toast.win { --accent: var(--win); } .toast.loss { --accent: var(--loss); } .toast.info { --accent: var(--grape); }
+.toast.out { animation: toast-out .25s forwards; }
+@keyframes toast-in { from { transform: translateY(30px) scale(.8) rotate(4deg); opacity: 0; } }
+@keyframes toast-out { to { transform: translateX(110%); opacity: 0; } }
+
+@media (max-width: 1100px) { .stats { grid-template-columns: repeat(2, 1fr); } .grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .hud { position: static; } .stats { grid-template-columns: 1fr; } .kv { grid-template-columns: 1fr; } .feed li { grid-template-columns: 1fr; gap: 4px; } .form .row2 { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="bg"></div><div class="flash" id="flash"></div>
+<div class="wrap">
+  <header class="hud">
+    <div class="brand">
+      <svg class="mascot" id="mascot" viewBox="0 0 64 64" aria-hidden="true">
+        <defs><linearGradient id="solg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff2e4d"/><stop offset="1" stop-color="#ff8a3d"/></linearGradient></defs>
+        <circle cx="32" cy="36" r="22" fill="url(#solg)" stroke="#0a0a0a" stroke-width="3"/>
+        <path d="M11 27 Q12 15 19 12 L19 3 L27 10 L33 1 L38 10 L47 4 L45 13 Q53 17 53 27 Q43 18 32 19 Q20 19 11 27 Z" fill="#fafafa" stroke="#0a0a0a" stroke-width="2.5" stroke-linejoin="round"/>
+        <rect x="13" y="27" width="38" height="12" rx="6" fill="#0a0a0a"/>
+        <rect x="18" y="29" width="10" height="3" rx="1.5" fill="#fafafa" opacity=".85"/>
+        <path class="mouth-idle" d="M25 47 Q33 51 40 45" fill="none" stroke="#0a0a0a" stroke-width="3" stroke-linecap="round"/>
+        <path class="mouth-happy" d="M23 44 Q32 56 41 44 Z" fill="#0a0a0a"/>
+        <path class="mouth-sad" d="M25 50 Q32 44 39 50" fill="none" stroke="#0a0a0a" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <div class="logo" id="logo" data-text="SOLBOY">SOL<b>BOY</b></div>
+    </div>
+    <span class="chip" id="mode">...</span>
+    <span class="status"><span class="dot" id="dot"></span><span id="conn">CONNECTING</span></span>
+    <button class="balchip" id="balChip" title="Open your account">◎ Set up wallet</button>
+    <span class="spacer"></span>
+    <button class="btn update" id="updateBtn" hidden>⬆ Update</button>
+    <button class="btn primary" id="addWalletBtn">+ Add wallet <kbd>A</kbd></button>
+    <button class="btn" id="pauseBtn" title="Stop copying new buys. Sells keep following.">Pause copying <kbd>P</kbd></button>
+    <button class="btn" id="sfxBtn">Sound off <kbd>S</kbd></button>
+    <button class="btn" id="logoutBtn" hidden>Log out</button>
+  </header>
+  <div class="ticker" aria-hidden="true"><div class="track" id="ticker"></div></div>
+
+  <section class="stats">
+    <div class="card cut"><div class="label"><span class="ic">$</span>Total PnL</div><div class="big" id="score">0</div><div class="sub" id="today">today 0</div></div>
+    <div class="card cut"><div class="label"><span class="ic">♥</span>HP · daily risk left</div><div class="bar hp" id="hpBar"><i id="hp"></i></div><div class="sub" id="hpText">-</div></div>
+    <div class="card cut"><div class="label"><span class="ic">✓</span>Win rate</div><div class="big" id="acc">-</div><div class="sub" id="wl">0W · 0L</div></div>
+    <div class="card cut"><div class="label"><span class="ic">↯</span>Streak</div><div class="big" id="streak">-</div><div class="sub" id="streakSub">no closed trades yet</div></div>
+    <div class="card cut"><div class="label"><span class="ic">★</span>Level</div><div class="big" id="level">LVL 1</div><div class="bar xp"><i id="xp"></i></div><div class="sub" id="xpText">0 / 10 XP</div></div>
+  </section>
+
+  <div class="grid">
+    <section class="panel cut">
+      <h2><span class="ic" style="background:var(--accent)">🎒</span>Positions <span class="count" id="slotCount"></span></h2>
+      <div class="slots" id="slots"></div>
+      <div class="hint">"Worth" is what selling right now would return, after price impact.</div>
+    </section>
+    <section class="panel cut">
+      <h2><span class="ic" style="background:var(--sky)">⚡</span>Live feed
+        <span class="filters" id="filters">
+          <button data-f="all" class="on">All</button><button data-f="trades">Trades</button><button data-f="intel">Intel</button><button data-f="alerts">Alerts</button>
+        </span>
+      </h2>
+      <ul class="feed" id="feed"></ul>
+    </section>
+  </div>
+
+  <section class="panel cut" style="margin-top:12px">
+    <h2><span class="ic" style="background:var(--sun)">📈</span>PnL curve <span class="count">total profit over time, in SOL</span></h2>
+    <div class="chart-wrap" id="chartWrap"><svg id="chart" viewBox="0 0 1000 220" preserveAspectRatio="none" role="img" aria-label="Total profit over time"></svg><div class="tip" id="tip"></div></div>
+  </section>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab on" data-tab="intel">Intel <kbd>1</kbd></button>
+    <button class="tab" data-tab="history">History <kbd>2</kbd></button>
+    <button class="tab" data-tab="board">Wallets <kbd>3</kbd></button>
+    <button class="tab" data-tab="loadout">Loadout <kbd>4</kbd></button>
+    <button class="tab" data-tab="account">Account <kbd>5</kbd></button>
+  </nav>
+
+  <section class="panel tabpage on" id="tab-intel">
+    <form class="scanbox" id="scanForm">
+      <input id="scanInput" placeholder="Paste any token address (CA) to get an AI breakdown" autocomplete="off" spellcheck="false">
+      <button class="btn primary" type="submit">Scan</button>
+    </form>
+    <div class="reports" id="reports"></div>
+  </section>
+  <section class="panel tabpage" id="tab-history"><div id="history"></div></section>
+  <section class="panel tabpage" id="tab-board"><div id="board"></div></section>
+  <section class="panel tabpage" id="tab-loadout"><div id="loadout"></div></section>
+  <section class="panel tabpage" id="tab-account"><div id="account"></div></section>
+</div>
+
+<div class="modal" id="modal"><div class="box"><div id="modalBody"></div><div class="foot"><button class="btn" id="modalClose">Close <kbd>Esc</kbd></button></div></div></div>
+<div class="toasts" id="toasts"></div>
+
+<button class="ask-fab" id="askFab"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="36" r="22" fill="url(#solg2)" stroke="#0a0a0a" stroke-width="3"/><defs><linearGradient id="solg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff2e4d"/><stop offset="1" stop-color="#ff8a3d"/></linearGradient></defs><path d="M11 27 Q12 15 19 12 L19 3 L27 10 L33 1 L38 10 L47 4 L45 13 Q53 17 53 27 Q43 18 32 19 Q20 19 11 27 Z" fill="#fafafa" stroke="#0a0a0a" stroke-width="2.5" stroke-linejoin="round"/><rect x="13" y="27" width="38" height="12" rx="6" fill="#0a0a0a"/><path d="M23 44 Q32 56 41 44 Z" fill="#0a0a0a"/></svg>Ask SolBoy <kbd>/</kbd></button>
+<aside class="drawer" id="drawer" aria-label="SolBoy Assistant">
+  <header><div><b>SolBoy Assistant</b><small id="aiEngine">...</small></div><span class="spacer"></span>
+    <button class="btn" id="chatClear" title="Start a new chat">New chat</button><button class="btn" id="drawerClose" aria-label="Close">✕</button></header>
+  <div class="model-row">Brain <select id="aiModel"></select></div>
+  <div class="chat" id="chat"></div>
+  <div class="chips" id="chips"></div>
+  <form class="chatbox" id="chatForm"><textarea id="chatInput" rows="2" placeholder="Ask about any meme coin, or tell SolBoy what to change..."></textarea><button class="btn primary" type="submit">Send</button></form>
+</aside>
+
+<script>
+const TOKEN = '__TOKEN__';
+const SERVER_MODE = '__SERVER_MODE__' === 'true'; // true when SolBoy runs online on a server
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+const fmt = (n, d = 4) => `${n > 0 ? '▲ +' : n < 0 ? '▼ ' : ''}${Number(n).toFixed(d)}`;
+const cls = (n) => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
+const ago = (t) => { const m = Math.round((Date.now() - new Date(t)) / 60000); return m < 60 ? `${m}m ago` : m < 2880 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
+const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+
+async function api(path, body) {
+  const res = await fetch(`${path}${path.includes('?') ? '&' : '?'}t=${TOKEN}`, body
+    ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
+  if (res.status === 401 && SERVER_MODE) { location.href = '/login'; throw new Error('Log in first.'); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || `error ${res.status}`), { status: res.status });
+  return data;
+}
+
+/* ---------- sound (off by default) ---------- */
+let sfx = store.get('sfx', 'off') === 'on';
+let audio;
+function beep(notes, type = 'sine') {
+  if (!sfx) return;
+  audio ??= new AudioContext();
+  let t = audio.currentTime;
+  for (const [freq, len] of notes) {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = type; o.frequency.value = freq; g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
+    o.connect(g).connect(audio.destination); o.start(t); o.stop(t + len); t += len * 0.8;
+  }
+}
+const SFX = {
+  buy: () => beep([[660, .07], [990, .1]]),
+  win: () => beep([[784, .08], [988, .08], [1319, .16]], 'triangle'),
+  loss: () => beep([[330, .12], [247, .22]], 'triangle'),
+  intel: () => beep([[1175, .05], [1568, .08]]),
+};
+function renderSfx() { $('sfxBtn').innerHTML = `Sound ${sfx ? 'on' : 'off'} <kbd>S</kbd>`; }
+$('sfxBtn').onclick = () => { sfx = !sfx; store.set('sfx', sfx ? 'on' : 'off'); renderSfx(); if (sfx) SFX.intel(); };
+renderSfx();
+if (SERVER_MODE) {
+  $('logoutBtn').hidden = false;
+  $('logoutBtn').onclick = async () => { await fetch('/api/logout', { method: 'POST' }); location.href = '/login'; };
+}
+// Online, risky money actions ask for the password again.
+const passwordField = () => (SERVER_MODE ? '<label class="check" style="display:grid;gap:6px">Your SolBoy password<input type="password" id="pwConfirm" class="addrbox" autocomplete="current-password"></label>' : '');
+const confirmPassword = () => (SERVER_MODE ? { password: $('pwConfirm')?.value ?? '' } : {});
+
+/* ---------- feedback: glow, glitch, toasts, count-up ---------- */
+function juice(kind) {
+  const f = $('flash'); f.className = `flash ${kind}`; requestAnimationFrame(() => requestAnimationFrame(() => (f.className = 'flash')));
+  const logo = $('logo'); logo.classList.remove('glitch'); void logo.offsetWidth; logo.classList.add('glitch');
+  mood(kind === 'loss' ? 'sad' : 'happy');
+}
+// The mascot reacts to trades, then goes back to chilling.
+let moodTimer;
+function mood(m) {
+  const el = $('mascot');
+  el.classList.remove('happy', 'sad'); void el.getBoundingClientRect(); el.classList.add(m);
+  clearTimeout(moodTimer); moodTimer = setTimeout(() => el.classList.remove(m), 3500);
+}
+function toast(kind, head, text) {
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`; el.innerHTML = `<div class="h">${esc(head)}</div>${esc(text)}`;
+  $('toasts').prepend(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 250); }, 5000);
+  while ($('toasts').children.length > 4) $('toasts').lastChild.remove();
+}
+const shown = new Map();
+function countTo(el, value, decimals = 4) {
+  const from = shown.get(el) ?? value, start = performance.now();
+  shown.set(el, value);
+  const step = (now) => {
+    const p = Math.min(1, (now - start) / 700), v = from + (value - from) * (1 - Math.pow(1 - p, 3));
+    el.textContent = `${fmt(v, decimals)} SOL`; el.className = `big ${cls(value)}`;
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+/* ---------- state ---------- */
+let S = null;
+async function refresh() {
+  try { S = await api('/api/state'); online(true); render(); }
+  catch (e) {
+    online(false);
+    if (e.status === 403) location.reload(); // SolBoy restarted (after an update): load the new page
+  }
+}
+function online(on) { $('dot').className = on ? 'dot' : 'dot off'; $('conn').textContent = on ? 'ONLINE' : 'BOT OFFLINE'; }
+
+function render() {
+  const s = S.summary;
+  $('mode').className = `chip ${S.mode}`;
+  $('mode').textContent = S.mode === 'live' ? 'Real money' : 'Paper · practice';
+  const pb = $('pauseBtn');
+  pb.className = S.paused ? 'btn paused' : 'btn';
+  pb.innerHTML = S.paused ? 'Paused · resume <kbd>P</kbd>' : 'Pause copying <kbd>P</kbd>';
+
+  countTo($('score'), s.totalPnl);
+  $('today').innerHTML = `today <span class="${cls(S.todayPnl)}">${fmt(S.todayPnl)} SOL</span>`;
+  const left = Math.max(0, S.dailyLossLimit + Math.min(0, S.todayPnl)), frac = left / S.dailyLossLimit;
+  $('hp').style.width = `${frac * 100}%`;
+  $('hpBar').className = `bar hp${frac < 0.3 ? ' low' : frac < 0.6 ? ' mid' : ''}`;
+  $('hpText').innerHTML = left <= 0 ? '<span class="ko">K.O. · buying stopped for today</span>' : `${left.toFixed(3)} of ${S.dailyLossLimit} SOL left today`;
+  $('acc').textContent = s.winRate == null ? '-' : `${Math.round(s.winRate * 100)}%`;
+  $('acc').className = 'big';
+  $('wl').textContent = `${s.wins}W · ${s.losses}L`;
+  $('streak').textContent = s.streak > 0 ? `W${s.streak}` : s.streak < 0 ? `L${-s.streak}` : '-';
+  $('streak').className = `big ${cls(s.streak)}`;
+  $('streakSub').textContent = s.streak > 0 ? `${s.streak} wins in a row` : s.streak < 0 ? `${-s.streak} losses in a row` : 'no closed trades yet';
+  const closed = s.sells;
+  $('level').textContent = `LVL ${Math.floor(closed / 10) + 1}`;
+  $('xp').style.width = `${(closed % 10) * 10}%`;
+  $('xpText').textContent = `${closed % 10} / 10 closed trades to next level`;
+
+  renderUpdate();
+  renderInventory(); renderChart(s.curve); renderReports(); renderHistory(); renderBoard(); renderLoadout(); renderAccount();
+}
+
+function renderInventory() {
+  $('slotCount').textContent = `${S.inventory.length}/${S.maxSlots} slots`;
+  const cards = S.inventory.map((p) => {
+    const pnl = p.worth == null ? null : p.worth - p.paid;
+    const pct = pnl == null ? '' : `${pnl > 0 ? '▲ +' : pnl < 0 ? '▼ ' : ''}${Math.round((pnl / p.paid) * 100)}%`;
+    return `<div class="slot cut">
+      <div class="name">${esc(p.name)}</div>
+      <div class="meta">copied from ${esc(p.from)} · ${ago(p.openedAt)}</div>
+      <div class="pnl ${cls(pnl)}">${pnl == null ? '...' : esc(pct)}</div>
+      <div class="row"><span>Paid</span><span>${p.paid.toFixed(4)} SOL</span></div>
+      <div class="row"><span>Worth</span><span>${p.worth == null ? 'n/a' : p.worth.toFixed(4) + ' SOL'}</span></div>
+      <div class="actions">
+        <a class="btn" href="https://dexscreener.com/solana/${encodeURIComponent(p.mint)}" target="_blank" rel="noopener">Chart</a>
+        <button class="btn danger" data-sell="${esc(p.mint)}" data-name="${esc(p.name)}">Sell now</button>
+      </div></div>`;
+  });
+  for (let i = S.inventory.length; i < S.maxSlots; i++) cards.push('<div class="slot empty">empty slot</div>');
+  $('slots').innerHTML = cards.join('');
+}
+$('slots').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-sell]'); if (!b) return;
+  const real = S.mode === 'live' ? ' This is a REAL trade with real SOL.' : '';
+  if (!confirm(`Sell all of ${b.dataset.name} now?${real}`)) return;
+  b.disabled = true; b.textContent = 'Selling...';
+  try { await api('/api/sell', { mint: b.dataset.sell }); } catch (err) { toast('loss', 'Sell failed', err.message); }
+  refresh();
+});
+
+/* ---------- chart: one series, cumulative profit ---------- */
+function renderChart(curve) {
+  const svg = $('chart');
+  if (!curve.length) { svg.innerHTML = `<text x="500" y="115" text-anchor="middle" fill="#6b6b74" font-size="15" font-family="Inter">Your PnL curve appears after your first closed trade.</text>`; return; }
+  const pts = [{ pnl: 0, time: null }, ...curve];
+  const W = 1000, H = 220, pad = 18;
+  const lo = Math.min(0, ...pts.map((p) => p.pnl)), hi = Math.max(0, ...pts.map((p) => p.pnl));
+  const span = hi - lo || 1;
+  const x = (i) => pad + (i / (pts.length - 1 || 1)) * (W - pad * 2);
+  const y = (v) => H - pad - ((v - lo) / span) * (H - pad * 2);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.pnl).toFixed(1)}`).join('');
+  const area = `${line}L${x(pts.length - 1).toFixed(1)},${y(0).toFixed(1)}L${x(0).toFixed(1)},${y(0).toFixed(1)}Z`;
+  svg.innerHTML = `
+    <defs><linearGradient id="ga" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#0aa2c8" stop-opacity=".3"/><stop offset="1" stop-color="#0aa2c8" stop-opacity="0"/></linearGradient></defs>
+    <line x1="${pad}" x2="${W - pad}" y1="${y(0)}" y2="${y(0)}" stroke="#6b6b74" stroke-dasharray="3 6" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    <path d="${area}" fill="url(#ga)"/>
+    <path d="${line}" fill="none" stroke="#0aa2c8" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <line id="cross" y1="${pad}" y2="${H - pad}" stroke="#a1a1aa" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0"/>
+    <rect width="${W}" height="${H}" fill="transparent" id="hit"/>`;
+  const tip = $('tip');
+  $('hit').onmousemove = (ev) => {
+    const r = svg.getBoundingClientRect();
+    const i = Math.max(0, Math.min(pts.length - 1, Math.round(((ev.clientX - r.left) / r.width * W - pad) / (W - pad * 2) * (pts.length - 1))));
+    const p = pts[i];
+    $('cross').setAttribute('x1', x(i)); $('cross').setAttribute('x2', x(i)); $('cross').setAttribute('opacity', 1);
+    tip.innerHTML = i === 0 ? 'Start' : `Trade #${i} · ${esc(ago(p.time))}<br>Total <b class="${cls(p.pnl)}">${fmt(p.pnl)} SOL</b>`;
+    tip.style.left = `${(x(i) / W) * r.width}px`; tip.style.top = `${(y(p.pnl) / H) * r.height}px`; tip.style.opacity = 1;
+  };
+  $('hit').onmouseleave = () => { tip.style.opacity = 0; $('cross').setAttribute('opacity', 0); };
+}
+
+/* ---------- tabs ---------- */
+function openTab(name) {
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.dataset.tab === name));
+  document.querySelectorAll('.tabpage').forEach((p) => p.classList.toggle('on', p.id === `tab-${name}`));
+  store.set('tab', name);
+}
+$('tabs').onclick = (e) => { const t = e.target.closest('.tab'); if (t) openTab(t.dataset.tab); };
+openTab(store.get('tab', 'intel'));
+
+function renderReports() {
+  $('reports').innerHTML = S.reports.length
+    ? S.reports.map((r) => `<button class="report cut" data-file="${esc(r.file)}"><div class="top"><span class="sym">$${esc(r.symbol)}</span><span class="when">${ago(r.at)}</span></div><div class="tldr">TL;DR</div><p>${esc(r.narrative || 'Open to read the breakdown')}</p></button>`).join('')
+    : `<div class="empty-msg">${S.research ? 'No intel yet. Reports appear when SolBoy buys a token, or paste a token address above and hit Scan.' : 'AI research is off. Add a free Groq key to .env to turn it on (see README).'}</div>`;
+}
+$('reports').onclick = async (e) => {
+  const b = e.target.closest('[data-file]'); if (!b) return;
+  try { showReport(await api(`/api/report?file=${encodeURIComponent(b.dataset.file)}`)); } catch (err) { toast('loss', "Couldn't open", err.message); }
+};
+function mdToHtml(md) {
+  const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  let html = '', list = false;
+  for (const raw of md.split('\n')) {
+    const l = raw.trim();
+    const item = l.match(/^[*-]\s+(.*)/);
+    if (item && !list) { html += '<ul>'; list = true; }
+    if (!item && list) { html += '</ul>'; list = false; }
+    if (l.startsWith('### ')) html += `<h3>${inline(l.slice(4))}</h3>`;
+    else if (item) html += `<li>${inline(item[1])}</li>`;
+    else if (l === '---') html += '<hr style="border:0;border-top:1px solid rgba(255,255,255,.08)">';
+    else if (l.startsWith('http')) html += `<p><a href="${esc(l)}" target="_blank" rel="noopener" style="color:var(--volt)">${esc(l)}</a></p>`;
+    else if (/^\**TL;DR/.test(l)) html += `<p class="tldr-box">${inline(l)}</p>`;
+    else if (l) html += `<p>${inline(l)}</p>`;
+  }
+  return html + (list ? '</ul>' : '');
+}
+function showReport(r) { $('modalBody').innerHTML = mdToHtml(r.text); $('modal').classList.add('on'); }
+function closeModal() { $('modal').classList.remove('on'); }
+$('modalClose').onclick = closeModal;
+$('modal').onclick = (e) => { if (e.target === $('modal')) closeModal(); };
+
+let waitingForScan = false;
+let lastAlert = 0;
+$('scanForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const mint = $('scanInput').value.trim();
+  if (!mint) return;
+  try { await api('/api/research', { mint }); $('scanInput').value = ''; waitingForScan = true; toast('info', 'Scanning', 'AI is writing the breakdown. It opens here when ready.'); }
+  catch (err) { toast('loss', 'Scan failed', err.message); }
+};
+
+function renderHistory() {
+  if (!S.trades.length) { $('history').innerHTML = '<div class="empty-msg">No trades yet. They show up here as soon as SolBoy copies something.</div>'; return; }
+  $('history').innerHTML = `<table><tr><th>When</th><th>Action</th><th>Token</th><th>SOL</th><th>PnL</th><th>Why</th></tr>${S.trades.map((t) => {
+    const sell = t.action.endsWith('sell'), pnl = t.pnl_sol === '' ? null : Number(t.pnl_sol);
+    return `<tr><td>${ago(t.time)}</td><td><span class="tag ${sell ? 'sell' : 'buy'}">${sell ? 'SELL' : 'BUY'}</span></td><td>${esc(t.name)}</td><td class="num">${Number(t.sol).toFixed(4)}</td><td class="num ${cls(pnl)}">${pnl == null ? '' : fmt(pnl)}</td><td>${esc(t.reason)}</td></tr>`;
+  }).join('')}</table><div class="hint">Full history: <code>${esc(S.tradeLogFile)}</code></div>`;
+}
+
+function renderBoard() {
+  const n = S.wallets.length;
+  const rows = S.wallets.map((w, i) => `<tr>
+      <td><span class="rank r${i + 1}">#${i + 1}</span></td>
+      <td><b>${esc(w.label)}</b><br><a class="addr" href="https://solscan.io/account/${encodeURIComponent(w.address)}" target="_blank" rel="noopener">${esc(w.address.slice(0, 4))}...${esc(w.address.slice(-4))}</a></td>
+      <td class="num">${w.buyAmountSol} SOL${w.customAmount ? '' : ' <span class="addr">(default)</span>'}</td>
+      <td class="num">${w.copies}</td><td class="num">${w.closed}</td>
+      <td class="num">${w.closed ? Math.round((w.wins / w.closed) * 100) + '%' : '-'}</td>
+      <td class="num ${cls(w.pnl)}">${fmt(w.pnl)} SOL</td>
+      <td>${w.retiring ? `<span class="state retiring">Sells only (${w.holding} held)</span>` : '<span class="state">Copying</span>'}</td>
+      <td>${w.retiring ? `<button class="btn" data-readd="${esc(w.address)}">Undo</button>` : `<button class="btn danger" data-remove="${esc(w.label)}" data-holding="${w.holding}">Remove</button>`}</td>
+    </tr>`).join('');
+  $('board').innerHTML = `<div class="wallet-bar"><button class="btn primary" data-add>+ Add wallet</button>
+      <span class="note">${n} wallet${n === 1 ? '' : 's'} watched. Best performers on top.${n > 10 ? ' Over 10 can hit the free Helius limit.' : ''}</span></div>
+    ${n ? `<table><tr><th>Rank</th><th>Wallet</th><th>Per trade</th><th>Buys copied</th><th>Closed</th><th>Win rate</th><th>PnL</th><th>Status</th><th></th></tr>${rows}</table>`
+        : '<div class="empty-msg">No wallets yet. Hit + Add wallet and paste one to start copying.</div>'}
+    <div class="hint">Give a wallet about 10 closed trades before judging it. Removing a wallet stops new buys right away; if you still hold tokens from it, SolBoy keeps following its sells until they're gone.</div>`;
+}
+$('board').addEventListener('click', async (e) => {
+  if (e.target.closest('[data-add]')) return openAddWallet();
+  const rm = e.target.closest('[data-remove]');
+  if (rm) {
+    const held = Number(rm.dataset.holding);
+    const msg = held ? `Remove ${rm.dataset.remove}? You still hold ${held} token(s) copied from it, so SolBoy will keep following its sells for those, but won't copy new buys.` : `Remove ${rm.dataset.remove}? SolBoy stops copying it right away.`;
+    if (!confirm(msg)) return;
+    try { await api('/api/wallets/remove', { key: rm.dataset.remove }); toast('info', 'Wallet removed', held ? 'Following its sells until your tokens are gone.' : `${rm.dataset.remove} is gone.`); refresh(); }
+    catch (err) { toast('loss', "Couldn't remove", err.message); }
+  }
+  const back = e.target.closest('[data-readd]');
+  if (back) { try { await api('/api/wallets/add', { address: back.dataset.readd }); toast('info', 'Welcome back', 'Copying its buys again.'); refresh(); } catch (err) { toast('loss', 'Error', err.message); } }
+});
+
+function openAddWallet() {
+  $('modalBody').innerHTML = `<h3>Add a wallet to copy</h3>
+    <form class="form" id="addForm">
+      <label>Wallet address <small>Paste it from Solscan, GMGN, Cielo, or wherever you found it.</small>
+        <input id="wAddr" autocomplete="off" spellcheck="false" placeholder="e.g. 5NU3oN4fNnx1CknHtaH8kGPHAaK4UJ3X4E2WdEyY3h1y"></label>
+      <div class="row2">
+        <label>Nickname <small>Optional. Shows in the feed.</small><input id="wName" maxlength="24" placeholder="whale2"></label>
+        <label>SOL per trade <small>Optional. Default ${esc(S?.defaultBuy ?? '')} SOL.</small><input id="wAmt" inputmode="decimal" placeholder="${esc(S?.defaultBuy ?? '0.05')}"></label>
+      </div>
+      <div class="err" id="wErr"></div>
+      <div><button class="btn primary" type="submit">Start copying</button></div>
+    </form>`;
+  $('modal').classList.add('on');
+  $('wAddr').focus();
+  $('addForm').onsubmit = async (e) => {
+    e.preventDefault();
+    $('wErr').textContent = '';
+    try {
+      const { wallet } = await api('/api/wallets/add', { address: $('wAddr').value, label: $('wName').value, buyAmountSol: $('wAmt').value });
+      closeModal(); toast('buy', 'Wallet added', `Now copying ${wallet.label}. It's saved for next time too.`); juice('buy'); refresh();
+    } catch (err) { $('wErr').textContent = err.message; }
+  };
+}
+$('addWalletBtn').onclick = openAddWallet;
+
+/* ---------- loadout: quick settings (saved instantly, no restart) + everything else ---------- */
+const QUICK_FIELDS = [
+  ['takeProfitPct', 'Take profit (%)', 'Sell everything once a token is up this much. Empty = off.', '50'],
+  ['stopLossPct', 'Stop loss (%)', 'Sell everything once a token is down this much. Empty = off.', '30'],
+  ['buyAmountSol', 'SOL per copied buy', 'Wallets with their own amount keep it.', '0.05'],
+  ['dailyLossLimitSol', 'Daily loss limit (SOL)', 'No new buys for the day after losing this much.', '0.5'],
+  ['maxOpenPositions', 'Max tokens held at once', 'New buys wait until one is sold.', '5'],
+];
+let quickSig = null, quickError = '';
+function renderLoadout() {
+  if (document.activeElement?.matches?.('#quick input, #quick select')) return; // don't wipe what you're typing
+  const sig = JSON.stringify([S.quick, S.settings]);
+  if (sig === quickSig) return;
+  quickSig = sig;
+  const q = S.quick ?? {};
+  const field = ([k, label, hint, ph]) => `<label>${esc(label)} <small>${esc(hint)}</small><input name="${k}" inputmode="decimal" autocomplete="off" placeholder="${q[k] == null ? 'off' : ph}" value="${q[k] == null ? '' : esc(q[k])}"></label>`;
+  $('loadout').innerHTML = `<div class="box2 quick"><h3>Quick settings</h3>
+      <p>Changes work straight away and are saved for next time. No restart.</p>
+      <form class="form" id="quick">
+        <div class="row2">${QUICK_FIELDS.slice(0, 2).map(field).join('')}</div>
+        <div class="row2">${QUICK_FIELDS.slice(2, 4).map(field).join('')}</div>
+        <div class="row2">${field(QUICK_FIELDS[4])}
+          <label>AI research runs on <small>"Every coin" starts the moment a wallet buys.</small><select name="researchOn">
+            <option value="detected" ${q.researchOn === 'detected' ? 'selected' : ''}>Every coin my wallets buy</option>
+            <option value="buys" ${q.researchOn === 'buys' ? 'selected' : ''}>Only coins SolBoy buys</option></select></label></div>
+        <div class="err" id="quickErr">${esc(quickError)}</div>
+        <div><button class="btn primary" type="submit">Save</button></div>
+      </form></div>
+    <h3 class="sub">Full loadout <small style="font-weight:400;font-size:12px;color:var(--ink-3)">SolBoy ${esc(S.update?.version ?? '')}</small></h3>
+    <div class="kv">${S.settings.map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}</div>
+    <div class="hint">Everything else lives in <code>${esc(S.configPath)}</code> (TextEdit works). Edit it, save, then restart SolBoy.</div>`;
+  $('quick').onsubmit = async (e) => {
+    e.preventDefault();
+    $('quickErr').textContent = '';
+    const now = S.quick ?? {}, done = [], errors = [];
+    for (const [k, v] of new FormData(e.target)) {
+      const raw = String(v).trim();
+      const before = now[k] == null ? '' : String(now[k]);
+      if (raw === before) continue;
+      try { done.push((await api('/api/settings', { setting: k, value: raw })).summary); }
+      catch (err) { errors.push(err.message); }
+    }
+    quickError = errors.join(' ');
+    if (errors.length) toast('loss', "Couldn't save", quickError);
+    if (done.length) { toast('win', 'Saved', done.join('. ')); juice('win'); }
+    else if (!errors.length) toast('info', 'Nothing changed', 'Change a number first, then Save.');
+    document.activeElement?.blur?.(); quickSig = null; renderLoadout(); refresh();
+  };
+}
+
+/* ---------- one-click updates ---------- */
+let updating = false;
+function renderUpdate() {
+  const u = S.update, b = $('updateBtn');
+  b.hidden = !(u?.available && u.canInstall) && !updating;
+  if (!updating && u?.available) b.textContent = `⬆ Update to ${u.available.version}`;
+}
+$('updateBtn').onclick = () => {
+  const u = S.update; if (!u?.available || updating) return;
+  $('modalBody').innerHTML = `<h3>SolBoy ${esc(u.available.version)} is out</h3>
+    <p>You have ${esc(u.version)}. Your settings, keys, wallets, positions and trades all stay exactly as they are: only the app itself is replaced.</p>
+    ${u.available.notes ? `<div class="notes">${mdToHtml(u.available.notes)}</div>` : ''}
+    <p style="font-size:13px;color:var(--ink-3)">It downloads the new version, checks it, and restarts SolBoy. This page reloads by itself. About 30 seconds.</p>
+    <div class="err" id="updErr" style="color:var(--loss);font-size:13px"></div>
+    <p><button class="btn primary" id="updGo">Update now</button> <button class="btn" id="updLater">Not now</button></p>`;
+  $('modal').classList.add('on');
+  $('updLater').onclick = closeModal;
+  $('updGo').onclick = async () => {
+    updating = true; $('updGo').disabled = true; $('updGo').textContent = 'Downloading...';
+    $('updateBtn').textContent = '⬆ Updating...';
+    try {
+      const r = await api('/api/update', {});
+      $('updGo').textContent = `Restarting into ${r.version}...`;
+      toast('win', 'Updated', `SolBoy ${r.version} installed. Reloading in a moment.`); juice('win');
+    } catch (err) { updating = false; $('updErr').textContent = err.message; $('updGo').disabled = false; $('updGo').textContent = 'Try again'; renderUpdate(); }
+  };
+};
+
+/* ---------- account: deposit, real-money switch, withdraw ---------- */
+let lastBalance = null;
+let accountSig = null;
+function renderAccount() {
+  const a = S.account, live = S.mode === 'live';
+  const bal = a.balance == null ? '...' : `${a.balance.toFixed(4)} SOL`;
+  $('balChip').textContent = a.address ? `◎ ${a.balance == null ? '...' : a.balance.toFixed(3)} SOL` : '◎ Set up wallet';
+  if (a.balance != null && lastBalance != null && a.balance > lastBalance + 0.000001) {
+    toast('win', 'Deposit received', `+${(a.balance - lastBalance).toFixed(4)} SOL landed in your SolBoy wallet.`); juice('win');
+  }
+  if (a.balance != null) lastBalance = a.balance;
+  if (document.activeElement?.matches?.('#account input')) return; // don't wipe what you're typing
+  const sig = JSON.stringify([a, S.mode]);
+  if (sig === accountSig) return; // nothing changed, so leave the form (and QR) alone
+  accountSig = sig;
+
+  if (!a.address) {
+    $('account').innerHTML = `<div class="acct"><div class="box2"><h3>Your SolBoy wallet</h3>
+      <p>To trade with real money, SolBoy needs its own wallet. You send SOL into it, and SolBoy trades from it. The key stays on this computer only.</p>
+      <p>Paper mode keeps working without one.</p>
+      <p><button class="btn primary" id="createWallet">Create my SolBoy wallet</button></p></div>
+      <div class="box2"><h3>How it works</h3><p>1. Create the wallet.<br>2. Send it some SOL from Phantom or an exchange.<br>3. Flip the switch to Real money.<br>4. Withdraw back to your own wallet any time.</p></div></div>`;
+    $('createWallet').onclick = async () => { try { await api('/api/account/create', {}); toast('info', 'Wallet created', 'Now send it some SOL to fund it.'); refresh(); } catch (e) { toast('loss', 'Error', e.message); } };
+    return;
+  }
+
+  $('account').innerHTML = `<div class="acct">
+    <div class="box2"><h3>Balance</h3><div class="balance">${bal}</div>
+      <p><b>To deposit,</b> send SOL to this address from Phantom, Solflare, or any exchange (use the <b>Solana</b> network). It shows up here within about 30 seconds.</p>
+      <div class="deposit"><img alt="QR code for your SolBoy wallet address" src="/api/account/qr?t=${TOKEN}&a=${encodeURIComponent(a.address)}">
+        <div><div class="addrbox" id="addrText">${esc(a.address)}</div>
+          <button class="btn" id="copyAddr">Copy address</button>
+          <a class="btn" href="https://solscan.io/account/${encodeURIComponent(a.address)}" target="_blank" rel="noopener">View on Solscan</a>
+          <p style="font-size:12px;color:var(--ink-3)">Scan the QR with Phantom on your phone to send straight to it.</p></div></div>
+    </div>
+    <div class="box2"><h3>Mode</h3>
+      <div class="modes">
+        <button class="mode-btn paper ${live ? '' : 'on'}" data-mode="paper"><b>Paper</b>Practice with real prices, no real money.</button>
+        <button class="mode-btn live ${live ? 'on' : ''}" data-mode="live"><b>Real money</b>Trades real SOL from your SolBoy wallet.</button>
+      </div>
+      <p style="font-size:13px">Real money needs at least <b>${a.minLive} SOL</b> (one trade plus fees). Paper and real-money trades are tracked separately.</p>
+      <h3 style="margin-top:18px">Withdraw</h3>
+      <form class="form" id="wdForm">
+        <label>Send to <small>Your Phantom (or other) Solana address.</small><input id="wdTo" autocomplete="off" spellcheck="false" placeholder="Your wallet address"></label>
+        <div class="row2"><label>Amount (SOL)<input id="wdAmt" inputmode="decimal" placeholder="0.5"></label>
+          <label>&nbsp;<button class="btn" type="button" id="wdMax">Max</button></label></div>
+        ${passwordField()}
+        <div class="err" id="wdErr"></div>
+        <div><button class="btn primary" type="submit">Withdraw</button></div>
+      </form>
+      <p style="margin-top:14px"><button class="btn" id="showKey" style="font-size:12px">Back up / import into Phantom</button></p>
+    </div></div>`;
+
+  $('copyAddr').onclick = async () => { try { await navigator.clipboard.writeText(a.address); toast('info', 'Copied', 'Address copied. Paste it into Phantom or your exchange.'); } catch { getSelection().selectAllChildren($('addrText')); } };
+  $('account').querySelectorAll('[data-mode]').forEach((b) => (b.onclick = () => switchMode(b.dataset.mode)));
+  let max = false;
+  $('wdMax').onclick = () => { max = true; $('wdAmt').value = 'all'; };
+  $('wdAmt').oninput = () => { max = false; };
+  $('wdForm').onsubmit = async (e) => {
+    e.preventDefault(); $('wdErr').textContent = '';
+    const to = $('wdTo').value.trim(), amount = max ? 'all' : $('wdAmt').value.trim();
+    const openLive = S.account.livePositions;
+    const extra = openLive && max ? `\n\nYou still hold ${openLive} real-money token(s). Without SOL for fees, SolBoy can't sell them.` : '';
+    if (!confirm(`Send ${amount === 'all' ? 'ALL your SOL' : amount + ' SOL'} to ${to}?${extra}\n\nDouble-check the address: crypto transfers can't be undone.`)) return;
+    try { const r = await api('/api/account/withdraw', { to, amount, ...confirmPassword() }); toast('win', 'Withdrawn', `${r.sol.toFixed(4)} SOL sent.`); lastBalance = null; refresh(); }
+    catch (err) { $('wdErr').textContent = err.message; }
+  };
+  $('showKey').onclick = showKey;
+}
+
+function switchMode(mode) {
+  if (mode === S.mode) return;
+  if (mode === 'paper') {
+    if (!confirm('Switch back to Paper mode? SolBoy stops trading real SOL. Your SOL stays in your SolBoy wallet.')) return;
+    return api('/api/account/mode', { mode: 'paper' }).then(() => { toast('info', 'Paper mode', 'Practice trades only.'); refresh(); }).catch((e) => toast('loss', 'Error', e.message));
+  }
+  $('modalBody').innerHTML = `<h3>Turn on real money?</h3>
+    <div class="warnbox">SolBoy will automatically buy and sell meme coins with the SOL in your SolBoy wallet (${S.account.balance?.toFixed(4) ?? '?'} SOL). Meme coins can go to zero in minutes. Copy trading often loses money, even when the copied wallet wins.</div>
+    <p>Start small: only deposit what you're fine losing completely. Your daily loss limit (the HP bar) stops new buys if a day goes badly.</p>
+    <label class="check"><input type="checkbox" id="riskOk"> I understand SolBoy trades real SOL automatically and I could lose all of it.</label>
+    ${passwordField()}
+    <div class="err" id="liveErr" style="color:var(--loss);font-size:13px"></div>
+    <p><button class="btn primary" id="goLive">Turn on real money</button></p>`;
+  $('modal').classList.add('on');
+  $('goLive').onclick = async () => {
+    if (!$('riskOk').checked) { $('liveErr').textContent = 'Tick the box first.'; return; }
+    try { await api('/api/account/mode', { mode: 'live', confirm: true, ...confirmPassword() }); closeModal(); toast('loss', 'Real money ON', 'SolBoy is now trading real SOL.'); refresh(); }
+    catch (e) { $('liveErr').textContent = e.message; }
+  };
+}
+
+function showKey() {
+  $('modalBody').innerHTML = `<h3>Back up your SolBoy wallet</h3>
+    <div class="warnbox">Anyone who sees this key can take every coin in the wallet. Never share it, screenshot it or paste it into a website. SolBoy staff, "support" and friends will never ask for it.</div>
+    <p>To import into Phantom: <b>Add / Connect Wallet → Import Private Key</b>, then paste it.</p>
+    <form class="form" id="keyForm"><label>Type SHOW to reveal it<input id="keyConfirm" autocomplete="off"></label>${passwordField()}<div class="err" id="keyErr"></div><div><button class="btn danger" type="submit">Reveal key</button></div></form>
+    <div id="keyOut"></div>`;
+  $('modal').classList.add('on');
+  $('keyForm').onsubmit = async (e) => {
+    e.preventDefault();
+    try { const { key } = await api('/api/account/key', { confirm: $('keyConfirm').value.trim(), ...confirmPassword() }); $('keyOut').innerHTML = `<div class="keybox">${esc(key)}</div>`; $('keyForm').remove(); }
+    catch (err) { $('keyErr').textContent = err.message; }
+  };
+}
+$('balChip').onclick = () => { openTab('account'); $('tab-account').scrollIntoView({ behavior: 'smooth' }); };
+
+/* ---------- SolBoy Assistant ---------- */
+let chat = [];
+try { chat = JSON.parse(store.get('chat', '[]')); } catch {}
+let AI = null, chatBusy = false;
+const saveChat = () => store.set('chat', JSON.stringify(chat.slice(-40)));
+const SUGGESTIONS = ["What's trending on Solana right now?", 'How do I spot a rug pull?', 'What is $WIF doing today?', 'How am I doing so far?', 'Which wallet should I drop?', 'Set a 30% stop loss'];
+
+async function loadAI() {
+  try { AI = await api('/api/assistant/status'); } catch { return; }
+  $('aiEngine').textContent = AI.engine ? `Using ${AI.engine}` : 'Not set up yet';
+  $('aiModel').innerHTML = Object.entries(AI.models).map(([id, m]) => `<option value="${esc(id)}" ${id === AI.model ? 'selected' : ''}>${esc(m.label)}: ${esc(m.note)}</option>`).join('');
+  renderChat();
+}
+$('aiModel').onchange = async () => {
+  try { AI = await api('/api/assistant/model', { model: $('aiModel').value }); toast('info', 'Brain switched', AI.engine); }
+  catch (e) { toast('loss', 'Not yet', e.message); }
+  loadAI();
+};
+
+function openChat() { $('drawer').classList.add('on'); loadAI(); setTimeout(() => $('chatInput').focus(), 300); }
+function closeChat() { $('drawer').classList.remove('on'); }
+$('askFab').onclick = openChat;
+$('drawerClose').onclick = closeChat;
+$('chatClear').onclick = () => { chat = []; saveChat(); renderChat(); };
+
+function setupCard() {
+  return `<div class="setup-card"><b>Turn on the assistant (free)</b><br>Paste a free ${esc(AI?.freeProvider ?? 'Groq')} key. Get one at <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color:var(--sky)">console.groq.com/keys</a>.
+    <input class="addrbox" id="freeKey" placeholder="gsk_..." autocomplete="off"><button class="btn primary" data-savekey="free">Save key</button>
+    <details><summary>Want Claude-level smarts? (paid)</summary><p>Paste your own Anthropic API key from <a href="https://console.anthropic.com" target="_blank" rel="noopener" style="color:var(--sky)">console.anthropic.com</a>, then pick a Claude model above. You pay Anthropic per question (about 1-15 cents).</p>
+    <input class="addrbox" id="claudeKey" placeholder="sk-ant-..." autocomplete="off"><button class="btn" data-savekey="anthropic">Save Anthropic key</button></details></div>`;
+}
+
+function renderChat() {
+  const box = $('chat');
+  const parts = [];
+  if (!AI?.engine) parts.push(setupCard());
+  else if (!chat.length) parts.push(`<div class="msg bot"><p>Hey! I'm SolBoy. Ask me anything about meme coins: what's trending, what a coin is doing, how to spot rugs. I can pull live market data. I also know your trades and settings, and I can change things for you, like "set a 30% stop loss". I always ask before changing anything.</p></div>`);
+  chat.forEach((m, i) => {
+    if (m.role === 'user') parts.push(`<div class="msg user">${esc(m.content)}</div>`);
+    else if (m.kind === 'note') parts.push(`<div class="msg note">${esc(m.content)}</div>`);
+    else if (m.kind === 'proposal') parts.push(`<div class="proposal"><div class="what"><small>SolBoy wants to</small>${esc(m.proposal.summary)}</div>${
+      m.state === 'done' ? '<div class="done">✓ Done</div>' : m.state === 'skipped' ? '<div class="skip">Skipped</div>'
+      : `<button class="btn primary" data-apply="${i}">Do it</button> <button class="btn" data-skip="${i}">No thanks</button>`}</div>`);
+    else parts.push(`<div class="msg bot">${mdToHtml(m.content)}${m.via ? `<span class="via">${esc(m.via)}</span>` : ''}</div>`);
+  });
+  if (chatBusy) parts.push('<div class="typing"><i></i><i></i><i></i></div>');
+  box.innerHTML = parts.join('');
+  box.scrollTop = box.scrollHeight;
+  $('chips').innerHTML = AI?.engine && !chat.length ? SUGGESTIONS.map((q) => `<button data-q="${esc(q)}">${esc(q)}</button>`).join('') : '';
+}
+
+$('chips').onclick = (e) => { const b = e.target.closest('[data-q]'); if (b) sendChat(b.dataset.q); };
+$('chat').onclick = async (e) => {
+  const save = e.target.closest('[data-savekey]');
+  if (save) {
+    const kind = save.dataset.savekey, key = (kind === 'free' ? $('freeKey') : $('claudeKey')).value;
+    try { await api('/api/assistant/key', { kind, key }); toast('win', 'Key saved', kind === 'free' ? 'The assistant is ready. If token research was off, restart SolBoy to turn it on too.' : 'Now pick a Claude model at the top.'); loadAI(); }
+    catch (err) { toast('loss', "Couldn't save", err.message); }
+    return;
+  }
+  const ap = e.target.closest('[data-apply]'), sk = e.target.closest('[data-skip]');
+  if (sk) { chat[sk.dataset.skip].state = 'skipped'; chat.push({ role: 'assistant', kind: 'note', content: 'Okay, no change made.' }); saveChat(); renderChat(); }
+  if (ap) {
+    const m = chat[ap.dataset.apply];
+    ap.disabled = true;
+    try { await api('/api/assistant/apply', { proposal: m.proposal }); m.state = 'done'; juice('buy'); refresh(); }
+    catch (err) { chat.push({ role: 'assistant', kind: 'note', content: `Couldn't do it: ${err.message}` }); }
+    saveChat(); renderChat();
+  }
+};
+
+// What the AI sees: plain text, with proposals and what happened to them written out.
+function historyForAI() {
+  return chat.map((m) => {
+    if (m.role === 'user') return { role: 'user', content: m.content };
+    if (m.kind === 'proposal') return { role: 'assistant', content: `(Proposed: ${m.proposal.summary}. User ${m.state === 'done' ? 'confirmed it, done' : m.state === 'skipped' ? 'declined' : 'has not decided yet'}.)` };
+    return { role: 'assistant', content: m.content };
+  });
+}
+
+async function sendChat(text) {
+  text = String(text ?? '').trim();
+  if (!text || chatBusy) return;
+  if (!AI?.engine) { toast('info', 'One step first', 'Paste a free Groq key in the assistant to turn it on.'); return; }
+  chat.push({ role: 'user', content: text }); chatBusy = true; renderChat(); saveChat();
+  try {
+    const r = await api('/api/assistant/ask', { messages: historyForAI() });
+    const via = [r.engine, ...(r.looked ?? []).map((l) => `🔎 ${l}`)].join(' · ');
+    if (r.text?.trim()) chat.push({ role: 'assistant', content: r.text.trim(), via });
+    for (const n of r.notes) chat.push({ role: 'assistant', kind: 'note', content: n });
+    for (const p of r.proposals) chat.push({ role: 'assistant', kind: 'proposal', proposal: p, state: 'pending' });
+  } catch (err) {
+    chat.push({ role: 'assistant', kind: 'note', content: err.message === 'NO_KEY' ? 'The assistant needs a key. Paste one above.' : err.message });
+    if (err.message === 'NO_KEY') loadAI();
+  }
+  chatBusy = false; saveChat(); renderChat();
+}
+$('chatForm').onsubmit = (e) => { e.preventDefault(); const v = $('chatInput').value; $('chatInput').value = ''; sendChat(v); };
+$('chatInput').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('chatForm').requestSubmit(); } };
+
+/* ---------- pause ---------- */
+async function togglePause() {
+  try { await api('/api/pause', { paused: !S.paused }); toast('info', S.paused ? 'Resumed' : 'Paused', S.paused ? 'Copying new buys again.' : 'No new buys. Sells still follow the copied wallets.'); refresh(); }
+  catch (err) { toast('loss', 'Error', err.message); }
+}
+$('pauseBtn').onclick = togglePause;
+
+/* ---------- live feed + ticker ---------- */
+const KIND = { buy: 'BOUGHT', sell: 'SOLD', spotted: 'SPOTTED', skip: 'SKIP', research: 'INTEL', 'research-done': 'INTEL', warn: 'ALERT', info: 'INFO' };
+const GROUP = { buy: 'trades', sell: 'trades', spotted: 'trades', skip: 'trades', research: 'intel', 'research-done': 'intel', warn: 'alerts', info: 'alerts' };
+let filter = 'all';
+$('filters').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  filter = b.dataset.f;
+  [...$('filters').children].forEach((x) => x.classList.toggle('on', x === b));
+  [...$('feed').children].forEach((li) => (li.hidden = filter !== 'all' && li.dataset.g !== filter));
+};
+const tickerItems = [];
+function renderTicker() {
+  const items = tickerItems.length ? tickerItems : [{ c: 'i', t: 'Waiting for the next move' }, { c: 'b', t: 'Watching your wallets' }, { c: 's', t: 'Press 1-4 to switch tabs' }];
+  const html = items.map((x) => `<span class="${x.c}">${esc(x.t)}</span>`).join('');
+  $('ticker').innerHTML = html + html; // doubled so the scroll loops seamlessly
+}
+function addTicker(ev) {
+  const c = { buy: 'b', sell: 's', spotted: 'b', 'research-done': 'i', warn: 'w' }[ev.kind];
+  if (!c) return;
+  tickerItems.unshift({ c, t: ev.text.trim().slice(0, 90) });
+  tickerItems.length = Math.min(tickerItems.length, 12);
+  renderTicker();
+}
+renderTicker();
+function addFeed(ev) {
+  addTicker(ev);
+  const li = document.createElement('li');
+  li.className = ev.kind; li.dataset.g = GROUP[ev.kind] || 'alerts';
+  li.hidden = filter !== 'all' && li.dataset.g !== filter;
+  li.innerHTML = `<span class="t">${new Date(ev.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span><span class="k">${KIND[ev.kind] || 'INFO'}</span><span>${esc(ev.text.trim())}</span>`;
+  $('feed').prepend(li);
+  while ($('feed').children.length > 150) $('feed').lastChild.remove();
+}
+function react(ev) {
+  if (ev.kind === 'buy') { SFX.buy(); juice('buy'); toast('buy', 'Buy copied', ev.text.trim()); refresh(); }
+  if (ev.kind === 'sell') {
+    const won = /\(\+/.test(ev.text);
+    (won ? SFX.win : SFX.loss)(); juice(won ? 'win' : 'loss');
+    toast(won ? 'win' : 'loss', won ? 'Profit locked' : 'Loss taken', ev.text.trim()); refresh();
+  }
+  if (ev.kind === 'research-done') {
+    SFX.intel(); refresh();
+    if (waitingForScan) { waitingForScan = false; setTimeout(async () => { await refresh(); if (S.reports[0]) showReport(await api(`/api/report?file=${encodeURIComponent(S.reports[0].file)}`)); }, 300); }
+    else toast('info', 'New intel', 'A research report is ready in the Intel tab.');
+  }
+  if (ev.kind === 'warn' && Date.now() - lastAlert > 60000) { lastAlert = Date.now(); toast('loss', 'Alert', ev.text.trim()); }
+}
+function connect() {
+  const es = new EventSource(`/api/events?t=${TOKEN}`);
+  es.onopen = () => { online(true); refresh(); };
+  es.onmessage = (m) => { const ev = JSON.parse(m.data); addFeed(ev); if (!ev.backlog) react(ev); };
+  es.onerror = () => online(false);
+}
+
+/* ---------- keyboard ---------- */
+const TABS = { 1: 'intel', 2: 'history', 3: 'board', 4: 'loadout', 5: 'account' };
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeModal(); closeChat(); return; }
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === '/') { e.preventDefault(); openChat(); return; }
+  else if (e.key === 'p' || e.key === 'P') togglePause();
+  else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); openAddWallet(); }
+  else if (e.key === 's' || e.key === 'S') $('sfxBtn').click();
+  else if (TABS[e.key]) openTab(TABS[e.key]);
+});
+
+refresh();
+connect();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

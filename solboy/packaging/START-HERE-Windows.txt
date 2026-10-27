@@ -1,0 +1,28 @@
+SOLBOY - START HERE (Windows)
+=============================
+
+1. Unzip this folder somewhere you'll keep it, like Documents\SolBoy.
+   (Right-click the zip > Extract All. Don't run it from inside the zip.)
+
+2. Double-click SolBoy.exe.
+   If Windows says "Windows protected your PC", click "More info", then "Run anyway".
+   That shows up because SolBoy is a new app without a paid signature.
+
+3. A black window opens and asks a few questions:
+   - Your free Helius key: make an account at https://www.helius.dev and copy your API key.
+   - The wallets you want to copy: paste one per line, then press Enter on an empty line.
+   - SOL per trade: press Enter to use 0.05.
+   - (Optional) A free Groq key for AI research: https://console.groq.com/keys
+
+4. Your browser opens the SolBoy dashboard at http://localhost:7777
+   SolBoy starts in PAPER mode: real prices, no real money. Let it run a few days.
+
+5. To use real money: open the Account tab, create your SolBoy wallet, send it a small
+   amount of SOL, then flip the switch to "Real money". Only use money you can afford to lose.
+
+Keep the black window open while SolBoy runs. Close it to stop SolBoy.
+While SolBoy is open it keeps your PC from sleeping by itself (the screen can still turn off).
+The full guide is in README.md (open it with Notepad).
+
+Updating later: when a yellow "Update" button appears at the top of the dashboard, click it.
+SolBoy updates itself and keeps your settings, keys, wallets and trades.

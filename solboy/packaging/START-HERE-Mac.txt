@@ -1,0 +1,29 @@
+SOLBOY - START HERE (Mac)
+=============================
+
+1. Unzip this folder somewhere you'll keep it, like Documents/SolBoy.
+   (Double-click the zip to unzip it.)
+
+2. Double-click SolBoy.
+   If your Mac says it can't be opened: System Settings > Privacy & Security > "Open Anyway".
+   That shows up because SolBoy is a new app without a paid signature.
+
+3. A Terminal window opens and asks a few questions:
+   - Your free Helius key: make an account at https://www.helius.dev and copy your API key.
+   - The wallets you want to copy: paste one per line, then press Enter on an empty line.
+   - SOL per trade: press Enter to use 0.05.
+   - (Optional) A free Groq key for AI research: https://console.groq.com/keys
+
+4. Your browser opens the SolBoy dashboard at http://localhost:7777
+   SolBoy starts in PAPER mode: real prices, no real money. Let it run a few days.
+
+5. To use real money: open the Account tab, create your SolBoy wallet, send it a small
+   amount of SOL, then flip the switch to "Real money". Only use money you can afford to lose.
+
+Keep the Terminal window open while SolBoy runs. Close it to stop SolBoy.
+While SolBoy is open it keeps your Mac from sleeping by itself (the screen can still turn off).
+Closing a MacBook's lid still puts it to sleep, so leave the lid open, ideally plugged in.
+The full guide is in README.md (open it with TextEdit).
+
+Updating later: when a yellow "Update" button appears at the top of the dashboard, click it.
+SolBoy updates itself and keeps your settings, keys, wallets and trades.

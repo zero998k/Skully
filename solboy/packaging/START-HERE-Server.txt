@@ -1,0 +1,73 @@
+SOLBOY ONLINE - FREE ALWAYS-ON SERVER (START HERE)
+==================================================
+
+This puts SolBoy on a free cloud server so it runs 24/7, even when your Mac is off.
+You'll get your own private HTTPS web address with a password. About 30 minutes, once.
+
+You need: this zip on your Mac, and two free accounts (made in step 1).
+Everything below is typed into the Mac's Terminal app (Applications > Utilities > Terminal).
+
+
+1. MAKE TWO FREE ACCOUNTS
+   - Oracle Cloud: https://www.oracle.com/cloud/free  ("Start for free")
+     They ask for a card to check you're real. The Always Free plan isn't charged.
+   - Tailscale: https://tailscale.com  ("Get started", sign in with Google/Apple/Microsoft)
+     This gives SolBoy its secure web address.
+
+2. CREATE THE FREE SERVER (in the Oracle Cloud website)
+   a. Menu > Compute > Instances > Create instance. Name it: solboy
+   b. Image: click "Change image" > Ubuntu > Canonical Ubuntu 24.04 (or the newest Ubuntu).
+   c. Shape: click "Change shape".
+      - Best: Ampere > VM.Standard.A1.Flex, set 1 OCPU and 6 GB memory ("Always Free-eligible").
+      - If Oracle says "Out of capacity": choose AMD > VM.Standard.E2.1.Micro instead. It works too.
+   d. Networking: leave the defaults (it should assign a public IPv4 address).
+   e. SSH keys: choose "Generate a key pair for me" and click "Save private key". A .key file downloads.
+   f. Click Create. Wait until it says RUNNING, then copy the "Public IP address".
+
+3. PUT YOUR KEY IN PLACE (Mac Terminal)
+      mkdir -p ~/.ssh && mv ~/Downloads/ssh-key-*.key ~/.ssh/solboy.key && chmod 600 ~/.ssh/solboy.key
+
+4. SEND SOLBOY TO THE SERVER (replace 1.2.3.4 with your server's Public IP)
+      scp -i ~/.ssh/solboy.key ~/Downloads/SolBoy-for-Server.zip ubuntu@1.2.3.4:
+   If it asks "Are you sure you want to continue connecting?", type yes and press Enter.
+
+5. LOG IN TO THE SERVER AND INSTALL
+      ssh -i ~/.ssh/solboy.key ubuntu@1.2.3.4
+   Now you're typing on the server. Run these three lines:
+      sudo apt-get update && sudo apt-get install -y unzip
+      unzip -o SolBoy-for-Server.zip
+      bash SolBoy-for-Server/install-server.sh
+
+6. YOUR WEB ADDRESS
+   The installer asks "Set up an HTTPS web address for SolBoy now?" Press Enter (yes).
+   - It shows a Tailscale login link. Open it on your Mac and sign in.
+   - If it then shows a link to enable "Funnel", open it, click Enable, and run:
+         sudo tailscale funnel --bg 7777
+   - Your address looks like https://solboy.something.ts.net
+     To see it again any time:   sudo tailscale funnel status
+   The installer also shows your SETUP CODE. Keep the Terminal open for the next step.
+
+7. FINISH SETUP IN YOUR BROWSER
+   Open your web address. Enter the setup code, create a password, paste your Helius key,
+   your wallets, and (optional) your Groq key. Done: log in and you'll see your SolBoy dashboard.
+   Bookmark it. It works from your phone too.
+
+
+IMPORTANT
+- Run SolBoy in ONE place. Once the server works, close SolBoy on your Mac, or both copies will trade.
+- The server starts fresh in Paper mode, with its own SolBoy wallet. To move real money:
+  withdraw from your Mac SolBoy (Account tab) to your Phantom, then deposit into the server SolBoy.
+- Online, withdrawing, showing your key and turning on real money all ask for your password again.
+- Oracle may reclaim "idle" free servers, and SolBoy uses very little CPU. To prevent that, many people
+  upgrade the Oracle account to "Pay As You Go": it stays $0 as long as you only use Always Free resources.
+  Check Oracle's current Always Free rules before deciding: https://docs.oracle.com/en-us/iaas/Content/FreeTier/resourceref.htm
+
+USEFUL COMMANDS (after step 5's ssh line, on the server)
+   sudo systemctl status solboy       is SolBoy running?
+   sudo journalctl -u solboy -f       watch SolBoy's live log (Ctrl+C to stop watching)
+   sudo systemctl restart solboy      restart SolBoy
+   sudo tailscale funnel status       show your web address
+
+UPDATING SOLBOY LATER
+   Click the yellow Update button at the top of your SolBoy dashboard when it appears. That's it:
+   your settings, wallet and trades are kept. (Repeating steps 4 and 5 with a new zip also works.)
