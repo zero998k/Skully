@@ -12,6 +12,7 @@ export const RESTART_CODE = 75; // tells the launcher in main.js to start SolBoy
 const REPO = 'zero998k/Skully';
 const TAG = 'solboy-v';
 const api = () => process.env.SOLBOY_UPDATE_API || `https://api.github.com/repos/${REPO}`;
+const site = () => process.env.SOLBOY_UPDATE_SITE || `https://github.com/${REPO}`;
 const ASSET = {
   'darwin-arm64': 'SolBoy-Mac-AppleSilicon',
   'darwin-x64': 'SolBoy-Mac-Intel',
@@ -57,15 +58,32 @@ export function createUpdater() {
     }
   }
 
+  // GitHub's API allows 60 checks an hour per internet address; its releases feed has no such limit,
+  // so it's the backup. Download links follow a fixed pattern either way.
+  async function fromApi() {
+    const releases = await (await get(`${api()}/releases?per_page=30`, 10_000)).json();
+    return releases.filter((r) => !r.draft && !r.prerelease).map((r) => ({ tag: r.tag_name, notes: r.body, page: r.html_url }));
+  }
+  async function fromFeed() {
+    const xml = await (await get(`${site()}/releases.atom`, 10_000)).text();
+    const text = (html) =>
+      html
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+        .replace(/<\/?strong>/g, '**').replace(/<\/(p|li)>/g, '\n').replace(/<li>/g, '- ').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&');
+    return [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map(([, e]) => ({
+      tag: /\/releases\/tag\/([^"]+)"/.exec(e)?.[1],
+      notes: text(/<content[^>]*>([\s\S]*?)<\/content>/.exec(e)?.[1] ?? ''),
+      page: /href="([^"]+)"/.exec(e)?.[1],
+    }));
+  }
+
   async function check(force = false) {
     if (!force && Date.now() - checkedAt < 10 * 60_000) return latest;
     checkedAt = Date.now();
     try {
-      const releases = await (await get(`${api()}/releases?per_page=30`, 10_000)).json();
-      const best = releases
-        .filter((r) => !r.draft && !r.prerelease && r.tag_name?.startsWith(TAG))
-        .reduce((a, r) => (!a || isNewer(r.tag_name, a.tag_name) ? r : a), null);
-      latest = best && isNewer(best.tag_name, VERSION) ? { version: best.tag_name.slice(TAG.length), notes: String(best.body ?? '').slice(0, 3000), page: best.html_url, assets: best.assets ?? [] } : null;
+      const releases = await fromApi().catch(fromFeed);
+      const best = releases.filter((r) => r.tag?.startsWith(TAG)).reduce((a, r) => (!a || isNewer(r.tag, a.tag) ? r : a), null);
+      latest = best && isNewer(best.tag, VERSION) ? { version: best.tag.slice(TAG.length), tag: best.tag, notes: String(best.notes ?? '').trim().slice(0, 3000), page: best.page } : null;
       error = null;
       if (latest && latest.version !== announced) {
         announced = latest.version;
@@ -92,19 +110,23 @@ export function createUpdater() {
     if (!canInstall) throw new Error(isPackagedApp ? "This copy of SolBoy can't update itself. Download the new version instead." : 'Running from source: update with git pull instead.');
     const rel = await check(true);
     if (!rel) throw new Error(error ?? "You're already on the newest SolBoy.");
-    const asset = rel.assets.find((a) => a.name === ASSET);
-    const sums = rel.assets.find((a) => a.name === 'SHA256SUMS');
-    if (!asset || !sums) throw new Error("The new version for your computer isn't uploaded yet. Try again in a few minutes.");
+    const download = (name) => `${site()}/releases/download/${rel.tag}/${name}`;
 
     busy = true;
     const tmp = `${exe}.new`;
     try {
-      const listed = (await (await get(sums.browser_download_url, 30_000)).text()).split('\n').map((l) => l.trim().split(/\s+\*?/));
+      let sums;
+      try {
+        sums = await (await get(download('SHA256SUMS'), 30_000)).text();
+      } catch {
+        throw new Error("The new version isn't fully uploaded yet. Try again in a few minutes.");
+      }
+      const listed = sums.split('\n').map((l) => l.trim().split(/\s+\*?/));
       const expected = listed.find(([, name]) => name === ASSET)?.[0];
       if (!/^[a-f0-9]{64}$/.test(expected ?? '')) throw new Error('The update has no checksum for your computer. Nothing was changed.');
 
       log(`Downloading SolBoy ${rel.version}...`);
-      const res = await get(asset.browser_download_url, 15 * 60_000);
+      const res = await get(download(ASSET), 15 * 60_000);
       const hash = crypto.createHash('sha256');
       const out = fs.createWriteStream(tmp, { mode: 0o755 });
       for await (const chunk of res.body) {
