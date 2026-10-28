@@ -47,6 +47,10 @@ const DEX_TO_PROTOCOL = { pumpswap: 'pump-amm', raydium: 'raydium', meteora: 'me
 
 const TWEET_API = () => process.env.TWEET_API_URL || 'https://cdn.syndication.twimg.com';
 const clip = (x, n) => (x == null ? null : String(x).replace(/\s+/g, ' ').trim().slice(0, n) || null);
+const gwScore = new Map(); // gateway -> recent answer times (ms); faster gateways are asked first
+const gwRank = (list) => [...list].sort((a, b) => avgMs(a) - avgMs(b));
+const avgMs = (g) => { const x = gwScore.get(g); return x?.length ? x.reduce((s, v) => s + v, 0) / x.length : 2500; };
+function gwNote(url, ms) { const g = GATEWAYS.find((x) => url.startsWith(x)); if (!g) return; const x = gwScore.get(g) ?? []; x.push(ms); if (x.length > 20) x.shift(); gwScore.set(g, x); }
 const GATEWAYS = ['https://pump.mypinata.cloud/ipfs/', 'https://ipfs.io/ipfs/', 'https://dweb.link/ipfs/', 'https://gateway.pinata.cloud/ipfs/', 'https://w3s.link/ipfs/'];
 const PUMP_API = () => process.env.PUMP_API_URL || 'https://frontend-api-v3.pump.fun';
 const ipfsCid = (u) => /\/ipfs\/([^?#]+)/.exec(u ?? '')?.[1] ?? /^ipfs:\/\/(.+)$/.exec(u ?? '')?.[1] ?? null;
@@ -261,6 +265,7 @@ export function createPulse({ cfg, connection }) {
       protocol: d.pool === 'bonk' ? 'bonk' : 'pump', creator: d.traderPublicKey ?? null, createdAt: Date.now(), fromBirth: true,
     });
     tokens.set(d.mint, tok);
+    wantMeta(tok); // picture and socials start loading the moment the coin launches
     if (tok.creator) {
       const dev = wallet(tok, tok.creator);
       dev.tags.add('dev');
@@ -598,10 +603,11 @@ export function createPulse({ cfg, connection }) {
       }
     }
     const cid = ipfsCid(tok.uri);
-    const urls = [...new Set([tok.uri, ...(cid ? GATEWAYS.map((g) => g + cid) : [])])].filter((u) => publicUrl(u) || (allowLocal() && /^http:\/\/127\.0\.0\.1/.test(u)));
+    const urls = [...new Set([tok.uri, ...(cid ? gwRank(GATEWAYS).map((g) => g + cid) : [])])].filter((u) => publicUrl(u) || (allowLocal() && /^http:\/\/127\.0\.0\.1/.test(u)));
     try {
       // IPFS gateways and Pump.fun's own record for the coin, whichever answers first
-      const sources = urls.map((u) => getJson(u, 5000));
+      const t0 = Date.now();
+      const sources = urls.map((u) => getJson(u, 5000).then((x) => { gwNote(u, Date.now() - t0); return x; }, (e) => { gwNote(u, 5000); throw e; }));
       if (tok.protocol === 'pump') sources.push(getJson(`${PUMP_API()}/coins/${tok.mint}`, 5000).then((c) => (c?.image_uri ? { ...c, image: c.image_uri } : Promise.reject(new Error('no coin')))));
       if (!sources.length) throw new Error('no metadata link');
       const m = await Promise.any(sources);
@@ -621,6 +627,7 @@ export function createPulse({ cfg, connection }) {
       }
       tok.metaState = 'done';
       stats.metaOk++;
+      if (tok.meta.image || tok.meta.cdnImage) fetchImage(tok.mint); // fetch the picture now, so it's ready when the card shows
     } catch {
       // the details file didn't load: Helius still has the picture (and the name), even without the socials
       if (!das && dasLeft()) das = await dasAsset(tok.mint).catch(() => null);
@@ -1287,7 +1294,7 @@ export function createPulse({ cfg, connection }) {
   const imgFail = new Map();
   const imgInflight = new Map();
   let imgBytes = 0;
-  function image(mint) {
+  function fetchImage(mint) {
     const tok = tokens.get(mint);
     const src = tok?.meta?.cdnImage || tok?.meta?.image || tok?.dex?.image;
     if (!src) return null;
@@ -1300,12 +1307,12 @@ export function createPulse({ cfg, connection }) {
     if (Date.now() - (imgFail.get(mint) ?? 0) < 60_000) return null;
     if (imgInflight.has(mint)) return imgInflight.get(mint);
     const cid = ipfsCid(src);
-    const urls = [...new Set([src, ...(cid ? GATEWAYS.map((g) => g + cid) : [])])].filter((u) => publicUrl(u) || (allowLocal() && /^http:\/\/127\.0\.0\.1/.test(u)));
+    const urls = [...new Set([src, ...(cid ? gwRank(GATEWAYS).map((g) => g + cid) : [])])].filter((u) => publicUrl(u) || (allowLocal() && /^http:\/\/127\.0\.0\.1/.test(u)));
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 12_000);
     // try the coin's own link first, then one more gateway every 1.5 seconds, and keep the first that answers
     const p = Promise.any(urls.map(async (u, i) => {
-      if (i) await new Promise((r) => setTimeout(r, i * 1500));
+      if (i) await new Promise((r) => setTimeout(r, i * 350)); // the next server gets asked after 0.35s, not seconds
       if (ctrl.signal.aborted) throw new Error('done');
       const res = await fetch(u, { signal: ctrl.signal });
       const type = res.headers.get('content-type') ?? '';
@@ -1377,7 +1384,7 @@ export function createPulse({ cfg, connection }) {
         }),
         check('Coin pictures (IPFS)', async () => {
           if (!recent.length) throw new Error('no coin pictures known yet; wait a minute and check again');
-          const v = await image(recent[0].mint);
+          const v = await fetchImage(recent[0].mint);
           if (!v) throw new Error(`couldn't load $${recent[0].symbol}'s picture (all time: ${pct(stats.imgOk, stats.imgFail)} loaded)`);
           return `$${recent[0].symbol}'s picture loaded; all time ${pct(stats.imgOk, stats.imgFail)}; coin details ${pct(stats.metaOk, stats.metaFail)}`;
         }),
@@ -1413,7 +1420,7 @@ export function createPulse({ cfg, connection }) {
     },
     setNarrative(mint, n) { const t = tokens.get(mint); if (t) t.narrative = n; },
     getNarrative: (mint) => tokens.get(mint)?.narrative ?? null,
-    image,
+    image: fetchImage,
     priceSol,
     curveOf,
     status: () => ({ feed: wsState === 'live' && Date.now() - lastMessageAt > 120_000 ? 'quiet' : wsState, solUsd, tracking: tokens.size, live: subscribed.size, delaySec: feedDelay(), tpm: tradeTicks.filter((x) => Date.now() - x < 60_000).length }),

@@ -61,6 +61,15 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.smooth = await p.evaluate((m) => ({ removed: window.__removed, sameImg: !!window.__img && document.contains(window.__img), entered: !!document.querySelector(`.card[data-mint="${m}"]`) }), late.mint);
   await p.screenshot({ path: `${E}/p1-board.png` });
 
+  // scrolling on a short laptop screen: columns, the filter window and (later) the coin page scroll on their own
+  await p.setViewportSize({ width: 1440, height: 430 }); await sleep(400);
+  const canScroll = (sel) => p.evaluate((sel) => { const el = document.querySelector(sel); if (!el || el.scrollHeight <= el.clientHeight + 2) return false; el.scrollTop = 40; return el.scrollTop > 0; }, sel);
+  R.scrollColumn = await canScroll('#list-new');
+  await p.click('[data-filter="new"]'); await p.click('[data-ftab="audit"]'); await sleep(300);
+  R.scrollFilters = await canScroll('#filterModal .body');
+  await p.keyboard.press('Escape'); await sleep(200);
+  await p.setViewportSize({ width: 1600, height: 1000 }); await sleep(300);
+
   // filters: exclude keyword, dev holding max, presets, reset
   await p.click('[data-filter="new"]'); await sleep(300);
   R.filterTabs = await p.locator('#filterModal [data-ftab]').allInnerTexts();
@@ -115,6 +124,11 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.analyzeToast = (await toasts()).match(/Checked[^\n]*/)?.[0];
   await p.click('[data-ctab="holders"]'); await sleep(300);
   R.insiderTagged = await p.locator('#coinTable .tag.insider').count();
+  await p.setViewportSize({ width: 1440, height: 560 }); await sleep(400);
+  R.scrollCoinSide = await p.evaluate(() => { const el = document.querySelector('#coinSide'); el.scrollTop = 60; return el.scrollTop > 0; });
+  R.scrollCoinTable = await p.evaluate(() => { const el = document.querySelector('#coinTable'); return el.clientHeight > 0 && el.clientHeight < window.innerHeight; });
+  await p.setViewportSize({ width: 1600, height: 1000 }); await sleep(300);
+  R.gauges = await p.locator('.gauge').count();
   R.windowsShown = (await p.locator('#coinSide .wtabs button').count()) === 4 && /Vol/.test(await p.locator('#coinSide .wins').innerText());
   await p.click('#coinSide [data-win="h1"]'); await sleep(200);
   R.windowSwitch = await p.locator('#coinSide [data-win="h1"].on').count() === 1;

@@ -8,7 +8,7 @@ Use only the facts. If they don't say what it is, write "No clear story yet: jus
 No price predictions, no advice, no hype, no emojis, no markdown, no headings.`;
 
 // Short replies: prefer a fast model over the biggest one.
-const FAST = ['llama-3.3-70b-versatile', 'openai/gpt-oss-20b', 'meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.1-8b-instant', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+const FAST = ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b', 'meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.1-8b-instant', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'];
 let picked = null;
 
 /** Returns { text } or { needsKey: true }. Throws on AI errors. */
@@ -22,7 +22,7 @@ export async function writeNarrative(cfg, facts) {
   }
   const { cacheKey, ...clean } = facts;
   let text = '';
-  await streamChat({ provider, key, model: picked, system: SYSTEM, user: `Coin facts: ${JSON.stringify(clean)}`, onText: (t) => (text += t), maxTokens: 800, timeoutMs: 20_000 });
+  await streamChat({ provider, key, model: picked, system: SYSTEM, user: `Coin facts: ${JSON.stringify(clean)}`, onText: (t) => (text += t), maxTokens: 300, timeoutMs: 12_000 });
   text = text.replace(/[#*_`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 500);
   return { text: text || null };
 }

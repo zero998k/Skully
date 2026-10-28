@@ -126,6 +126,8 @@ PP('coin page: 5m/1h/6h/24h stats, mint/freeze check, trade size icons', pp.wind
 PP('quick trade box: one-click buy, sell SOL amount, Sell Init., presets, edit, USD', /Bought 0\.05/.test(pp.qtBuy ?? '') && pp.qtSellSol === true && pp.qtInit === true && /Bought .*Sold .*Holding .*PnL/.test(pp.qtFoot ?? '') && pp.qtP2 === '0.25,0.5,1,2' && pp.qtEdited === '0.07' && /^\$25/.test(pp.qtUsd ?? ''), 'qtFoot');
 PP('chart shows dev / sniper / KOL / whale markers', /DB/.test(pp.chartMarkers ?? ''), 'chartMarkers');
 PP('holders: SOL balance, bought/sold with avg MC, PnL, remaining, fees, funding, held', ['SOL balance', 'Bought (avg MC)', 'Sold (avg MC)', 'U. PnL', 'Remaining', 'Fees (est.)', 'Funding', 'Held'].every((x) => (pp.holderCols ?? '').toUpperCase().includes(x.toUpperCase())) && pp.holderFees === true, 'holderCols');
+PP('everything scrolls on a short screen (columns, filters, coin page)', pp.scrollColumn === true && pp.scrollFilters === true && pp.scrollCoinSide === true && pp.scrollCoinTable === true, 'scrollColumn');
+PP('risk numbers are animated gauges', pp.gauges >= 5, 'gauges');
 PP('back to the board', pp.backOnBoard === true, 'backOnBoard');
 PP('no page errors', Array.isArray(pp.errors) && pp.errors.length === 0, 'errors');
 

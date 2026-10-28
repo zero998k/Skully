@@ -1,3 +1,8 @@
+**New in 1.8.0**
+- **Scrolling fixed everywhere:** the Pulse columns, the filter window (every section reachable now) and the coin page scroll properly on laptop screens.
+- **Animated risk gauges:** top 10, dev, snipers, insiders and bundlers are rings that fill to the percentage around their own icon, glide when the number moves, turn yellow then red as it gets risky, and pulse red when it's dangerous.
+- **Pictures and stories load faster:** a coin's picture and socials start loading the moment it launches, the fastest picture servers are remembered and asked first, the coin's own description or X post shows instantly on its page while the AI writes, the AI uses Groq's fastest model, and hovering a coin preloads its page and story.
+
 **New in 1.7.0: Axiom-style trading box and coin details**
 - **New quick trade box (side panel, floating box and pop-out):** presets **P1 / P2 / P3**, four one-click **Buy** buttons (in SOL, or flip to **USD**), one-click **Sell** by SOL amount or by %, **Sell Init.** (sells just enough to get your money back), slippage and priority fee per preset (⚙), ✎ to change any button, your wallet balance, and **Bought / Sold / Holding / PnL** at the bottom.
 - **Holders, Top Traders and Snipers & Bundles in full detail:** each wallet's SOL balance, what it bought and sold (in $, tokens, number of trades and the average market cap it bought / sold at), unrealized PnL, what it still holds ($, % and a bar), **fees paid**, who funded it, and how long it has held.
