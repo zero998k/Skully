@@ -3,7 +3,7 @@ import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import { PublicKey } from '@solana/web3.js';
 import { log, short, notify, write } from './log.js';
-import { PROVIDERS, listModels, pickModel, streamChat } from './ai.js';
+import { PROVIDERS, AiError, listModels, pickModel, streamChat } from './ai.js';
 import { dexApi, pumpApi, tweetApi } from './endpoints.js';
 
 const SYSTEM_PROMPT = `You are SolBoy's AI coin overview, like GMGN's "AI Overview": a Solana meme coin analyst who tells a trader, in seconds, exactly what a coin is and why it is moving. Be direct and specific. No filler, greetings or intros. Start with the data.
@@ -268,15 +268,37 @@ export function createResearcher({ cfg, connection, rpcUrl, rpcFetch = fetch, ou
   let queue = Promise.resolve();
   let model = cfg.research.model === 'auto' ? (useClaude ? 'claude-opus-5-5' : null) : cfg.research.model;
 
+  let available = null;
   async function resolveModel() {
-    if (!model) model = pickModel(provider, await listModels(provider, key));
+    if (!model) model = pickModel(provider, (available ??= await listModels(provider, key)));
     return model;
   }
 
+  // Free models each have their own per-minute and daily limits, so when one says no, the next one usually says yes.
+  async function modelsToTry() {
+    const first = await resolveModel();
+    try {
+      available ??= await listModels(provider, key);
+    } catch {
+      return [first];
+    }
+    return [...new Set([first, ...provider.prefer.filter((m) => available.includes(m))])].slice(0, 3);
+  }
+
   async function writeReport(snap, onText) {
-    const user = `Token snapshot:\n${JSON.stringify(snap, null, 2)}`;
+    const user = `Token snapshot (JSON):\n${JSON.stringify(snap)}`;
     if (!useClaude) {
-      return streamChat({ provider, key, model: await resolveModel(), system: SYSTEM_PROMPT, user, onText });
+      let lastError;
+      for (const m of await modelsToTry()) {
+        try {
+          return { text: await streamChat({ provider, key, model: m, system: SYSTEM_PROMPT, user, onText, maxTokens: 2000 }), model: m };
+        } catch (e) {
+          lastError = e;
+          if (!(e instanceof AiError) || /rejected the API key/.test(e.message)) throw e;
+          log(`  ${m} couldn't do it (${e.message.slice(0, 120)}). Trying another free model...`);
+        }
+      }
+      throw lastError;
     }
     const stream = claude.beta.messages.stream({
       model,
@@ -290,7 +312,7 @@ export function createResearcher({ cfg, connection, rpcUrl, rpcFetch = fetch, ou
     stream.on('text', onText);
     const message = await stream.finalMessage();
     if (message.stop_reason === 'refusal') throw new Error('Claude declined to research this token.');
-    return message.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+    return { text: message.content.filter((b) => b.type === 'text').map((b) => b.text).join(''), model };
   }
 
   async function run(mint, context) {
@@ -300,7 +322,7 @@ export function createResearcher({ cfg, connection, rpcUrl, rpcFetch = fetch, ou
     const dataSecs = ((Date.now() - started) / 1000).toFixed(1);
 
     write('\n');
-    const report = await writeReport(snap, (text) => write(text));
+    const { text: report, model: usedModel } = await writeReport(snap, (text) => write(text));
     write('\n');
     const secs = ((Date.now() - started) / 1000).toFixed(1);
     log(`Research done in ${secs}s (data ${dataSecs}s)`);
@@ -309,7 +331,7 @@ export function createResearcher({ cfg, connection, rpcUrl, rpcFetch = fetch, ou
     fs.mkdirSync(outDir, { recursive: true });
     fs.writeFileSync(
       path.join(outDir, name),
-      `${report}\n\n---\nMint: ${mint}\nhttps://dexscreener.com/solana/${mint}\nResearched ${new Date().toISOString()} in ${secs}s by ${model}\n`,
+      `${report}\n\n---\nMint: ${mint}\nhttps://dexscreener.com/solana/${mint}\nResearched ${new Date().toISOString()} in ${secs}s by ${usedModel}\n`,
     );
     notify(`${report}\n\nhttps://dexscreener.com/solana/${mint}`);
   }

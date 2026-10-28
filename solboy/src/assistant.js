@@ -37,6 +37,11 @@ const TOOLS = [
     parameters: { type: 'object', properties: { paused: { type: 'boolean' } }, required: ['paused'] },
   },
   {
+    name: 'reset_day',
+    description: "Propose resetting today's profit/loss (daily PnL) to zero. This refills the daily loss limit (HP bar) so SolBoy can buy again. Past trades stay in history.",
+    parameters: { type: 'object', properties: {} },
+  },
+  {
     name: 'sell_position',
     description: 'Propose selling all of one open position now, by token name (like $CATGPT) or token address.',
     parameters: { type: 'object', properties: { token: { type: 'string' } }, required: ['token'] },
@@ -154,6 +159,8 @@ export function createAssistant({ cfg, bot, book, research, getState }) {
         const held = book.positions.entries().filter(([, p]) => p.source === w.address).length;
         return { tool: call.name, args: { nickname: w.label }, summary: `Remove wallet ${w.label}${held ? ` (you hold ${held} token(s) from it, so SolBoy keeps following its sells for those)` : ''}` };
       }
+      case 'reset_day':
+        return { tool: call.name, args: {}, summary: "Reset today's profit/loss to 0 (your daily loss limit fills back up)" };
       case 'set_copying': {
         const paused = a.paused === true || a.paused === 'true';
         if (paused === bot.isBuyingPaused()) throw new Error(`copying is already ${paused ? 'paused' : 'running'}`);
@@ -279,6 +286,9 @@ export function createAssistant({ cfg, bot, book, research, getState }) {
         break;
       case 'set_copying':
         bot.setBuyingPaused(p.args.paused);
+        break;
+      case 'reset_day':
+        bot.resetDay();
         break;
       case 'sell_position':
         await bot.sellNow(p.args.mint);

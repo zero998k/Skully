@@ -9,7 +9,7 @@ export const PROVIDERS = {
     },
     envKey: 'GROQ_API_KEY',
     signup: 'https://console.groq.com/keys',
-    prefer: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'],
+    prefer: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'],
     fallback: /llama|gpt-oss|qwen|kimi/i,
   },
   gemini: {
@@ -28,6 +28,7 @@ function explainStatus(provider, status, body) {
   // Gemini answers a bad key with a 400 rather than a 401.
   if (status === 401 || status === 403 || /api key/i.test(body)) return `${provider.label} rejected the API key. Check ${provider.envKey} in .env.`;
   if (status === 429) return `${provider.label} free limit reached for now. Research resumes once it resets.`;
+  if (status === 413) return `${provider.label} said the request was too large for this model's free limit.`;
   return `${provider.label} error ${status}: ${body.slice(0, 300)}`;
 }
 
@@ -46,7 +47,7 @@ export function pickModel(provider, available) {
 }
 
 /** Stream a chat reply, calling onText for each piece as it arrives. Returns the full text. */
-export async function streamChat({ provider, key, model, system, user, onText, timeoutMs = 30_000 }) {
+export async function streamChat({ provider, key, model, system, user, onText, maxTokens = 4096, timeoutMs = 30_000 }) {
   const res = await fetch(`${provider.base}/chat/completions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -54,7 +55,7 @@ export async function streamChat({ provider, key, model, system, user, onText, t
     body: JSON.stringify({
       model,
       stream: true,
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },

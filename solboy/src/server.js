@@ -25,6 +25,7 @@ function classify(text) {
   if (/SOLD/.test(text)) return 'sell';
   if (/^\S+ (BUY|SELL) /.test(text)) return 'spotted';
   if (/Research done/.test(text)) return 'research-done';
+  if (/Research failed/.test(text)) return 'research-failed';
   if (/Research/.test(text)) return 'research';
   if (/fail|error|limit reached|dropped|WARNING|declined|took too long/i.test(text)) return 'warn';
   if (/skip|not selling/i.test(text)) return 'skip';

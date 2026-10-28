@@ -86,6 +86,7 @@ body { min-height: 100vh; overflow-x: hidden; }
 .btn.danger:hover { background: var(--loss); color: #fff; border-color: #000; box-shadow: 5px 5px 0 #fafafa; }
 .btn.update { background: var(--sun); color: #0a0a0a; border-color: #000; box-shadow: 3px 3px 0 #fafafa; animation: wiggle 2.5s infinite; }
 .mini { margin-top: 8px; font-family: var(--display); font-weight: 800; font-size: 12px; color: var(--ink-2); background: transparent; border: 2px solid var(--edge); border-radius: 10px; padding: 4px 10px; cursor: pointer; }
+.mini.inline { margin: 0 0 0 6px; padding: 1px 8px; font-size: 11px; vertical-align: middle; }
 .mini:hover { color: var(--ink); border-color: var(--accent); }
 .since { color: var(--ink-3); }
 .btn.paused { background: var(--warn); color: #0a0a0a; border-color: #000; box-shadow: 3px 3px 0 #fafafa; }
@@ -493,7 +494,7 @@ function render() {
   pb.innerHTML = S.paused ? 'Paused · resume <kbd>P</kbd>' : 'Pause copying <kbd>P</kbd>';
 
   countTo($('score'), s.totalPnl);
-  $('today').innerHTML = `today <span class="${cls(S.todayPnl)}">${fmt(S.todayPnl)} SOL</span>`;
+  $('today').innerHTML = `today <span class="${cls(S.todayPnl)}">${fmt(S.todayPnl)} SOL</span> <button class="mini inline" data-reset-day title="Start today's profit/loss from zero">↺ reset</button>`;
   const left = Math.max(0, S.dailyLossLimit + Math.min(0, S.todayPnl)), frac = left / S.dailyLossLimit;
   $('hp').style.width = `${frac * 100}%`;
   $('hpBar').className = `bar hp${frac < 0.3 ? ' low' : frac < 0.6 ? ' mid' : ''}`;
@@ -745,11 +746,13 @@ function renderLoadout() {
   };
 }
 
-$('resetDay').onclick = async () => {
+document.addEventListener('click', (e) => { if (e.target.closest('[data-reset-day]')) resetDay(); });
+$('resetDay').onclick = () => resetDay();
+async function resetDay() {
   if (!confirm("Reset today's profit/loss to 0? Your daily loss limit fills back up and SolBoy can buy again. Past trades stay in your history.")) return;
   try { await api('/api/reset-day', {}); toast('win', 'Fresh start', `Today's profit/loss is back to 0. ${S.dailyLossLimit} SOL of daily risk available.`); juice('win'); refresh(); }
   catch (e) { toast('loss', "Couldn't reset", e.message); }
-};
+}
 
 /* ---------- one-click updates ---------- */
 let updating = false;
@@ -993,7 +996,7 @@ async function togglePause() {
 $('pauseBtn').onclick = togglePause;
 
 /* ---------- live feed + ticker ---------- */
-const KIND = { buy: 'BOUGHT', sell: 'SOLD', spotted: 'SPOTTED', skip: 'SKIP', research: 'INTEL', 'research-done': 'INTEL', warn: 'ALERT', info: 'INFO' };
+const KIND = { buy: 'BOUGHT', sell: 'SOLD', spotted: 'SPOTTED', skip: 'SKIP', research: 'INTEL', 'research-done': 'INTEL', 'research-failed': 'ALERT', warn: 'ALERT', info: 'INFO' };
 const GROUP = { buy: 'trades', sell: 'trades', spotted: 'trades', skip: 'trades', research: 'intel', 'research-done': 'intel', warn: 'alerts', info: 'alerts' };
 let filter = 'all';
 $('filters').onclick = (e) => {
@@ -1037,6 +1040,7 @@ function react(ev) {
     if (waitingForScan) { waitingForScan = false; setTimeout(async () => { await refresh(); if (S.reports[0]) showReport(await api(`/api/report?file=${encodeURIComponent(S.reports[0].file)}`)); }, 300); }
     else toast('info', 'New intel', 'A research report is ready in the Intel tab.');
   }
+  if (ev.kind === 'research-failed') { waitingForScan = false; toast('loss', 'Scan failed', ev.text.trim().replace(/^Research failed for \S+: /, '')); }
   if (ev.kind === 'warn' && Date.now() - lastAlert > 60000) { lastAlert = Date.now(); toast('loss', 'Alert', ev.text.trim()); }
 }
 function connect() {
