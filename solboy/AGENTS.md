@@ -36,7 +36,7 @@ casual messages; explain results in plain English, no jargon.
 - `npm ci` then `npm start` runs from source (asks setup questions; needs a Helius key to reach Solana).
 - `npm run build` builds all five apps into `dist/` (needs Bun 1.4.4).
 - `test/e2e/run-all.sh` end-to-end tests of the real packaged app against fake Solana/Jupiter/DexScreener/
-  Pump.fun/X/Groq/GitHub servers, with Playwright and a pty. Needs Linux x64, Bun, Python 3 and
+  Pump.fun/X/Groq/GitHub servers, with Playwright and a pty. Runs natively on Linux x64/arm64 and macOS x64/arm64; needs Bun, Python 3 and
   `npm i --no-save playwright && npx playwright install chromium`. About 10 minutes. Prints PASS/FAIL per
   feature and exits non-zero on any failure. Add checks to `test/e2e/full.cjs` + `check.cjs` for new features.
 

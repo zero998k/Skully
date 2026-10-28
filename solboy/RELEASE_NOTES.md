@@ -1,3 +1,8 @@
+**New in 1.10.1: faster trade updates and clearer speed readings**
+- Pump.fun confirmation checks start sooner, with fewer network requests. Recently unavailable sell routes avoid repeated quote requests while a fresh Pump.fun curve is available.
+- Completed buys and sells appear immediately while prices and balances refresh. Speed readings now cover buys and sells, distinguish sent from confirmed, and clearly label practice trades.
+- Updated the free Jupiter connection so it keeps working on the current service.
+
 **New in 1.10.0: Social Lobby and Hypothetical PnL**
 - **🧮 Hypothetical PnL** (button at the top): every copy SolBoy made, with what you actually made, what you'd have made if you'd sold exactly when the wallet sold, and what you'd have if you still held it. Type an amount in "What if every copy was __ SOL" to see it at a different size.
 - **💬 Social Lobby** (button at the top): chat with friends. Pick your username, then share your link (🔗 Share Finder). Friends open it, tap **💬 Social Lobby**, and join with a username and password.
