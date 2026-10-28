@@ -27,7 +27,7 @@ export class AiError extends Error {}
 function explainStatus(provider, status, body) {
   // Gemini answers a bad key with a 400 rather than a 401.
   if (status === 401 || status === 403 || /api key/i.test(body)) return `${provider.label} rejected the API key. Check ${provider.envKey} in .env.`;
-  if (status === 429) return `${provider.label} free limit reached for now. Research resumes once it resets.`;
+  if (status === 429) return `${provider.label} free limit reached for now. Try again in a minute.`;
   if (status === 413) return `${provider.label} said the request was too large for this model's free limit.`;
   return `${provider.label} error ${status}: ${body.slice(0, 300)}`;
 }

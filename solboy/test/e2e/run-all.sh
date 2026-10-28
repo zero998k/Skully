@@ -48,9 +48,8 @@ stop_all
 
 echo "2/4 Terminal menu..."
 start_fake term
-python3 term.py "$OUT/app/SolBoy" 1 "" 2 "" 3 1 "" 4 "" 5 "" "tp 40" "sl -15" "sl 120" "tp" "tp off" \
-  "add 5NU3oN4fNnx1CknHtaH8kGPHAaK4UJ3X4E2WdEyY3h1y buddy" "remove buddy" reset account "ask hey" \
-  "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm" "blah" > "$OUT/term.txt"
+python3 term.py "$OUT/app/SolBoy" 1 "" 2 "" 3 "" 4 "" "tp 40" "sl -15" "sl 120" "tp" "tp off" \
+  "add 5NU3oN4fNnx1CknHtaH8kGPHAaK4UJ3X4E2WdEyY3h1y buddy" "remove buddy" reset account "ask hey" "blah" > "$OUT/term.txt"
 stop_all
 
 echo "3/4 Online server mode..."

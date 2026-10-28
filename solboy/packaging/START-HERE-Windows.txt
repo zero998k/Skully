@@ -12,7 +12,7 @@ SOLBOY - START HERE (Windows)
    - Your free Helius key: make an account at https://www.helius.dev and copy your API key.
    - The wallets you want to copy: paste one per line, then press Enter on an empty line.
    - SOL per trade: press Enter to use 0.05.
-   - (Optional) A free Groq key for AI research: https://console.groq.com/keys
+   - (Optional) A free Groq key for the Ask SolBoy assistant: https://console.groq.com/keys
 
 4. Your browser opens the SolBoy dashboard at http://localhost:7777
    SolBoy starts in PAPER mode: real prices, no real money. Let it run a few days.

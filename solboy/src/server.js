@@ -1,14 +1,11 @@
 import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { PublicKey } from '@solana/web3.js';
 import DASHBOARD_HTML from './dashboard-html.js';
 import { log, onLog, readTrades } from './log.js';
 import { summarize, scoreboard } from './stats.js';
 import { tokenNames, positionWorth } from './tokens.js';
-import { settingsRows, reportSummary } from './ui.js';
+import { settingsRows } from './ui.js';
 import { applySetting, settingValue } from './settings.js';
 
 import { file } from './paths.js';
@@ -18,15 +15,12 @@ import { createAuth } from './auth.js';
 import { RESTART_CODE } from './update.js';
 
 // Settings the dashboard's Quick settings card can change while SolBoy runs.
-const QUICK = ['takeProfitPct', 'stopLossPct', 'buyAmountSol', 'dailyLossLimitSol', 'maxOpenPositions', 'researchOn', 'onlyFirstBuy', 'sellOnlyOnFullExit'];
+const QUICK = ['takeProfitPct', 'stopLossPct', 'buyAmountSol', 'dailyLossLimitSol', 'maxOpenPositions', 'onlyFirstBuy', 'sellOnlyOnFullExit'];
 
 function classify(text) {
   if (/BOUGHT/.test(text)) return 'buy';
   if (/SOLD/.test(text)) return 'sell';
   if (/^\S+ (BUY|SELL) /.test(text)) return 'spotted';
-  if (/Research done/.test(text)) return 'research-done';
-  if (/Research failed/.test(text)) return 'research-failed';
-  if (/Research/.test(text)) return 'research';
   if (/fail|error|limit reached|dropped|WARNING|declined|took too long/i.test(text)) return 'warn';
   if (/skip|not selling/i.test(text)) return 'skip';
   return 'info';
@@ -51,7 +45,7 @@ function openInBrowser(url) {
  * The game-style dashboard, served only to this computer (127.0.0.1). Every API call must carry
  * a secret made fresh each run and baked into the page, so other websites can't read or click anything.
  */
-export async function startDashboard({ cfg, bot, book, account, researchDir, research, updater, serverMode = false }) {
+export async function startDashboard({ cfg, bot, book, account, updater, serverMode = false }) {
   const positions = book.positions;
   const secret = crypto.randomBytes(16).toString('hex');
   const page = DASHBOARD_HTML.replace('__TOKEN__', secret).replace('__SERVER_MODE__', serverMode ? 'true' : 'false');
@@ -69,20 +63,6 @@ export async function startDashboard({ cfg, bot, book, account, researchDir, res
     for (const res of clients) res.write(': ping\n\n');
   }, 20_000).unref();
 
-  function listReports() {
-    if (!fs.existsSync(researchDir)) return [];
-    return fs
-      .readdirSync(researchDir)
-      .filter((f) => f.endsWith('.md'))
-      .map((f) => {
-        const full = path.join(researchDir, f);
-        return { file: f, symbol: f.split('-')[0], at: fs.statSync(full).mtime.toISOString(), narrative: reportSummary(fs.readFileSync(full, 'utf8')) };
-      })
-      .sort((a, b) => b.at.localeCompare(a.at))
-      .slice(0, 60);
-  }
-
-  // Your wallets, best performers first, with what SolBoy is doing with each.
   function walletRows(trades) {
     const stats = new Map(scoreboard(trades, cfg.wallets).map((s) => [s.label, s]));
     return cfg.wallets
@@ -134,9 +114,7 @@ export async function startDashboard({ cfg, bot, book, account, researchDir, res
       inventory,
       trades: recent.map((t) => ({ ...t, name: name(t.token) })),
       wallets: walletRows(positions.counted(trades)),
-      reports: listReports(),
-      research: Boolean(research),
-      settings: settingsRows(cfg, research).map(([k, v]) => [k, String(v)]),
+      settings: settingsRows(cfg).map(([k, v]) => [k, String(v)]),
       configPath: file('config.json'),
       update: updater?.status() ?? null,
       quick: Object.fromEntries(QUICK.map((k) => [k, settingValue(cfg, k) ?? null])),
@@ -144,7 +122,7 @@ export async function startDashboard({ cfg, bot, book, account, researchDir, res
     };
   }
 
-  const assistant = createAssistant({ cfg, bot, book, research, getState: state });
+  const assistant = createAssistant({ cfg, bot, book, getState: state });
 
   // Turn AI errors into something a person can act on.
   function assistantError(e) {
@@ -220,13 +198,6 @@ export async function startDashboard({ cfg, bot, book, account, researchDir, res
         clients.add(res);
         req.on('close', () => clients.delete(res));
         return;
-      }
-
-      if (req.method === 'GET' && url.pathname === '/api/report') {
-        const name = path.basename(url.searchParams.get('file') ?? '');
-        const full = path.join(researchDir, name);
-        if (!name.endsWith('.md') || !fs.existsSync(full)) return send(res, 404, { error: 'report not found' });
-        return send(res, 200, { text: fs.readFileSync(full, 'utf8') });
       }
 
       if (req.method === 'POST' && url.pathname === '/api/pause') {
@@ -326,19 +297,6 @@ export async function startDashboard({ cfg, bot, book, account, researchDir, res
         } catch (e) {
           return send(res, 400, { error: e.message });
         }
-      }
-
-      if (req.method === 'POST' && url.pathname === '/api/research') {
-        if (!research) return send(res, 400, { error: 'AI research is off. Add a free Groq key to .env first.' });
-        const { mint } = await readBody(req);
-        const ca = String(mint ?? '').match(/[1-9A-HJ-NP-Za-km-z]{32,44}/)?.[0];
-        try {
-          new PublicKey(ca);
-        } catch {
-          return send(res, 400, { error: "That doesn't look like a token address." });
-        }
-        research(ca, { trigger: 'manual lookup by the user' }, true);
-        return send(res, 200, { ok: true });
       }
 
       send(res, 404, { error: 'not found' });

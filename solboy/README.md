@@ -60,12 +60,11 @@ When SolBoy starts, it opens a dashboard in your browser at **http://localhost:7
 | **Streak** | Wins (🔥) or losses (💀) in a row |
 | **Level / XP** | Goes up every 10 closed trades |
 | **Inventory** | Open positions, with **SELL NOW** and **CHART** buttons |
-| **Kill feed** | Live activity. Filter it by trades, intel or alerts |
+| **Kill feed** | Live activity. Filter it by trades or alerts |
 | **Power curve** | Your total profit over time. Hover to see each trade |
-| **Intel** | AI research reports. Paste a token address and hit **SCAN** |
-| **History / Wallets / Loadout** | Trade history, your wallets ranked by profit (add and remove them here) and settings. **Quick settings** in Loadout change take profit, stop loss, SOL per buy, daily loss limit, max tokens held and what AI research runs on. They work instantly, no restart |
+| **History / Wallets / Loadout** | Trade history, your wallets ranked by profit (add and remove them here) and settings. **Quick settings** in Loadout change take profit, stop loss, SOL per buy, daily loss limit, max tokens held, and the copy rules (first buys only, sell when they sell out). They work instantly, no restart |
 
-**Buttons and keys:** **PAUSE COPYING** (or `P`) stops new buys while sells keep following the copied wallets. **↺ reset** (next to today's profit, or **↺ Reset PnL** under the HP bar) sets your profit/loss back to 0: total, today, win rate and chart start fresh, the daily loss limit refills, and your trade history is kept. `S` toggles sound effects (off by default). `1`–`5` switch tabs, and `Esc` closes a report. The terminal keeps working as before, and trading speed is the same whether the dashboard is open or not.
+**Buttons and keys:** **PAUSE COPYING** (or `P`) stops new buys while sells keep following the copied wallets. **↺ reset** (next to today's profit, or **↺ Reset PnL** under the HP bar) sets your profit/loss back to 0: total, today, win rate and chart start fresh, the daily loss limit refills, and your trade history is kept. `S` toggles sound effects (off by default). `1`–`4` switch tabs, and `Esc` closes a report. The terminal keeps working as before, and trading speed is the same whether the dashboard is open or not.
 
 To turn the dashboard off, set `"dashboard": { "enabled": false }` in `config.json`.
 
@@ -77,14 +76,13 @@ The window shows a menu at the top and live activity below it. Type a number and
 |---|---|---|
 | `1` | Open positions | Tokens you hold now: what you paid, what they're worth now, profit or loss |
 | `2` | Trade history | Wins, losses, win rate, total profit, and your last 15 trades |
-| `3` | Research reports | Every AI report, newest first. Type a report's number to read it |
-| `4` | Wallet scoreboard | Each copied wallet's win rate and profit, best first, so you can drop the losers |
-| `5` | Settings | Your settings in plain English, and where to change them |
+| `3` | Wallet scoreboard | Each copied wallet's win rate and profit, best first, so you can drop the losers |
+| `4` | Settings | Your settings in plain English, and where to change them |
 | `account` | Account | Your SolBoy wallet address and balance |
 | `tp 50` / `sl 25` | Take profit / stop loss | Sell everything at +50% / -25%. `tp off` or `sl off` turns it off. Works instantly |
 | `m` | Menu | Shows the menu again |
 
-Press **Enter** on any screen to go back. While a screen is open, new activity waits so it doesn't scroll over what you're reading. When you go back, it shows how many updates came in. To research any token, paste its token address (CA) and press Enter.
+Press **Enter** on any screen to go back. While a screen is open, new activity waits so it doesn't scroll over what you're reading. When you go back, it shows how many updates came in.
 
 Buys show in green, sells in yellow. Profit is green and losses are red.
 
@@ -185,44 +183,6 @@ SolBoy is free to share. Each friend runs their own copy, with their own free ke
 
 ---
 
-## Free AI token research (optional)
-
-The moment a wallet you copy buys a token, AI writes a quick breakdown of it (at the same time as the copy, so it never slows the trade). That includes coins launched seconds ago:
-
-- **AI overview (like GMGN's):** what the coin is, why it's pumping (or dumping) with the real numbers (price change, volume spike, buyers vs sellers, the post behind it), and the biggest risk. Straight to the point, no "maybe"s
-- **Why now:** what triggered it
-- **Imagery and audience:** the meme style and who's buying
-- **Lifespan and copycat risk**
-- **Red flags**
-- **Bull vs bear verdict**
-
-To research any token yourself, **paste its token address (CA) into the window and press Enter**. Use the token address, not a DexScreener pair link.
-
-- **Free:** it uses Groq's free plan, with no credit card. Make an account at <https://console.groq.com/keys>, create an API key, and paste it when the app asks. Skipped it? Paste the key after `GROQ_API_KEY=` in `.env` and restart.
-- **Free limits:** Groq's free plan has a daily cap, enough for many reports a day with a few wallets. If you hit it, SolBoy says so and research picks up again when it resets. Trading is never affected. To use less, set `on` to `"buys"` (below).
-- **Speed:** Groq is one of the fastest AI services. Expect a full report in about 5–10 seconds, including 2–5 seconds to gather the token's data. Each report shows how long it took. It runs separately from trading and never slows a copy trade.
-- **Saved:** reports go to `data/research/`, and to Telegram if you've set that up.
-- **What it sees**, gathered at once in a few seconds:
-  - **The X post the coin links to:** who posted it, what it says, likes and replies. This is often the whole narrative.
-  - **Launchpad data** (Pump.fun): how many minutes old the coin is, market cap, bonding curve progress, replies.
-  - **The creator's past coins:** how many they launched and how many went anywhere (serial launchers are a red flag).
-  - **Copycats:** other tokens using the same ticker.
-  - **The basics:** name, description, website, socials, DexScreener market data (price, liquidity, volume, buys and sells), and top holders.
-
-  It can't scroll X or TikTok beyond the linked post. When it's guessing the trigger or audience, the line ends with "(inferred)". It's a quick read of the token, not a safety check.
-
-Research settings live in `config.json` under `"research"`:
-
-| Setting | Default | What it does |
-|---|---|---|
-| `enabled` | `true` | `false` turns research off |
-| `on` | `"detected"` | `"detected"` = every token a watched wallet buys, the moment they buy, even ones SolBoy skips. `"buys"` = only tokens SolBoy itself buys (uses your free limit slower). You can also switch this in the Loadout tab |
-| `provider` | `"groq"` | `"groq"` (free, fastest), `"gemini"` (Google's free plan: key from <https://aistudio.google.com/apikey>, goes after `GEMINI_API_KEY=` in `.env`; lower free limits), or `"anthropic"` (Claude: paid, about 2–3 cents per report, needs `ANTHROPIC_API_KEY=` in `.env`) |
-| `model` | `"auto"` | `"auto"` picks the best model the provider currently offers. You can name a specific model instead |
-| `effort` | `"low"` | Only used with `"anthropic"`: `low`, `medium` or `high` |
-
----
-
 ## Settings (`config.json`)
 
 The most-used ones (take profit, stop loss, SOL per buy, daily loss limit, max tokens held) are easiest to change in the dashboard: **Loadout tab → Quick settings → Save**. They work straight away. For everything else, edit `config.json` and restart SolBoy.
@@ -242,13 +202,13 @@ The most-used ones (take profit, stop loss, SOL per buy, daily loss limit, max t
 | `takeProfitPct` | `null` | e.g. `100` = sell everything once you're up 100%. `null` = off |
 | `stopLossPct` | `null` | e.g. `40` = sell everything once you're down 40%. `null` = off |
 | `priceCheckSeconds` | `20` | How often to check take-profit and stop-loss |
-| `dailyLossLimitSol` | `0.5` | Stop *buying* for the rest of the day (UTC) after losing this much. Sells still happen |
+| `dailyLossLimitSol` | `0.5` | Stop *buying* for the rest of the day (UTC) after losing this much (or until you click ↺ reset). Sells still happen |
 | `skipIfMintAuthority` | `true` | Skip tokens whose creator can still print more |
 | `skipIfFreezeAuthority` | `true` | Skip tokens whose creator can freeze your tokens (a common honeypot trick) |
 | `blocklist` | `[]` | Token addresses never to buy |
 | `rpcRequestsPerSecond` | `8` | How fast the bot may ask Helius for data. The free plan allows about 10 per second. Lower it if you still see "limit reached" often |
 | `maxCopyDelaySeconds` | `15` | Skip copying a buy if it took longer than this to load, because the price has likely moved. Sells are always copied |
-| `research` | see above | AI token research settings |
+| `research` | `{ "provider": "groq" }` | Which free AI the Ask SolBoy assistant uses: `"groq"` or `"gemini"` |
 
 If two of your wallets buy the same token, the bot only buys once. It then follows the sells of the wallet it copied first.
 

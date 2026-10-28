@@ -1,3 +1,9 @@
+**New in 1.3.0**
+- **Copying fixed for traders who keep a "moon bag":** SolBoy now sells when the wallet sells 90% or more. Before, a trader keeping a few % forever meant SolBoy never sold, your slots filled up, and new buys were skipped.
+- **Fresh buys copied again:** a wallet holding a little dust from an old trade no longer counts as "adding more".
+- **The dashboard tells you why a buy was skipped:** slots full, daily loss limit hit, or the trade loaded too slowly, with what to do about it.
+- **AI narrative research removed** (Intel tab, Scan box and reports). Ask SolBoy still works and can look up any coin's live numbers. Tabs are now 1 History, 2 Wallets, 3 Loadout, 4 Account.
+
 **New in 1.2.2**
 - **Reset PnL now resets everything you see:** the big total, today's profit, win rate, streak, chart and wallet stats all go back to 0 (before, only today's number and the daily loss limit did). Your trade history is kept, and the daily loss limit refills.
 

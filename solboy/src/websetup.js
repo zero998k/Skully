@@ -34,7 +34,7 @@ ${field('Setup code', 'Shown by the installer when you set up the server (and in
 ${needPassword ? field('Create a password', 'You\'ll use this to log in to your SolBoy site. At least 10 characters.', '<input name="password" type="password" autocomplete="new-password" minlength="10" required>') + field('Type it again', '', '<input name="password2" type="password" autocomplete="new-password" required>') : ''}
 ${needRpc ? field('Helius API key', 'Free at <a href="https://www.helius.dev" target="_blank" rel="noopener">helius.dev</a>. Copy the API key from your dashboard. (Advanced: a full RPC URL also works.)', '<input name="rpc" autocomplete="off" required>') : ''}
 ${needWallets ? field('Wallets to copy', 'One per line. Optionally add a nickname after the address, like:<br><code>5NU3oN4f...3h1y whale1</code>', '<textarea name="wallets" required></textarea>') + field('SOL per copied trade', 'Paper mode first, so this is practice money. You can change it later.', `<input name="buy" value="${DEFAULTS.buyAmountSol}" inputmode="decimal">`) : ''}
-${needAi ? field('Groq API key (optional, free)', 'Turns on AI token research and the Ask SolBoy assistant. Get one at <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>. Leave empty to skip.', '<input name="groq" autocomplete="off">') : ''}
+${needAi ? field('Groq API key (optional, free)', 'Turns on the Ask SolBoy assistant. Get one at <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>. Leave empty to skip.', '<input name="groq" autocomplete="off">') : ''}
 <div class="err" id="err"></div>
 <button type="submit" id="go">Finish setup</button>
 </form></main>

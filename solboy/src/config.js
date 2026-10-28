@@ -24,7 +24,7 @@ export const DEFAULTS = {
   blocklist: [],
   rpcRequestsPerSecond: 8,
   maxCopyDelaySeconds: 15,
-  research: { enabled: true, on: 'detected', provider: 'groq', model: 'auto', effort: 'low' },
+  research: { provider: 'groq' }, // the free AI behind Ask SolBoy
   dashboard: { enabled: true, port: 7777, openBrowser: true },
   assistant: { model: 'free' },
   keepAwake: true,
@@ -46,9 +46,6 @@ export function loadConfig(file = basePath('config.json')) {
     dashboard: { ...DEFAULTS.dashboard, ...raw.dashboard },
     assistant: { ...DEFAULTS.assistant, ...raw.assistant },
   };
-  // Older versions researched only tokens SolBoy bought. Now every token your wallets buy is researched,
-  // unless you picked "buys" yourself.
-  if (raw.research?.on === 'buys' && !raw.research.onChosen) cfg.research.on = 'detected';
 
   if (!Array.isArray(cfg.wallets) || cfg.wallets.length === 0) {
     throw new Error('Add at least one wallet to "wallets" in config.json.');
@@ -66,7 +63,6 @@ export function loadConfig(file = basePath('config.json')) {
   if (!['groq', 'gemini', 'anthropic'].includes(cfg.research.provider)) {
     throw new Error('"research.provider" must be "groq", "gemini" or "anthropic".');
   }
-  if (!['buys', 'detected'].includes(cfg.research.on)) throw new Error('"research.on" must be "buys" or "detected".');
   if (!['mirror', 'all'].includes(cfg.sellMode)) throw new Error('"sellMode" must be "mirror" or "all".');
   if (!(cfg.buyAmountSol > 0)) throw new Error('"buyAmountSol" must be more than 0.');
   return cfg;

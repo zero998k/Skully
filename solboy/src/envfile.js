@@ -10,7 +10,7 @@ WS_URL=
 # Burner wallet used in LIVE mode. Anyone with this key can take its SOL. Never share this file.
 PRIVATE_KEY=
 
-# Optional: free AI token research (free key from https://console.groq.com/keys)
+# Optional: free AI assistant, Ask SolBoy (free key from https://console.groq.com/keys)
 GROQ_API_KEY=
 
 # Optional: a free Jupiter key from https://portal.jup.ag (only if swaps fail without one)

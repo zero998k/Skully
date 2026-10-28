@@ -2,8 +2,8 @@
 
 SolBoy is a Solana meme coin copy-trading app for a non-technical owner. It runs on the owner's Mac (and a
 friend's Windows PC, and optionally a Linux server). It copies the buys and sells of wallets the owner picks,
-in paper (practice) or real-money mode, shows a game-style dashboard in the browser, writes AI research
-reports with a free Groq key, and has a built-in assistant ("Ask SolBoy"). The owner talks in short,
+in paper (practice) or real-money mode, shows a game-style dashboard in the browser, and has a built-in
+assistant ("Ask SolBoy") on a free Groq key. (AI narrative research was removed in 1.3.0 at the owner's request.) The owner talks in short,
 casual messages; explain results in plain English, no jargon.
 
 ## Layout
@@ -13,9 +13,6 @@ casual messages; explain results in plain English, no jargon.
   is the app itself.
 - `src/bot.js` copy trading (detect a watched wallet's trade, copy it, take profit / stop loss, copy rules).
   `src/detect.js` turns a transaction into buys and sells. `src/jupiter.js` swaps. `src/rpc.js` rate limiter.
-- `src/research.js` AI research: gathers data (DexScreener, Pump.fun, X post embed, IPFS metadata, website,
-  holders, creator history, copycats, movement signals), then asks the AI for the report format in
-  `SYSTEM_PROMPT`. `src/ai.js` Groq/Gemini client with model fallback.
 - `src/assistant.js` Ask SolBoy (tools only *propose* changes; the owner clicks Do it).
 - `src/settings.js` settings that can change while running (Quick settings, assistant, terminal `tp`/`sl`).
 - `src/server.js` dashboard HTTP server and API. `src/dashboard.html` the whole dashboard (one file),

@@ -53,7 +53,7 @@ export function parseTrades(tx, wallet) {
     if (QUOTE_MINTS.has(mint)) continue;
     const delta = t.post - t.pre;
     if (delta > 0n && solDelta < 0n) {
-      trades.push({ side: 'buy', mint, solAmount: Number(-solDelta) / 1e9, tokenAmount: delta, heldBefore: t.pre > 0n });
+      trades.push({ side: 'buy', mint, solAmount: Number(-solDelta) / 1e9, tokenAmount: delta, heldBefore: t.pre * 10n > delta }); // dust left from an old trade doesn't count
     } else if (delta < 0n && solDelta > 0n) {
       const fractionSold = t.pre > 0n ? Math.min(1, Number(-delta) / Number(t.pre)) : 1;
       trades.push({ side: 'sell', mint, solAmount: Number(solDelta) / 1e9, tokenAmount: -delta, fractionSold });

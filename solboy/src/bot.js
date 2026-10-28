@@ -11,7 +11,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * The copy-trading engine. Everything it talks to is passed in so it can be tested without a network.
  * The book says whether we're paper or real-money trading, and holds the trading keypair.
  */
-export function createBot({ cfg, connection, book, onToken, rpcFetch }) {
+export function createBot({ cfg, connection, book, rpcFetch }) {
   const positions = book.positions;
   const seen = new Set();
   const locks = new Map();
@@ -83,10 +83,6 @@ export function createBot({ cfg, connection, book, onToken, rpcFetch }) {
     const late = Date.now() - seenAt > cfg.maxCopyDelaySeconds * 1000;
     for (const t of parseTrades(tx, w.address)) {
       log(`${w.label} ${t.side.toUpperCase()} ${short(t.mint)} for ${t.solAmount.toFixed(3)} SOL ${delay}`);
-      // Research starts the moment a watched wallet buys, alongside the copy, not after it.
-      if (t.side === 'buy' && cfg.research.on === 'detected') {
-        onToken?.(t.mint, { trigger: `watched wallet ${w.label} bought`, theirBuySol: t.solAmount });
-      }
       if (t.side === 'buy' && late) {
         log(`  skip: took over ${cfg.maxCopyDelaySeconds}s to load, too late to copy this buy`);
         continue;
@@ -157,9 +153,6 @@ export function createBot({ cfg, connection, book, onToken, rpcFetch }) {
         openedAt: new Date().toISOString(),
       });
       log(c.green(`  ${tag()}BOUGHT ${sol} SOL of ${short(t.mint)}`) + (sig ? `  tx: ${sig}` : ''));
-      if (cfg.research.on === 'buys') {
-        onToken?.(t.mint, { trigger: `copied a buy by watched wallet ${w.label}`, theirBuySol: t.solAmount, ourBuySol: sol });
-      }
       recordTrade(book.tradeLogFile, { action: `${tag()}buy`, mint: t.mint, wallet: w.label, sol, reason: `copied ${w.label}`, tx: sig });
       notify(`${tag()}BUY ${sol} SOL of ${t.mint}\ncopied ${w.label}\nhttps://dexscreener.com/solana/${t.mint}`);
     } catch (e) {
@@ -171,9 +164,10 @@ export function createBot({ cfg, connection, book, onToken, rpcFetch }) {
     const pos = positions.get(t.mint);
     if (!pos || !cfg.followSells) return;
     if (pos.source !== w.address) return log(`  not selling: this position was copied from ${pos.sourceLabel}`);
-    const out = t.fractionSold >= 0.98;
+    // Selling 90%+ counts as out: many traders keep a tiny "moon bag" forever, which would never free the slot.
+    const out = t.fractionSold >= 0.9;
     if (cfg.sellOnlyOnFullExit) {
-      if (!out) return log(`  not selling yet: ${w.label} sold ${Math.round(t.fractionSold * 100)}% but still holds some. SolBoy sells when they fully exit`);
+      if (!out) return log(`  not selling yet: ${w.label} sold ${Math.round(t.fractionSold * 100)}% and still holds most of it. SolBoy sells when they sell 90% or more`);
       return sellPosition(t.mint, 1, `${w.label} sold out`);
     }
     const fraction = cfg.sellMode === 'all' ? 1 : t.fractionSold;

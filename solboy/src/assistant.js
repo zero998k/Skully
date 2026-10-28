@@ -1,5 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { PublicKey } from '@solana/web3.js';
 import { PROVIDERS, AiError, listModels, pickModel, chatWithTools } from './ai.js';
 import { checkWallet, saveConfigValue } from './config.js';
 import { SETTINGS, parseValue, show, showSetting, settingValue, applySetting } from './settings.js';
@@ -46,11 +45,6 @@ const TOOLS = [
     description: 'Propose selling all of one open position now, by token name (like $CATGPT) or token address.',
     parameters: { type: 'object', properties: { token: { type: 'string' } }, required: ['token'] },
   },
-  {
-    name: 'research_token',
-    description: 'Propose running the AI token research report on a token address.',
-    parameters: { type: 'object', properties: { address: { type: 'string' } }, required: ['address'] },
-  },
 ];
 
 // Read-only lookups the assistant may run by itself (no confirmation needed: they change nothing).
@@ -70,8 +64,8 @@ TOOLS.push(...Object.entries(READ_TOOLS).map(([name, t]) => ({ name, description
 
 const GUIDE = `SolBoy is a Solana meme coin copy-trading app that runs on the user's own computer. It watches wallets the user picks and copies their buys and sells about 1-3 seconds later through Jupiter, using a free Helius connection.
 Modes: Paper (practice with real prices, no money) and Real money (trades SOL from the user's own SolBoy wallet; switched on the Account tab after depositing; withdrawals there too). Paper and real-money trades are tracked separately.
-Copy rules (Loadout tab): by default only a wallet's FIRST buy of a coin is copied (not when they add more), and SolBoy sells only when they fully sell out (partial sells are ignored); both can be switched. Safety features: daily loss limit (the HP bar; at zero, no new buys until tomorrow or until the user resets their PnL with the ↺ reset button), max open positions, skip tokens with mint/freeze authority, skip buys too slow to copy, optional take profit / stop loss, pause copying. Removing a wallet you still hold tokens from keeps following its sells until they're sold.
-Dashboard: Positions, Live feed, PnL curve, tabs Intel (AI token reports with a TL;DR; Scan box), History, Wallets (ranked, add/remove), Loadout (settings), Account (deposit QR, mode switch, withdraw, key backup). Keys: A add wallet, P pause, S sound, 1-5 tabs.
+Copy rules (Loadout tab): by default only a wallet's FIRST buy of a coin is copied (not when they add more), and SolBoy sells everything only when they sell 90% or more (smaller partial sells are ignored); both can be switched. Safety features: daily loss limit (the HP bar; at zero, no new buys until tomorrow or until the user resets their PnL with the ↺ reset button), max open positions, skip tokens with mint/freeze authority, skip buys too slow to copy, optional take profit / stop loss, pause copying. Removing a wallet you still hold tokens from keeps following its sells until they're sold.
+Dashboard: Positions, Live feed, PnL curve, tabs History, Wallets (ranked, add/remove), Loadout (Quick settings and all settings), Account (deposit QR, mode switch, withdraw, key backup). Keys: A add wallet, P pause, S sound, 1-4 tabs. SolBoy no longer writes AI research reports; for a specific coin, use lookup_token.
 Copy trading usually loses money even when the copied wallet wins (you buy after them at a worse price, fees ~1% each way on Pump.fun). Judge a wallet after ~10 closed trades. Free Helius plan: about 3-10 wallets.`;
 
 function systemPrompt(snapshot) {
@@ -134,7 +128,7 @@ function engine(cfg) {
   return key ? { kind: 'free', provider, key, label: `${provider.label} (free)` } : null;
 }
 
-export function createAssistant({ cfg, bot, book, research, getState }) {
+export function createAssistant({ cfg, bot, book, getState }) {
   let freeModel = null;
 
   /** Turn a raw tool call into a checked proposal with a plain-English summary, or throw why it can't. */
@@ -171,16 +165,6 @@ export function createAssistant({ cfg, bot, book, research, getState }) {
         const hit = st.inventory.find((p) => p.mint.toLowerCase() === t || p.name.toLowerCase().replace(/^\$/, '') === t);
         if (!hit) throw new Error(`you don't hold "${a.token}". Open positions: ${st.inventory.map((p) => p.name).join(', ') || 'none'}`);
         return { tool: call.name, args: { mint: hit.mint }, summary: `Sell all of ${hit.name} now${book.mode === 'live' ? ' (REAL money)' : ' (paper)'}` };
-      }
-      case 'research_token': {
-        if (!research) throw new Error('AI research is off');
-        const ca = String(a.address ?? '').trim();
-        try {
-          new PublicKey(ca);
-        } catch {
-          throw new Error(`"${ca.slice(0, 50)}" isn't a valid token address`);
-        }
-        return { tool: call.name, args: { address: ca }, summary: `Run AI research on ${short(ca)} (the report appears in the Intel tab)` };
       }
       default:
         throw new Error(`I can't do "${call.name}"`);
@@ -292,9 +276,6 @@ export function createAssistant({ cfg, bot, book, research, getState }) {
         break;
       case 'sell_position':
         await bot.sellNow(p.args.mint);
-        break;
-      case 'research_token':
-        research(p.args.address, { trigger: 'asked for by the user in the assistant' }, true);
         break;
     }
     log(`Assistant: ${p.summary} (confirmed by you).`);

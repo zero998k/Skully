@@ -10,13 +10,14 @@ const MINT = 'CkVfySiwbXr8uosL9W9vtuiKSSd4WqhvBr2YjyQKv8u3';
 const DEV = '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU';
 const S = { groq413: 1, groqdown: 0, apidown: 0, release: 0, corrupt: 0, mult: 1, balanceLamports: 0, held: 0n, sent: [], groq: [], swaps: [], log: [] };
 const txs = {}; const subs = new Map(); let nextSub = 1; let n = 0;
-const tb = (amt) => ({ accountIndex: 1, mint: MINT, owner: WHALE, uiTokenAmount: { amount: String(amt), decimals: 6, uiAmount: amt / 1e6 } });
-function makeTx(side, frac = 1, held = 0) {
+const MINT2 = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
+const tb = (amt, mint = MINT) => ({ accountIndex: 1, mint, owner: WHALE, uiTokenAmount: { amount: String(amt), decimals: 6, uiAmount: amt / 1e6 } });
+function makeTx(side, frac = 1, held = 0, mint = MINT) {
   const sig = bs58.encode(Buffer.from(require('crypto').randomBytes(64)));
   const buy = side === 'buy';
-  const pre = buy ? (held ? 1e6 : 0) : 1e6, post = buy ? pre + 1e6 : Math.round(1e6 * (1 - frac));
-  txs[sig] = { slot: 1, blockTime: Math.floor(Date.now() / 1000), transaction: { signatures: [sig], message: { accountKeys: [{ pubkey: WHALE, signer: true, writable: true }, { pubkey: MINT, signer: false, writable: false }], instructions: [], recentBlockhash: '11111111111111111111111111111111' } },
-    meta: { err: null, fee: 5000, preBalances: [5e9, 0], postBalances: [buy ? 5e9 - 5e8 - 5000 : 5e9 + 6e8 * frac - 5000, 0], preTokenBalances: pre ? [tb(pre)] : [], postTokenBalances: [tb(post)], innerInstructions: [], logMessages: [] } };
+  const pre = buy ? Math.round(held * 1e6) : 1e6, post = buy ? pre + 1e6 : Math.round(1e6 * (1 - frac));
+  txs[sig] = { slot: 1, blockTime: Math.floor(Date.now() / 1000), transaction: { signatures: [sig], message: { accountKeys: [{ pubkey: WHALE, signer: true, writable: true }, { pubkey: mint, signer: false, writable: false }], instructions: [], recentBlockhash: '11111111111111111111111111111111' } },
+    meta: { err: null, fee: 5000, preBalances: [5e9, 0], postBalances: [buy ? 5e9 - 5e8 - 5000 : 5e9 + 6e8 * frac - 5000, 0], preTokenBalances: pre ? [tb(pre, mint)] : [], postTokenBalances: [tb(post, mint)], innerInstructions: [], logMessages: [] } };
   return sig;
 }
 const ok = (value) => ({ context: { slot: 1 }, value });
@@ -48,7 +49,7 @@ function rpc(method, params) {
 const json = (res, x) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(x)); };
 const body = (r) => new Promise((ok) => { let b = ''; r.on('data', (d) => (b += d)); r.on('end', () => ok(b)); });
 const mainHttp = http.createServer(async (r, res) => { const b = await body(r); const u = new URL(r.url, 'http://x');
-  if (u.pathname === '/emit') { const side = u.searchParams.get('side'); const sig = makeTx(side, Number(u.searchParams.get('frac') ?? 1), Number(u.searchParams.get('held') ?? 0));
+  if (u.pathname === '/emit') { const side = u.searchParams.get('side'); const sig = makeTx(side, Number(u.searchParams.get('frac') ?? 1), Number(u.searchParams.get('held') ?? 0), u.searchParams.get('mint') === '2' ? MINT2 : MINT);
     for (const [id, s] of subs) if (s.ws.readyState === 1 && s.kind === 'logs') s.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'logsNotification', params: { result: { context: { slot: 1 }, value: { signature: sig, err: null, logs: ['Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [1]', `Program log: Instruction: ${side === 'buy' ? 'Buy' : 'Sell'}`] } }, subscription: id } }));
     return json(res, { sig, subs: [...subs.values()].filter((s) => s.kind === 'logs').length }); }
   if (u.pathname === '/set') { for (const k of ['release', 'corrupt', 'apidown', 'groq413', 'groqdown']) if (u.searchParams.has(k)) S[k] = Number(u.searchParams.get(k)); if (u.searchParams.has('mult')) S.mult = Number(u.searchParams.get('mult')); if (u.searchParams.has('sol')) S.balanceLamports = Math.round(Number(u.searchParams.get('sol')) * 1e9); return json(res, { ok: true }); }

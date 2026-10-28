@@ -20,23 +20,21 @@ const F = (name, ok, key) => check('dashboard', name, ok, f[key] ?? f.crashed);
 F('online', f.online === 'ONLINE', 'online');
 F('quick settings save take profit / stop loss', f.savedTP === 30 && f.savedSL === 20, 'savedSL');
 F('quick settings refuse a 150% stop loss', /between 1 and 99/.test(f.badValueError ?? ''), 'badValueError');
-F('research report made', f.reportReady === true, 'reportReady');
-F('research saw the linked X post', f.researchSawTweet === true, 'researchSawTweet');
-F('report opens with What it is / Why / Risk', f.overviewBoxes === 3, 'overviewBoxes');
-F('research switched model when Groq refused', f.reportModel === 'llama-3.3-70b-versatile', 'reportModel');
+F('copies a buy', f.boughtAt === true, 'boughtAt');
+F('research (Intel tab) is gone', f.noIntelTab === true, 'noIntelTab');
 F('take profit sells', /^take-profit/.test(f.tpReason ?? ''), 'tpReason');
 F('stop loss sells', /^stop-loss/.test(f.slReason ?? ''), 'slReason');
 F('take profit / stop loss can be turned off', f.offTP === null && f.offSL === null && f.heldWithTPSLOff === 1, 'heldWithTPSLOff');
 F('stacked buys are not copied', f.stackedBuySkipped >= 1, 'stackedBuySkipped');
 F('partial sells are ignored', f.partialSellIgnored === true, 'partialSellIgnored');
-F('full exit sells', f.fullExitSold === 'wallet1 sold out', 'fullExitSold');
+F('selling 90%+ counts as out (moon bag)', f.fullExitSold === 'wallet1 sold out', 'fullExitSold');
+F('a first buy is copied even if they held dust', f.dustFirstBuyCopied === true, 'dustFirstBuyCopied');
 F('"every sell" mode mirrors a 50% sell', f.savedSellRule === false && /sold 50%/.test(f.afterHalfSell ?? ''), 'afterHalfSell');
 F('Sell now', f.afterSellNow === 0, 'afterSellNow');
 F('daily loss limit stops buys', f.koSkip >= 1, 'koSkip');
 F('Reset PnL zeroes the total', f.totalAfterReset === 0 && f.inlineResetButton === 1, 'totalAfterReset');
 F('buying resumes after reset', f.buysAgainAfterReset === true, 'buysAgainAfterReset');
-F('Scan box', f.scanAdded === true, 'scanAdded');
-F('failed scans show a popup', f.scanFailedToast === true, 'scanFailedToast');
+F('slots full: skipped and explained', f.maxPosSkip >= 1 && f.slotsFullToast === true, 'slotsFullToast');
 F('assistant changes a setting after Do it', f.afterDoIt === 25, 'afterDoIt');
 F('assistant resets PnL', f.todayAfterAssistantReset === 0 && f.totalAfterAssistantReset === 0 && f.historyKept > 0, 'totalAfterAssistantReset');
 F('assistant looks up live market data', /^Looked it up/.test(f.lookupAnswer ?? ''), 'lookupAnswer');
@@ -59,7 +57,8 @@ for (const [name, text] of [
   ['remove wallet', 'Stopped watching buddy'],
   ['reset', 'Profit/loss reset to 0'],
   ['ask the assistant', 'gm from fake groq'],
-  ['paste a token address to research it', 'Research done'],
+  ['scoreboard is option 3', 'WALLET SCOREBOARD'],
+  ['settings is option 4', 'SETTINGS: what the bot is doing'],
 ]) check('terminal', name, term.includes(text), text);
 
 const s = json('server.json');

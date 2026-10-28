@@ -13,13 +13,12 @@ export const SETTINGS = {
   buySlippageBps: { label: 'Max buy slippage', hint: 'basis points, 100 = 1%', type: 'int', min: 50, max: 5000, fmt: pct },
   sellSlippageBps: { label: 'Max sell slippage', hint: 'basis points, 100 = 1%', type: 'int', min: 50, max: 9000, fmt: pct },
   onlyFirstBuy: { label: 'Copy only their first buy of a coin (not when they add more)', type: 'bool' },
-  sellOnlyOnFullExit: { label: 'Sell only when they fully sell out (ignore partial sells)', type: 'bool' },
+  sellOnlyOnFullExit: { label: 'Sell only when they sell out (90%+ of their coins; smaller partial sells are ignored)', type: 'bool' },
   followSells: { label: 'Sell when the copied wallet sells', type: 'bool' },
   sellMode: { label: 'When they sell, sell', type: 'enum', values: ['mirror', 'all'], fmt: (v) => (v === 'all' ? 'everything' : 'the same %') },
   skipIfMintAuthority: { label: 'Skip tokens whose creator can mint more', type: 'bool' },
   skipIfFreezeAuthority: { label: 'Skip tokens whose creator can freeze holders', type: 'bool' },
   maxCopyDelaySeconds: { label: 'Skip buys slower to load than', type: 'int', min: 1, max: 120, unit: 's' },
-  researchOn: { label: 'AI research runs on', type: 'enum', values: ['buys', 'detected'], fmt: (v) => (v === 'buys' ? 'tokens SolBoy buys' : 'every token your wallets buy') },
 };
 
 export function parseValue(spec, raw) {
@@ -45,7 +44,7 @@ export function parseValue(spec, raw) {
 export const show = (v) => (v === null || v === undefined ? 'off' : v === true ? 'yes' : v === false ? 'no' : String(v));
 export const showSetting = (spec, v) => (v === null || v === undefined || typeof v === 'boolean' ? show(v) : spec.fmt ? spec.fmt(v) : `${v}${spec.unit ?? ''}`);
 
-export const settingValue = (cfg, key) => (key === 'researchOn' ? cfg.research.on : cfg[key]);
+export const settingValue = (cfg, key) => cfg[key];
 
 /** Check a new value, use it straight away and save it to config.json. Throws a plain-English reason if it's not allowed. */
 export function applySetting(cfg, key, raw) {
@@ -58,13 +57,7 @@ export function applySetting(cfg, key, raw) {
     throw new Error(`${spec.label} ${e.message}.`);
   }
   const before = settingValue(cfg, key);
-  if (key === 'researchOn') {
-    cfg.research.on = value;
-    cfg.research.onChosen = true;
-    saveConfigValue('research', { ...cfg.research });
-  } else {
-    cfg[key] = value;
-    saveConfigValue(key, value);
-  }
+  cfg[key] = value;
+  saveConfigValue(key, value);
   return { setting: key, value, before, summary: `${spec.label}: ${showSetting(spec, before)} → ${showSetting(spec, value)}` };
 }

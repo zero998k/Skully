@@ -150,7 +150,7 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 5px; border: 1.5px
 .feed li .t { white-space: nowrap; color: var(--ink-3); font-family: var(--mono); font-size: 11px; }
 .feed li .k { font-family: var(--display); font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; border: 1.5px solid #000; color: #0a0a0a; background: var(--ink-3); justify-self: start; }
 .feed li.buy .k { background: var(--sun); } .feed li.sell .k { background: var(--sky); } .feed li.spotted .k { background: var(--pink); }
-.feed li.research .k, .feed li.research-done .k { background: var(--grape); } .feed li.warn .k { background: var(--warn); }
+.feed li.warn .k { background: var(--warn); }
 @keyframes slide { from { transform: translateX(16px) scale(.98); opacity: 0; } }
 
 /* chart */
@@ -167,20 +167,6 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 5px; border: 1.5px
 .tab:hover { transform: translate(-1px, -1px); color: var(--ink); }
 .tab.on { color: #fff; background: var(--accent); border-color: #000; box-shadow: 4px 4px 0 #fafafa; transform: rotate(-1.5deg); }
 .tabpage { display: none; animation: pop .3s var(--pop); } .tabpage.on { display: block; }
-
-/* intel */
-.scanbox { display: flex; gap: 10px; margin-bottom: 16px; }
-.scanbox input { flex: 1; font-family: var(--mono); font-size: 14px; color: var(--ink); background: var(--bg); border: 2px solid var(--edge); border-radius: 14px; padding: 12px 14px; }
-.scanbox input::placeholder { color: var(--ink-3); font-family: var(--body); }
-.reports { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; align-items: start; }
-.report { text-align: left; font-family: var(--body); color: var(--ink); cursor: pointer; padding: 16px; background: var(--panel-2); border: 2px solid var(--edge); border-radius: 16px;
-  box-shadow: 4px 4px 0 var(--grape); transition: transform .2s var(--pop), box-shadow .2s; display: block; width: 100%; }
-.report:hover { transform: translate(-2px, -2px) rotate(-.6deg); box-shadow: 6px 6px 0 var(--grape); }
-.report .top { display: flex; justify-content: space-between; align-items: baseline; }
-.report .sym { font-family: var(--display); font-size: 21px; font-weight: 800; }
-.report .when { color: var(--ink-3); font-size: 12px; font-family: var(--mono); }
-.report .tldr { display: inline-block; font-family: var(--display); font-weight: 800; font-size: 11px; color: #0a0a0a; background: var(--grape); border: 1.5px solid #000; border-radius: 999px; padding: 1px 8px; margin-top: 10px; }
-.report p { color: var(--ink-2); font-size: 14px; line-height: 1.55; margin: 8px 0 0; }
 
 /* wallets */
 .wallet-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -347,7 +333,7 @@ code { font-family: var(--mono); font-size: 12px; color: var(--sky); word-break:
     <section class="panel cut">
       <h2><span class="ic" style="background:var(--sky)">⚡</span>Live feed
         <span class="filters" id="filters">
-          <button data-f="all" class="on">All</button><button data-f="trades">Trades</button><button data-f="intel">Intel</button><button data-f="alerts">Alerts</button>
+          <button data-f="all" class="on">All</button><button data-f="trades">Trades</button><button data-f="alerts">Alerts</button>
         </span>
       </h2>
       <ul class="feed" id="feed"></ul>
@@ -360,21 +346,13 @@ code { font-family: var(--mono); font-size: 12px; color: var(--sky); word-break:
   </section>
 
   <nav class="tabs" id="tabs">
-    <button class="tab on" data-tab="intel">Intel <kbd>1</kbd></button>
-    <button class="tab" data-tab="history">History <kbd>2</kbd></button>
-    <button class="tab" data-tab="board">Wallets <kbd>3</kbd></button>
-    <button class="tab" data-tab="loadout">Loadout <kbd>4</kbd></button>
-    <button class="tab" data-tab="account">Account <kbd>5</kbd></button>
+    <button class="tab on" data-tab="history">History <kbd>1</kbd></button>
+    <button class="tab" data-tab="board">Wallets <kbd>2</kbd></button>
+    <button class="tab" data-tab="loadout">Loadout <kbd>3</kbd></button>
+    <button class="tab" data-tab="account">Account <kbd>4</kbd></button>
   </nav>
 
-  <section class="panel tabpage on" id="tab-intel">
-    <form class="scanbox" id="scanForm">
-      <input id="scanInput" placeholder="Paste any token address (CA) to get an AI breakdown" autocomplete="off" spellcheck="false">
-      <button class="btn primary" type="submit">Scan</button>
-    </form>
-    <div class="reports" id="reports"></div>
-  </section>
-  <section class="panel tabpage" id="tab-history"><div id="history"></div></section>
+  <section class="panel tabpage on" id="tab-history"><div id="history"></div></section>
   <section class="panel tabpage" id="tab-board"><div id="board"></div></section>
   <section class="panel tabpage" id="tab-loadout"><div id="loadout"></div></section>
   <section class="panel tabpage" id="tab-account"><div id="account"></div></section>
@@ -512,7 +490,7 @@ function render() {
   $('xpText').textContent = `${closed % 10} / 10 closed trades to next level`;
 
   renderUpdate();
-  renderInventory(); renderChart(s.curve); renderReports(); renderHistory(); renderBoard(); renderLoadout(); renderAccount();
+  renderInventory(); renderChart(s.curve); renderHistory(); renderBoard(); renderLoadout(); renderAccount();
 }
 
 function renderInventory() {
@@ -581,17 +559,8 @@ function openTab(name) {
   store.set('tab', name);
 }
 $('tabs').onclick = (e) => { const t = e.target.closest('.tab'); if (t) openTab(t.dataset.tab); };
-openTab(store.get('tab', 'intel'));
+openTab(['history', 'board', 'loadout', 'account'].includes(store.get('tab')) ? store.get('tab') : 'history');
 
-function renderReports() {
-  $('reports').innerHTML = S.reports.length
-    ? S.reports.map((r) => `<button class="report cut" data-file="${esc(r.file)}"><div class="top"><span class="sym">$${esc(r.symbol)}</span><span class="when">${ago(r.at)}</span></div><div class="tldr">AI overview</div><p>${esc(r.narrative || 'Open to read the breakdown')}</p></button>`).join('')
-    : `<div class="empty-msg">${S.research ? 'No intel yet. Reports appear when SolBoy buys a token, or paste a token address above and hit Scan.' : 'AI research is off. Add a free Groq key to .env to turn it on (see README).'}</div>`;
-}
-$('reports').onclick = async (e) => {
-  const b = e.target.closest('[data-file]'); if (!b) return;
-  try { showReport(await api(`/api/report?file=${encodeURIComponent(b.dataset.file)}`)); } catch (err) { toast('loss', "Couldn't open", err.message); }
-};
 function mdToHtml(md) {
   const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   let html = '', list = false;
@@ -609,20 +578,12 @@ function mdToHtml(md) {
   }
   return html + (list ? '</ul>' : '');
 }
-function showReport(r) { $('modalBody').innerHTML = mdToHtml(r.text); $('modal').classList.add('on'); }
 function closeModal() { $('modal').classList.remove('on'); }
 $('modalClose').onclick = closeModal;
 $('modal').onclick = (e) => { if (e.target === $('modal')) closeModal(); };
 
-let waitingForScan = false;
 let lastAlert = 0;
-$('scanForm').onsubmit = async (e) => {
-  e.preventDefault();
-  const mint = $('scanInput').value.trim();
-  if (!mint) return;
-  try { await api('/api/research', { mint }); $('scanInput').value = ''; waitingForScan = true; toast('info', 'Scanning', 'AI is writing the breakdown. It opens here when ready.'); }
-  catch (err) { toast('loss', 'Scan failed', err.message); }
-};
+const skipAlerts = {};
 
 function renderHistory() {
   if (!S.trades.length) { $('history').innerHTML = '<div class="empty-msg">No trades yet. They show up here as soon as SolBoy copies something.</div>'; return; }
@@ -711,15 +672,13 @@ function renderLoadout() {
         <div class="row2">${QUICK_FIELDS.slice(0, 2).map(field).join('')}</div>
         <div class="row2">${QUICK_FIELDS.slice(2, 4).map(field).join('')}</div>
         <div class="row2">${field(QUICK_FIELDS[4])}
-          <label>AI research runs on <small>"Every coin" starts the moment a wallet buys.</small><select name="researchOn">
-            <option value="detected" ${q.researchOn === 'detected' ? 'selected' : ''}>Every coin my wallets buy</option>
-            <option value="buys" ${q.researchOn === 'buys' ? 'selected' : ''}>Only coins SolBoy buys</option></select></label></div>
+</div>
         <div class="row2">
           <label>Copy their buys <small>Adding to a coin they already hold isn't copied.</small><select name="onlyFirstBuy">
             <option value="true" ${q.onlyFirstBuy !== false ? 'selected' : ''}>Only their first buy of a coin</option>
             <option value="false" ${q.onlyFirstBuy === false ? 'selected' : ''}>Every buy, including adds</option></select></label>
           <label>Copy their sells <small>Your take profit and stop loss still work either way.</small><select name="sellOnlyOnFullExit">
-            <option value="true" ${q.sellOnlyOnFullExit !== false ? 'selected' : ''}>Only when they fully sell out</option>
+            <option value="true" ${q.sellOnlyOnFullExit !== false ? 'selected' : ''}>Only when they sell out (90%+)</option>
             <option value="false" ${q.sellOnlyOnFullExit === false ? 'selected' : ''}>Every sell, the same %</option></select></label></div>
         <div class="err" id="quickErr">${esc(quickError)}</div>
         <div><button class="btn primary" type="submit">Save</button></div>
@@ -944,7 +903,7 @@ $('chat').onclick = async (e) => {
   const save = e.target.closest('[data-savekey]');
   if (save) {
     const kind = save.dataset.savekey, key = (kind === 'free' ? $('freeKey') : $('claudeKey')).value;
-    try { await api('/api/assistant/key', { kind, key }); toast('win', 'Key saved', kind === 'free' ? 'The assistant is ready. If token research was off, restart SolBoy to turn it on too.' : 'Now pick a Claude model at the top.'); loadAI(); }
+    try { await api('/api/assistant/key', { kind, key }); toast('win', 'Key saved', kind === 'free' ? 'The assistant is ready.' : 'Now pick a Claude model at the top.'); loadAI(); }
     catch (err) { toast('loss', "Couldn't save", err.message); }
     return;
   }
@@ -996,8 +955,8 @@ async function togglePause() {
 $('pauseBtn').onclick = togglePause;
 
 /* ---------- live feed + ticker ---------- */
-const KIND = { buy: 'BOUGHT', sell: 'SOLD', spotted: 'SPOTTED', skip: 'SKIP', research: 'INTEL', 'research-done': 'INTEL', 'research-failed': 'ALERT', warn: 'ALERT', info: 'INFO' };
-const GROUP = { buy: 'trades', sell: 'trades', spotted: 'trades', skip: 'trades', research: 'intel', 'research-done': 'intel', warn: 'alerts', info: 'alerts' };
+const KIND = { buy: 'BOUGHT', sell: 'SOLD', spotted: 'SPOTTED', skip: 'SKIP', warn: 'ALERT', info: 'INFO' };
+const GROUP = { buy: 'trades', sell: 'trades', spotted: 'trades', skip: 'trades', warn: 'alerts', info: 'alerts' };
 let filter = 'all';
 $('filters').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
@@ -1012,7 +971,7 @@ function renderTicker() {
   $('ticker').innerHTML = html + html; // doubled so the scroll loops seamlessly
 }
 function addTicker(ev) {
-  const c = { buy: 'b', sell: 's', spotted: 'b', 'research-done': 'i', warn: 'w' }[ev.kind];
+  const c = { buy: 'b', sell: 's', spotted: 'b', warn: 'w' }[ev.kind];
   if (!c) return;
   tickerItems.unshift({ c, t: ev.text.trim().slice(0, 90) });
   tickerItems.length = Math.min(tickerItems.length, 12);
@@ -1035,12 +994,14 @@ function react(ev) {
     (won ? SFX.win : SFX.loss)(); juice(won ? 'win' : 'loss');
     toast(won ? 'win' : 'loss', won ? 'Profit locked' : 'Loss taken', ev.text.trim()); refresh();
   }
-  if (ev.kind === 'research-done') {
-    SFX.intel(); refresh();
-    if (waitingForScan) { waitingForScan = false; setTimeout(async () => { await refresh(); if (S.reports[0]) showReport(await api(`/api/report?file=${encodeURIComponent(S.reports[0].file)}`)); }, 300); }
-    else toast('info', 'New intel', 'A research report is ready in the Intel tab.');
+  // Say plainly why a buy was skipped when it's something you can fix (once every 2 minutes per reason).
+  if (ev.kind === 'skip') {
+    const why = /maxOpenPositions/.test(ev.text) ? ['slots', 'Slots full', `A wallet bought a coin, but you already hold ${S.maxSlots} tokens (your max). Sell one, or raise "Max tokens held" in Loadout.`]
+      : /daily loss limit/.test(ev.text) ? ['ko', 'Daily loss limit hit', 'Buying is stopped for today. Click ↺ reset next to today\'s PnL to start fresh, or raise the limit in Loadout.']
+      : /too late to copy/.test(ev.text) ? ['late', 'Buy skipped: too slow', 'That trade took too long to load, so the price had already moved. If this keeps happening, raise "maxCopyDelaySeconds" in config.json or use fewer wallets.']
+      : null;
+    if (why && Date.now() - (skipAlerts[why[0]] ?? 0) > 120000) { skipAlerts[why[0]] = Date.now(); toast('loss', why[1], why[2]); }
   }
-  if (ev.kind === 'research-failed') { waitingForScan = false; toast('loss', 'Scan failed', ev.text.trim().replace(/^Research failed for \S+: /, '')); }
   if (ev.kind === 'warn' && Date.now() - lastAlert > 60000) { lastAlert = Date.now(); toast('loss', 'Alert', ev.text.trim()); }
 }
 function connect() {
@@ -1051,7 +1012,7 @@ function connect() {
 }
 
 /* ---------- keyboard ---------- */
-const TABS = { 1: 'intel', 2: 'history', 3: 'board', 4: 'loadout', 5: 'account' };
+const TABS = { 1: 'history', 2: 'board', 3: 'loadout', 4: 'account' };
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { closeModal(); closeChat(); return; }
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;

@@ -25,10 +25,10 @@ const emit = (side) => fetch(`http://127.0.0.1:18900/emit?side=${side}`, { metho
   R.apiWithoutLogin = (await fetch('http://127.0.0.1:7777/api/state')).status;
   R.pageWithoutLogin = (await fetch('http://127.0.0.1:7777/', { redirect: 'manual' })).status;
   R.settingsWithoutLogin = (await fetch('http://127.0.0.1:7777/api/settings', { method: 'POST', body: '{"setting":"takeProfitPct","value":"99"}' })).status;
-  await p.keyboard.press('4'); await sleep(400); await p.fill('#quick [name=takeProfitPct]', '35'); await p.click('#quick button[type=submit]'); await sleep(1200);
+  await p.keyboard.press('3'); await sleep(400); await p.fill('#quick [name=takeProfitPct]', '35'); await p.click('#quick button[type=submit]'); await sleep(1200);
   R.serverQuickSaved = JSON.parse(require('fs').readFileSync(`${E}/srv/config.json`, 'utf8')).takeProfitPct;
   // risky actions need the password
-  await p.keyboard.press('5'); await sleep(400); await p.click('#createWallet'); await sleep(1500);
+  await p.keyboard.press('4'); await sleep(400); await p.click('#createWallet'); await sleep(1500);
   await p.fill('#wdTo', '5NU3oN4fNnx1CknHtaH8kGPHAaK4UJ3X4E2WdEyY3h1y'); await p.fill('#wdAmt', '0.1'); await p.fill('#pwConfirm', 'wrong'); await p.click('#wdForm button[type=submit]'); await sleep(900);
   R.withdrawWrongPw = await p.textContent('#wdErr');
   await p.click('#showKey'); await p.fill('#keyConfirm', 'SHOW'); await p.fill('#pwConfirm', 'wrong'); await p.click('#keyForm button'); await sleep(900);

@@ -49,9 +49,8 @@ export function extractKey(input) {
 
 async function askResearchKey(rl) {
   const provider = researchProvider();
-  console.log('\nOptional: free AI token research.');
-  console.log('  When the bot buys a token, AI writes a quick breakdown: the story, why it is pumping now,');
-  console.log('  risks, and a bull vs bear verdict. You can also paste any token address to research it.');
+  console.log('\nOptional: the free AI assistant (Ask SolBoy).');
+  console.log('  Ask it anything about meme coins, look up live coin data, or have it change settings for you.');
   console.log(`  It uses ${provider.label}'s free plan. Make a free account at ${provider.signup} and create an API key.\n`);
   for (;;) {
     const key = (await rl.question(`  Paste your ${provider.label} API key, or press Enter to skip: `)).trim();

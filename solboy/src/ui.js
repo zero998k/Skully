@@ -1,7 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import readline from 'node:readline';
-import { PublicKey } from '@solana/web3.js';
 import { tokenNames, positionWorth } from './tokens.js';
 import { summarize, scoreboard } from './stats.js';
 import { c, write, log, pauseFeed, resumeFeed, readTrades } from './log.js';
@@ -26,16 +23,8 @@ function ago(iso) {
   return `${Math.round(mins / 1440)}d ago`;
 }
 
-/** The report's TL;DR (falls back to the core narrative for older reports). */
-export function reportSummary(text) {
-  const what = text.match(/What it is:\**\s*(.*)/)?.[1];
-  const why = text.match(/Why it's (?:pumping|dumping):\**\s*(.*)/)?.[1];
-  const line = what ? [what, why].filter(Boolean).join(' ') : text.match(/TL;DR:\**\s*(.*)/)?.[1] ?? text.match(/Core Narrative:\**\s*(.*)/)?.[1] ?? '';
-  return line.replaceAll('*', '').trim();
-}
-
 /** Plain-English settings, shared by the terminal and the dashboard. */
-export function settingsRows(cfg, research) {
+export function settingsRows(cfg) {
   const yes = (b) => (b ? 'yes' : 'no');
   return [
     ['Mode', cfg.dryRun ? 'Paper trading: real prices, no real money' : 'LIVE: real trades with real SOL'],
@@ -44,22 +33,20 @@ export function settingsRows(cfg, research) {
     ['Ignore their buys under', `${cfg.minSourceBuySol} SOL`],
     ['Most tokens held at once', cfg.maxOpenPositions],
     ['Copy their buys', cfg.onlyFirstBuy ? 'only their first buy of a coin' : 'every buy, including when they add more'],
-    ['Sell when they sell', !cfg.followSells ? 'no' : cfg.sellOnlyOnFullExit ? 'only when they fully sell out' : cfg.sellMode === 'all' ? 'yes, everything' : 'yes, the same % they sell'],
+    ['Sell when they sell', !cfg.followSells ? 'no' : cfg.sellOnlyOnFullExit ? 'only when they sell out (90% or more)' : cfg.sellMode === 'all' ? 'yes, everything' : 'yes, the same % they sell'],
     ['Take profit at', cfg.takeProfitPct ? `+${cfg.takeProfitPct}%` : 'off'],
     ['Stop loss at', cfg.stopLossPct ? `-${cfg.stopLossPct}%` : 'off'],
     ['Stop buying after losing', `${cfg.dailyLossLimitSol} SOL in a day`],
     ['Skip risky tokens', `mint authority: ${yes(cfg.skipIfMintAuthority)}, freeze authority: ${yes(cfg.skipIfFreezeAuthority)}`],
     ['Max slippage', `buys ${cfg.buySlippageBps / 100}%, sells ${cfg.sellSlippageBps / 100}%`],
-    ['AI research', research ? `on (${cfg.research.provider}, researching ${cfg.research.on === 'buys' ? 'tokens the bot buys' : 'every token watched wallets buy'})` : 'off'],
   ];
 }
 
 /** The numbered menu shown at startup and whenever you type "m". */
-export function createMenu({ cfg, bot, book, account, researchDir, research, dashboard, updater }) {
+export function createMenu({ cfg, bot, book, account, dashboard, updater }) {
   const positions = book.positions;
   const mode = () => (cfg.dryRun ? c.yellow('PAPER MODE (practice, no real money)') : c.red('REAL MONEY MODE'));
   let state = 'feed';
-  let reportFiles = [];
 
   function menuText() {
     return [
@@ -67,14 +54,13 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
       c.bold('='.repeat(78)),
       `  ${c.bold('SOLBOY')}   ${mode()}`,
       c.bold('='.repeat(78)),
-      `  Watching ${cfg.wallets.length} wallet(s). Research: ${research ? 'on' : 'off'}.`,
+      `  Watching ${cfg.wallets.length} wallet(s).`,
       '',
       `  Type a number and press ${c.bold('Enter')}:`,
       `    ${c.cyan('1')}  Open positions      what you hold right now and what it's worth`,
       `    ${c.cyan('2')}  Trade history       recent trades, wins/losses and total profit`,
-      `    ${c.cyan('3')}  Research reports    read the AI breakdowns of tokens`,
-      `    ${c.cyan('4')}  Wallet scoreboard   which copied wallets are making you money`,
-      `    ${c.cyan('5')}  Settings            your current settings in plain English`,
+      `    ${c.cyan('3')}  Wallet scoreboard   which copied wallets are making you money`,
+      `    ${c.cyan('4')}  Settings            your current settings in plain English`,
       dashboard ? `    ${c.cyan('d')}  Dashboard           open the game-style dashboard in your browser (${dashboard.url})` : '',
       `    ${c.cyan('add')} <address> <nickname>    start copying a new wallet (saved for next time)`,
       `    ${c.cyan('remove')} <nickname>          stop copying a wallet`,
@@ -84,7 +70,6 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
       dashboard ? `    ${c.cyan('ask')} <question>             ask the SolBoy Assistant anything` : '',
       updater?.status().available ? `    ${c.cyan('update')}                     ${c.green(`install SolBoy ${updater.status().available.version} (keeps all your settings)`)}` : '',
       `    ${c.cyan('m')}  Show this menu again`,
-      research ? '    Or paste a token address (CA) to research it.' : '',
       '',
       c.dim('  Live activity appears below. Press Ctrl+C to stop the bot.'),
       LINE,
@@ -163,49 +148,6 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
     closeHint();
   }
 
-  function listReports() {
-    if (!fs.existsSync(researchDir)) return [];
-    return fs
-      .readdirSync(researchDir)
-      .filter((f) => f.endsWith('.md'))
-      .map((f) => ({ f, at: fs.statSync(path.join(researchDir, f)).mtimeMs }))
-      .sort((a, b) => b.at - a.at)
-      .slice(0, 30);
-  }
-
-  function showReportList() {
-    openScreen('RESEARCH REPORTS: AI breakdowns of tokens');
-    reportFiles = listReports();
-    if (!reportFiles.length) {
-      process.stdout.write(
-        research
-          ? '\n  No reports yet. They are written automatically when the bot buys a token,\n  or paste any token address (CA) into the live feed to research it.\n'
-          : '\n  Research is off. Add a free Groq key to .env (see README) to turn it on.\n',
-      );
-      return closeHint();
-    }
-    process.stdout.write(`\n  ${pad('#', 4)}${pad('Token', 16)}${pad('When', 10)}TL;DR\n`);
-    reportFiles.forEach(({ f, at }, i) => {
-      const text = fs.readFileSync(path.join(researchDir, f), 'utf8');
-      const narrative = reportSummary(text).slice(0, 44);
-      process.stdout.write(`  ${pad(i + 1, 4)}${pad(`$${f.split('-')[0]}`, 16)}${pad(ago(at), 10)}${narrative}\n`);
-    });
-    state = 'reports';
-    process.stdout.write(`\n${c.dim('Type a report number and press Enter to read it, or just press Enter to go back.')}\n`);
-  }
-
-  function showReport(n) {
-    const item = reportFiles[n - 1];
-    if (!item) return process.stdout.write(c.dim(`There's no report #${n}. Type a number from the list, or press Enter to go back.\n`));
-    const text = fs.readFileSync(path.join(researchDir, item.f), 'utf8');
-    const pretty = text
-      .split('\n')
-      .map((l) => (l.startsWith('### ') ? `\n${c.bold(c.cyan(l.slice(4)))}` : l.replaceAll('**', '')))
-      .join('\n');
-    process.stdout.write(`\n${LINE}\n${pretty}\n${LINE}\n`);
-    process.stdout.write(c.dim('Type another report number, or press Enter to go back to the live feed.\n'));
-  }
-
   function showScoreboard() {
     openScreen('WALLET SCOREBOARD: which copied wallets make money');
     const rows = scoreboard(book.positions.counted(readTrades(book.tradeLogFile)), cfg.wallets);
@@ -221,7 +163,7 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
 
   function showSettings() {
     openScreen('SETTINGS: what the bot is doing');
-    const lines = settingsRows(cfg, research);
+    const lines = settingsRows(cfg);
     process.stdout.write('\n');
     for (const [k, v] of lines) process.stdout.write(`  ${pad(k, 28)}${v}\n`);
     process.stdout.write(c.dim(`\n  Take profit and stop loss: type tp 50 or sl 25 (or "off"). The dashboard's Loadout tab changes more.\n  Everything else: edit config.json in this folder with TextEdit, save, and restart the bot:\n  ${file('config.json')}\n  The README explains every setting.\n`));
@@ -230,18 +172,13 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
 
   function handle(line) {
     const input = line.trim();
-    if (state === 'reports') {
-      if (!input) return backToFeed();
-      if (/^\d+$/.test(input)) return showReport(Number(input));
-    }
-    if (state === 'screen' || state === 'reports') return backToFeed();
+    if (state === 'screen') return backToFeed();
 
     const pick = input.toLowerCase();
     if (pick === '1') return showPositions().catch((e) => log(`Couldn't show positions: ${e.message}`));
     if (pick === '2') return showHistory().catch((e) => log(`Couldn't show history: ${e.message}`));
-    if (pick === '3') return showReportList();
-    if (pick === '4') return showScoreboard();
-    if (pick === '5') return showSettings();
+    if (pick === '3') return showScoreboard();
+    if (pick === '4') return showSettings();
     if (pick === 'm' || pick === 'menu' || pick === 'help') return write(menuText());
     if (pick === 'd' && dashboard) return dashboard.open();
 
@@ -316,13 +253,6 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
     }
     if (!input) return;
 
-    const ca = input.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/)?.[0];
-    if (ca && research) {
-      try {
-        new PublicKey(ca);
-        return research(ca, { trigger: 'manual lookup by the user' }, true);
-      } catch {}
-    }
     log(`Didn't understand "${input.slice(0, 40)}". Type ${c.cyan('m')} and press Enter to see the menu.`);
   }
 

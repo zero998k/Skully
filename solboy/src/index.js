@@ -8,7 +8,6 @@ import { runSetupIfNeeded } from './setup.js';
 import { createBook } from './book.js';
 import { createAccount } from './account.js';
 import { createBot } from './bot.js';
-import { createResearcher } from './research.js';
 import { createRpcLimiter } from './rpc.js';
 import { createMenu } from './ui.js';
 import { startDashboard } from './server.js';
@@ -89,22 +88,19 @@ async function main() {
   if (cfg.keepAwake) keepAwake();
 
   const account = createAccount({ cfg, connection, book, positionsFor: book.positionsFor });
-  const research = createResearcher({ cfg, connection, rpcUrl, rpcFetch: rpc.fetch, outDir: file('data/research') });
-  const bot = createBot({ cfg, connection, book, onToken: research ?? undefined, rpcFetch: rpc.fetch });
+  const bot = createBot({ cfg, connection, book, rpcFetch: rpc.fetch });
   bot.start();
-  if (research) log(`Token research: ${await research.describe()}.`);
-  const researchDir = file('data/research');
   const updater = createUpdater();
   let dashboard = null;
   if (cfg.dashboard.enabled) {
     try {
-      dashboard = await startDashboard({ cfg, bot, book, account, researchDir, research, updater, serverMode: SERVER_MODE });
+      dashboard = await startDashboard({ cfg, bot, book, account, updater, serverMode: SERVER_MODE });
     } catch (e) {
       log(`Dashboard couldn't start (${e.message}). The bot keeps running here in the terminal.`);
     }
   }
   if (SERVER_MODE) log('Server mode: SolBoy is running. Use it from your SolBoy web address.');
-  else createMenu({ cfg, bot, book, account, researchDir, research, dashboard, updater }).start();
+  else createMenu({ cfg, bot, book, account, dashboard, updater }).start();
 }
 
 // Keep the window open after an error so a double-clicked app doesn't just vanish.
