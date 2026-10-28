@@ -1,0 +1,42 @@
+{
+  "dryRun": true,
+  "wallets": [
+    {
+      "label": "wallet1",
+      "address": "AqzPs1UDhnK2Ga37PphobfMukGtN53erw5N3KhoR6qky"
+    }
+  ],
+  "buyAmountSol": 0.05,
+  "minSourceBuySol": 0.1,
+  "maxOpenPositions": 5,
+  "buySlippageBps": 1500,
+  "sellSlippageBps": 2000,
+  "priorityFeeMaxLamports": 1000000,
+  "followSells": true,
+  "sellMode": "mirror",
+  "takeProfitPct": null,
+  "stopLossPct": null,
+  "priceCheckSeconds": 2,
+  "dailyLossLimitSol": 0.5,
+  "skipIfMintAuthority": true,
+  "skipIfFreezeAuthority": true,
+  "blocklist": [],
+  "rpcRequestsPerSecond": 8,
+  "maxCopyDelaySeconds": 15,
+  "research": {
+    "enabled": true,
+    "on": "buys",
+    "provider": "groq",
+    "model": "auto",
+    "effort": "low"
+  },
+  "dashboard": {
+    "enabled": true,
+    "port": 7777,
+    "openBrowser": false
+  },
+  "assistant": {
+    "model": "free"
+  },
+  "keepAwake": false
+}
