@@ -192,6 +192,42 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await sleep(600); await emit('buy'); await sleep(2500);
   R.pausedSkip = await p.locator('.feed li', { hasText: 'copying is paused' }).count();
   await key('p');
+
+  // ---- Wallet Finder: paste two coins that ran, see who was early on both, open a wallet's profile ----
+  const FA = await fetch('http://127.0.0.1:18900/finder/addrs').then((r) => r.json());
+  const sh = (a) => `${a.slice(0, 4)}…${a.slice(-4)}`;
+  await key('5'); await sleep(300);
+  await p.fill('#finderInput', `${FA.COIN_A}\n${FA.COIN_B}`); await p.click('#finderForm button[type=submit]');
+  R.finderMulti = await until(async () => (await p.locator('#finderView').innerText()).includes('In profit on more than one'), 30000);
+  const fv = await p.locator('#finderView').innerText();
+  R.finderSmartOnBoth = (fv.match(new RegExp(sh(FA.SMART), 'g')) ?? []).length >= 3 && fv.includes('RUNA') && fv.includes('RUNB');
+  R.finderTags = await p.locator('#finderView .ftag.sniper').count() > 0 && await p.locator('#finderView .ftag.dev').count() > 0;
+  await p.screenshot({ path: `${E}/6-finder-coins.png`, fullPage: true });
+  await p.locator(`[data-fprofile="${FA.SMART}"]`).first().click();
+  R.finderProfile = await until(async () => p.locator('#finderView .cal').count().then((n) => n > 0), 30000);
+  R.finderVerdict = await p.locator('#finderView .verdict').innerText().catch(() => '');
+  R.finderNetWorth = (await p.locator('#finderView .fcards').first().innerText()).match(/Net worth\s+([\d.]+) SOL/)?.[1];
+  R.finderHolds = (await p.locator('#finderView').innerText()).includes('RUNB');
+  const calDays = async () => p.locator('#finderView [data-cal=profile] .cal-day.win, #finderView [data-cal=profile] .cal-day.loss').count();
+  R.finderCalDays = await calDays();
+  for (let i = 0; i < 2; i++) { await p.click('#finderView [data-cal=profile] [data-calmove="-1"]'); R.finderCalDays += await calDays(); }
+  await p.click('#finderView [data-cal=profile] [data-calmove="1"]'); await p.click('#finderView [data-cal=profile] [data-calmove="1"]');
+  R.finderLinked = await until(async () => { const row = p.locator('#fLinked tr', { hasText: sh(FA.SIB) }); return (await row.count()) && (await row.locator('.conf').innerText()) === 'high'; }, 30000);
+  R.finderLinkedWhy = await p.locator('#fLinked tr', { hasText: sh(FA.SIB) }).innerText().catch(() => '');
+  await p.click('[data-freplay="30"]');
+  R.finderReplay = await until(async () => { const t = await p.locator('#fReplay').innerText(); return /You'd have made\s+\+[\d.]+ SOL/.test(t) && t; }, 30000);
+  await p.screenshot({ path: `${E}/7-finder-profile.png`, fullPage: true });
+  await p.click('.fhead [data-fcopy]'); await sleep(300);
+  R.finderCopyPrefilled = (await p.inputValue('#wAddr')) === FA.SMART;
+  await p.fill('#wName', 'finderpick'); await p.click('#addForm button[type=submit]'); await sleep(800);
+  R.finderCopied = cfg().wallets.some((w) => w.address === FA.SMART);
+  await p.evaluate(() => api('/api/wallets/remove', { key: 'finderpick' }));
+  await p.fill('#finderInput', 'not-an-address'); await p.click('#finderForm button[type=submit]'); await sleep(1500);
+  R.finderBadAddress = await p.locator('#finderView').innerText();
+  await p.setViewportSize({ width: 390, height: 900 }); await p.click(`#finderRecent [data-frecent="${FA.SMART}"]`);
+  await until(async () => p.locator('#finderView .cal').count().then((n) => n > 0), 15000);
+  R.finderPhoneOverflow = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+  await p.screenshot({ path: `${E}/8-finder-phone.png`, fullPage: true });
   await p.setViewportSize({ width: 390, height: 900 }); await key('3'); await sleep(500);
   await p.screenshot({ path: `${E}/5-phone-loadout.png`, fullPage: true });
   R.phoneOverflow = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth);

@@ -5,6 +5,7 @@ const { createRequire } = require('module');
 const req = createRequire(require('path').join(__dirname, '../../package.json'));
 const WS = req('ws'); const WebSocketServer = WS.WebSocketServer || WS.Server;
 const web3 = req('@solana/web3.js'); const bs58 = req('bs58');
+const FF = require('./fake-finder.cjs');
 const WHALE = 'AqzPs1UDhnK2Ga37PphobfMukGtN53erw5N3KhoR6qky';
 const MINT = 'CkVfySiwbXr8uosL9W9vtuiKSSd4WqhvBr2YjyQKv8u3';
 const DEV = '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU';
@@ -37,6 +38,7 @@ function vaultAcct(c, key) { const d = Buffer.alloc(165); new web3.PublicKey(key
   d.writeBigUInt64LE(BigInt(Math.round(key === c.vaultQuote ? c.ammQuote * 1e9 : c.ammBase * 1e6)), 64); d[108] = 1;
   return { data: [d.toString('base64'), 'base64'], executable: false, lamports: 2039280, owner: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', rentEpoch: 0, space: 165 }; }
 function rpc(method, params) {
+  const ff = FF.rpc(method, params); if (ff !== undefined) return ff;
   switch (method) {
     case 'getSlot': return 123;
     case 'getBlockHeight': return 50;
@@ -112,6 +114,7 @@ const mainHttp = http.createServer(async (r, res) => { const b = await body(r); 
     return json(res, { sent, mcSol: (c.ammQuote / c.ammBase) * 1e9 }); }
   if (u.pathname === '/pp/fund') { const to = who(u.searchParams.get('holder')); const from = who(u.searchParams.get('from')); const sig = bs58.encode(require('crypto').randomBytes(64)); P.funds.set(to, sig); P.fundSigs.set(sig, { from, to }); return json(res, { to, from }); }
   if (u.pathname === '/pp/noroute') { P.noroute.add(u.searchParams.get('mint')); return json(res, { ok: true }); }
+  if (u.pathname === '/finder/addrs') return json(res, FF.A);
   if (u.pathname === '/pp/who') return json(res, { address: who(u.searchParams.get('name')) });
   if (u.pathname === '/pp/subs') return json(res, [...P.clients].map((c) => ({ newToken: c.newToken, migration: c.migration, keys: c.keys.size })));
   const q = JSON.parse(b || '{}'); const handle = (x) => { try { return { jsonrpc: '2.0', id: x.id, result: rpc(x.method, x.params) }; } catch (e) { return { jsonrpc: '2.0', id: x.id, error: { code: -32015, message: e.message } }; } };
@@ -163,6 +166,8 @@ http.createServer(async (r, res) => { const b = await body(r); const u = new URL
   if (p === '/repos/zero998k/Skully/releases') { const base = 'http://127.0.0.1:18903/dl/';
     return json(res, !S.release ? [] : [{ tag_name: 'solboy-v1.0.9', draft: false, prerelease: false, assets: [] }, { tag_name: 'v9.9.9', draft: false, prerelease: false, assets: [] }, { tag_name: REL, draft: false, prerelease: false, html_url: 'https://github.com/zero998k/Skully/releases/tag/' + REL, body: '**New:** auto-updates from the dashboard.\n- Faster research', assets: ['SolBoy-Linux-x64', 'SHA256SUMS'].map((n) => ({ name: n, browser_download_url: base + n })) }]); }
   if (p.startsWith('/dl/')) { const name = p.slice(4); let data = require('fs').readFileSync((process.env.FAKE_REL_DIR || __dirname + '/rel') + '/' + name); if (S.corrupt && name !== 'SHA256SUMS') data = Buffer.concat([data, Buffer.from('x')]); res.setHeader('content-type', 'application/octet-stream'); return res.end(data); }
+  { const fr = FF.dex(p); if (fr) return json(res, fr); }
+  if (p === '/solprice') return json(res, { So11111111111111111111111111111111111111112: { usdPrice: 150 } });
   if (p.startsWith('/tokens/v1/solana/') && [...P.coins.values()].some((c) => c.migrated && p.includes(c.mint))) return json(res, [...P.coins.values()].filter((c) => c.migrated && p.includes(c.mint)).map((c) => ({ chainId: 'solana', dexId: 'pumpswap', pairAddress: c.pair, baseToken: { address: c.mint, name: c.name, symbol: c.symbol }, priceUsd: '0.00008', marketCap: 80000, liquidity: { usd: 30000 }, volume: { h24: 120000 }, txns: { h24: { buys: 900, sells: 400 } }, priceChange: { h1: 20 }, pairCreatedAt: Date.now() - 600000, info: { imageUrl: 'http://127.0.0.1:18903/img.png', websites: [{ url: 'https://example.com' }], socials: [{ type: 'twitter', url: 'https://x.com/dexpaid' }] } })));
   if (p === '/pp-api/trade-local') { const q = JSON.parse(b); P.tradeLocal = [...(P.tradeLocal ?? []), q]; const user = new web3.PublicKey(q.publicKey);
     const msg = new web3.TransactionMessage({ payerKey: user, recentBlockhash: '11111111111111111111111111111111', instructions: [new web3.TransactionInstruction({ programId: new web3.PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'), keys: [{ pubkey: user, isSigner: true, isWritable: true }], data: Buffer.from([2]) })] }).compileToV0Message();

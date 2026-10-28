@@ -44,7 +44,7 @@ function openInBrowser(url) {
  * The game-style dashboard, served only to this computer (127.0.0.1). Every API call must carry
  * a secret made fresh each run and baked into the page, so other websites can't read or click anything.
  */
-export async function startDashboard({ cfg, bot, book, account, updater, serverMode = false }) {
+export async function startDashboard({ cfg, bot, book, account, updater, finder, serverMode = false }) {
   const positions = book.positions;
   const secret = crypto.randomBytes(16).toString('hex');
   const page = DASHBOARD_HTML.replace('__TOKEN__', secret).replace('__SERVER_MODE__', serverMode ? 'true' : 'false');
@@ -224,6 +224,20 @@ export async function startDashboard({ cfg, bot, book, account, updater, serverM
         const { key, paused } = await readBody(req);
         const w = bot.setWalletPaused(key, Boolean(paused));
         return send(res, 200, { label: w.label, paused: Boolean(w.paused) });
+      }
+
+      // Wallet Finder: scans run in the background; the page asks again until state is 'done'
+      if (req.method === 'GET' && url.pathname.startsWith('/api/finder/')) {
+        const what = url.pathname.slice('/api/finder/'.length), a = url.searchParams.get('a');
+        try {
+          if (what === 'kind') return send(res, 200, await finder.kind(a));
+          if (what === 'wallet') return send(res, 200, finder.wallet(a, url.searchParams.get('refresh') === '1'));
+          if (what === 'linked') return send(res, 200, finder.linked(a));
+          if (what === 'coin') return send(res, 200, finder.coin(a));
+          if (what === 'replay') return send(res, 200, finder.replay(a, url.searchParams.get('days')));
+        } catch {
+          return send(res, 400, { error: "That isn't a valid Solana address." });
+        }
       }
 
       if (req.method === 'POST' && url.pathname === '/api/sell') {

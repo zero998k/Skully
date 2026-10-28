@@ -13,6 +13,8 @@ casual messages; explain results in plain English, no jargon.
   is the app itself.
 - `src/bot.js` copy trading (detect a watched wallet's trade, copy it, take profit / stop loss, copy rules).
   `src/detect.js` turns a transaction (or a Pump.fun trade event in its logs) into buys and sells; `bot.js` reads Pump.fun bonding curves from the chain to price coins Jupiter can't route yet. `src/jupiter.js` swaps. `src/rpc.js` rate limiter.
+- `src/finder.js` Wallet Finder (Finder tab): a coin's early buyers, a wallet's profile + PnL calendar, linked wallets,
+  and a copy replay. Reads the chain on `rpc.js`'s background lane so copy trading always goes first; saves scans in `data/finder`.
 - `src/assistant.js` Ask SolBoy (tools only *propose* changes; the owner clicks Do it).
 - `src/settings.js` settings that can change while running (Quick settings, assistant, terminal `tp`/`sl`).
 - `src/server.js` dashboard HTTP server and API. `src/dashboard.html` the whole dashboard (one file),

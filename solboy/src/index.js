@@ -9,6 +9,7 @@ import { createBook } from './book.js';
 import { createAccount } from './account.js';
 import { createBot } from './bot.js';
 import { createRpcLimiter } from './rpc.js';
+import { createFinder } from './finder.js';
 import { createMenu } from './ui.js';
 import { startDashboard } from './server.js';
 import { log, captureLibraryOutput } from './log.js';
@@ -61,6 +62,8 @@ async function main() {
     fetch: rpc.fetch,
     disableRetryOnRateLimit: true, // rpc.fetch handles rate limits quietly instead
   });
+  // Wallet scans use their own connection on the background lane, so they never slow down copy trading.
+  const scanConnection = new Connection(rpcUrl, { commitment: 'confirmed', fetch: rpc.backgroundFetch, disableRetryOnRateLimit: true });
   const book = createBook(cfg, loadKeypair());
 
   if (!cfg.dryRun && !book.keypair) {
@@ -89,12 +92,13 @@ async function main() {
 
   const account = createAccount({ cfg, connection, book, positionsFor: book.positionsFor });
   const bot = createBot({ cfg, connection, book, rpcFetch: rpc.fetch });
+  const finder = createFinder({ cfg, connection: scanConnection, bot });
   bot.start();
   const updater = createUpdater();
   let dashboard = null;
   if (cfg.dashboard.enabled) {
     try {
-      dashboard = await startDashboard({ cfg, bot, book, account, updater, serverMode: SERVER_MODE });
+      dashboard = await startDashboard({ cfg, bot, book, account, updater, finder, serverMode: SERVER_MODE });
     } catch (e) {
       log(`Dashboard couldn't start (${e.message}). The bot keeps running here in the terminal.`);
     }

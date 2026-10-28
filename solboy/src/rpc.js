@@ -13,6 +13,7 @@ export function createRpcLimiter(requestsPerSecond) {
   let pausedUntil = 0;
   let lastWarning = 0;
 
+  let urgentWaiting = 0; // copy-trading requests queued right now
   async function waitForSlot() {
     const now = Date.now();
     const start = Math.max(now, nextSlot, pausedUntil);
@@ -20,9 +21,30 @@ export function createRpcLimiter(requestsPerSecond) {
     if (start > now) await sleep(start - now);
   }
 
-  async function limitedFetch(url, init) {
+  // Background work (wallet scans) only takes a free slot: it waits while copy trading has requests queued or the
+  // next slot is already taken, so a scan never delays a copy by more than one request.
+  async function waitForBackgroundSlot() {
+    for (;;) {
+      const now = Date.now();
+      if (!urgentWaiting && nextSlot <= now && pausedUntil <= now) {
+        nextSlot = now + gap;
+        return;
+      }
+      await sleep(Math.max(gap, 20));
+    }
+  }
+
+  async function limitedFetch(url, init, background = false) {
     for (let attempt = 0; ; attempt++) {
-      await waitForSlot();
+      if (background) await waitForBackgroundSlot();
+      else {
+        urgentWaiting++;
+        try {
+          await waitForSlot();
+        } finally {
+          urgentWaiting--;
+        }
+      }
       const res = await fetch(url, init);
       if (res.status !== 429 || attempt >= 3) return res;
       if (Date.now() - lastWarning > 30_000) {
@@ -33,5 +55,5 @@ export function createRpcLimiter(requestsPerSecond) {
     }
   }
 
-  return { fetch: limitedFetch };
+  return { fetch: (url, init) => limitedFetch(url, init), backgroundFetch: (url, init) => limitedFetch(url, init, true) };
 }

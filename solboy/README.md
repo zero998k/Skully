@@ -112,6 +112,20 @@ Edit `config.json` in the app's folder with any text editor (Notepad or TextEdit
 
 ---
 
+## Wallet Finder
+
+Open the **Finder** tab (key 5). Paste one or more coins that ran (copy the address from Axiom) and press Find:
+SolBoy reads each coin's first trades from the chain and lists its early buyers, with their profit, tagged
+**dev** (made the coin), **bundle** (bought in the launch block) or **sniper** (bought within seconds). With
+several coins, the wallets that were early and in profit on more than one are listed first.
+
+Click **Profile** on a wallet (or paste a wallet address) for its full record: net worth and holdings, win rate,
+profit (7 days, 30 days, all), typical hold time and entry market cap, style, a "good to copy?" verdict, a
+**PnL calendar** (green and red days), best and worst trades, **possibly linked wallets** (direct transfers,
+same funder, same-block buys; exchanges ignored) and **What if I'd copied it?** for the last 7 or 30 days with
+your settings. **Copy this wallet** adds it to your copy list. Scans use your Helius key in the background, so
+they never slow down copy trading; a busy wallet's first scan can take a minute, after that it's quick.
+
 ## Copy speed
 
 For Pump.fun coins, SolBoy reads the watched wallet's trade straight from the notification at the earliest moment the network reports it ("processed"), checks the coin and prepares the order at the same time, and buys straight on the bonding curve. The dashboard shows ⚡ how long each copy took, from their trade to your order going out. Trades on other exchanges are downloaded first, which adds about half a second. How fast the order then lands is up to the network: Axiom and similar terminals pay for priority landing services; SolBoy uses your normal Helius connection and priority fee.

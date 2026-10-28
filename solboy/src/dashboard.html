@@ -304,6 +304,67 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); }
 [class*="mono"], table, .num { font-variant-numeric: tabular-nums; }
 button:active:not(:disabled) { transform: translateY(1px); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ---------- wallet finder ---------- */
+.fbar { display: flex; gap: 10px; flex-wrap: wrap; }
+.fbar textarea { flex: 1 1 320px; min-height: 46px; max-height: 140px; resize: vertical; font-family: var(--mono); font-size: 13px; background: var(--panel-2); color: var(--ink); border: 2px solid var(--edge); border-radius: 14px; padding: 12px; }
+.fbar textarea:focus { border-color: var(--accent); outline: none; }
+.frecent { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.frecent button { font-family: var(--mono); font-size: 12px; color: var(--ink-2); background: var(--panel-2); border: 1.5px solid var(--edge); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.frecent button:hover { border-color: var(--accent); color: var(--ink); }
+.fview { margin-top: 18px; }
+.fload { display: flex; align-items: center; gap: 12px; color: var(--ink-2); padding: 26px 4px; }
+.fload .spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--edge); border-top-color: var(--accent); animation: fspin .8s linear infinite; }
+@keyframes fspin { to { transform: rotate(360deg); } }
+.fhead { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.fhead img { width: 52px; height: 52px; border-radius: 14px; border: 2px solid #000; box-shadow: 3px 3px 0 var(--accent); object-fit: cover; background: var(--panel-2); }
+.fhead .who { font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: -.3px; }
+.fhead .who small { display: block; font-family: var(--mono); font-weight: 500; font-size: 12px; color: var(--ink-3); }
+.fhead .spacer { flex: 1; }
+.verdict { font-family: var(--display); font-weight: 800; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 2px solid #000; color: #0a0a0a; box-shadow: 2px 2px 0 #000; }
+.verdict.good { background: var(--win); } .verdict.warn { background: var(--warn); } .verdict.bad { background: var(--loss); color: #fff; } .verdict.unknown { background: #3a3a3a; color: var(--ink); }
+.fcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 42%), 1fr)); gap: 10px; margin-bottom: 16px; }
+.fcard { background: var(--panel-2); border: 2px solid var(--edge); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+.fcard span { display: block; font-size: 12px; color: var(--ink-3); }
+.fcard b { display: block; font-family: var(--mono); font-size: 17px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fcard small { color: var(--ink-3); font-size: 11px; }
+.fsec { margin-top: 22px; }
+.fsec h3 { font-family: var(--display); font-weight: 800; font-size: 17px; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fsec h3 .count { color: var(--ink-3); font-family: var(--mono); font-weight: 500; font-size: 12px; }
+.fscroll { overflow-x: auto; }
+.fscroll table { min-width: 640px; }
+.coinc { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.coinc img, .coinc .ph { width: 26px; height: 26px; border-radius: 8px; border: 1.5px solid #000; object-fit: cover; flex: none; background: var(--panel-2); }
+.ftag { font-family: var(--display); font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px; border: 1.5px solid #000; color: #0a0a0a; margin-left: 4px; text-transform: uppercase; }
+.ftag.dev { background: var(--grape); } .ftag.bundle { background: var(--warn); } .ftag.sniper { background: var(--sky); } .ftag.multi { background: var(--accent); color: #fff; }
+.conf { font-family: var(--display); font-weight: 800; font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1.5px solid #000; color: #0a0a0a; }
+.conf.high { background: var(--accent); color: #fff; } .conf.medium { background: var(--warn); } .conf.low { background: #555; color: var(--ink); }
+.reasons { margin: 4px 0 0; padding-left: 16px; color: var(--ink-2); font-size: 12px; }
+.fbtns { display: flex; gap: 6px; flex-wrap: wrap; }
+.fbtns .btn { font-size: 12px; padding: 5px 10px; }
+/* PnL calendar */
+.cal { max-width: 640px; }
+.cal-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.cal-top .mini { margin-top: 0; }
+.cal-top b { font-family: var(--display); font-size: 16px; min-width: 130px; }
+.cal-top .sum { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.cal-grid .dow { font-family: var(--display); font-weight: 800; font-size: 11px; color: var(--ink-3); text-align: center; padding-bottom: 2px; }
+.cal-day { aspect-ratio: 1 / .82; border-radius: 10px; border: 1.5px solid #1f1f1f; background: #111; padding: 5px 6px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; overflow: hidden; }
+.cal-day .d { font-size: 11px; color: var(--ink-3); }
+.cal-day .p { font-family: var(--mono); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-day .n { font-size: 10px; color: rgba(255,255,255,.7); }
+.cal-day.blank { background: transparent; border-color: transparent; }
+.cal-day.win { border-color: #000; color: #04170b; } .cal-day.win .d, .cal-day.win .n { color: rgba(0,0,0,.65); }
+.cal-day.loss { border-color: #000; color: #fff; }
+.cal-day.today { outline: 2px solid var(--accent); outline-offset: 1px; }
+.hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; align-items: end; height: 70px; max-width: 640px; }
+.hours i { display: block; background: var(--grape); border-radius: 4px 4px 0 0; min-height: 2px; }
+.hours-x { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; max-width: 640px; font-size: 10px; color: var(--ink-3); text-align: center; margin-top: 3px; }
+.ftabs { display: flex; gap: 6px; }
+.ftabs button { font-family: var(--display); font-weight: 800; font-size: 12px; padding: 4px 11px; border-radius: 999px; border: 1.5px solid var(--edge); background: var(--panel-2); color: var(--ink-2); cursor: pointer; }
+.ftabs button.on { background: var(--accent); color: #fff; border-color: #000; }
+@media (max-width: 600px) { .cal-day .p { font-size: 10px; } .cal-day .n { display: none; } }
 </style>
 </head>
 <body>
@@ -361,12 +422,19 @@ button:active:not(:disabled) { transform: translateY(1px); }
     <button class="tab" data-tab="board">Wallets <kbd>2</kbd></button>
     <button class="tab" data-tab="loadout">Loadout <kbd>3</kbd></button>
     <button class="tab" data-tab="account">Account <kbd>4</kbd></button>
+    <button class="tab" data-tab="finder">Finder <kbd>5</kbd></button>
   </nav>
 
   <section class="panel tabpage on" id="tab-history"><div id="history"></div></section>
   <section class="panel tabpage" id="tab-board"><div id="board"></div></section>
   <section class="panel tabpage" id="tab-loadout"><div id="loadout"></div></section>
   <section class="panel tabpage" id="tab-account"><div id="account"></div></section>
+  <section class="panel tabpage" id="tab-finder">
+    <h2><span class="ic" style="background:var(--grape)">🔍</span>Wallet Finder <span class="count">paste coins that ran to find the wallets that bought early, or paste a wallet to check it</span></h2>
+    <form class="fbar" id="finderForm"><textarea id="finderInput" rows="1" spellcheck="false" placeholder="Paste one or more coin addresses (from Axiom), or a wallet address"></textarea><button class="btn primary" type="submit">Find</button></form>
+    <div class="frecent" id="finderRecent"></div>
+    <div class="fview" id="finderView"></div>
+  </section>
 </div>
 
 <div class="modal" id="modal"><div class="box"><div id="modalBody"></div><div class="foot"><button class="btn" id="modalClose">Close <kbd>Esc</kbd></button></div></div></div>
@@ -572,7 +640,7 @@ function openTab(name) {
   store.set('tab', name);
 }
 $('tabs').onclick = (e) => { const t = e.target.closest('.tab'); if (t) openTab(t.dataset.tab); };
-openTab(['history', 'board', 'loadout', 'account'].includes(store.get('tab')) ? store.get('tab') : 'history');
+openTab(['history', 'board', 'loadout', 'account', 'finder'].includes(store.get('tab')) ? store.get('tab') : 'history');
 
 function mdToHtml(md) {
   const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -1058,8 +1126,224 @@ function connect() {
   es.onerror = () => online(false);
 }
 
+/* ---------- wallet finder ---------- */
+const F = { view: 0, profile: null, cal: {}, recent: JSON.parse(store.get('finderRecent', '[]') || '[]') };
+const shortA = (a) => `${String(a).slice(0, 4)}…${String(a).slice(-4)}`;
+const sol2 = (n, d = 2) => (n == null || !Number.isFinite(n) ? '-' : `${n > 0 ? '+' : ''}${n.toFixed(d)}`);
+const usdC = (n) => (n == null || !Number.isFinite(n) ? '-' : n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${n.toFixed(0)}`);
+const dur = (s) => (s == null ? '-' : s < 60 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)}m` : s < 86400 ? `${(s / 3600).toFixed(1)}h` : `${(s / 86400).toFixed(1)}d`);
+const pct = (x) => (x == null ? '-' : `${Math.round(x * 100)}%`);
+const coinCell = (c) => `<span class="coinc">${c.image ? `<img src="${esc(c.image)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ph'}))">` : '<span class="ph"></span>'}<span><b>${esc(c.symbol || shortA(c.mint))}</b>${c.name ? `<br><small class="addr">${esc(c.name.slice(0, 24))}</small>` : ''}</span></span>`;
+const walletLink = (a) => `<a class="addr" href="https://solscan.io/account/${encodeURIComponent(a)}" target="_blank" rel="noopener">${esc(shortA(a))}</a>`;
+const loading = (step) => `<div class="fload"><span class="spin"></span><span>${esc(step || 'Working…')}</span></div>`;
+
+function rememberFinder(text) {
+  F.recent = [text, ...F.recent.filter((x) => x !== text)].slice(0, 8);
+  store.set('finderRecent', JSON.stringify(F.recent));
+  renderRecent();
+}
+function renderRecent() {
+  $('finderRecent').innerHTML = F.recent.map((r) => `<button type="button" data-frecent="${esc(r)}" title="${esc(r)}">${esc(r.split(/\s+/).map(shortA).join(' + ').slice(0, 60))}</button>`).join('');
+}
+
+// Ask for a scan and keep asking until it's done; `onStep` shows how far along it is.
+async function finderJob(path, view, onStep) {
+  for (;;) {
+    const j = await api(path);
+    if (view !== F.view) throw Object.assign(new Error('stale'), { stale: true });
+    if (j.state === 'done') return j.result;
+    if (j.state === 'error') throw new Error(j.error || 'The scan failed.');
+    onStep?.(j.step);
+    await new Promise((r) => setTimeout(r, 900));
+  }
+}
+
+async function finderGo(text) {
+  const list = [...new Set(String(text).split(/[\s,]+/).map((x) => x.trim()).filter(Boolean))].slice(0, 10);
+  if (!list.length) return;
+  $('finderInput').value = list.join('\n');
+  rememberFinder(list.join(' '));
+  const view = ++F.view;
+  const box = $('finderView');
+  box.innerHTML = loading('Checking what you pasted…');
+  try {
+    const kinds = await Promise.all(list.map((a) => api(`/api/finder/kind?a=${encodeURIComponent(a)}`)));
+    if (view !== F.view) return;
+    const coins = kinds.filter((k) => k.kind === 'coin').map((k) => k.address);
+    if (!coins.length) return openProfile(kinds[0].address);
+    await showCoins(coins, view);
+  } catch (e) {
+    if (!e.stale) box.innerHTML = `<div class="empty-msg">${esc(e.message)}</div>`;
+  }
+}
+
+async function showCoins(mints, view) {
+  const box = $('finderView');
+  const results = [];
+  for (const [i, m] of mints.entries()) {
+    results.push(await finderJob(`/api/finder/coin?a=${encodeURIComponent(m)}`, view, (s) => (box.innerHTML = loading(`Coin ${i + 1} of ${mints.length}: ${s}`))));
+  }
+  let html = '';
+  if (results.length > 1) {
+    // wallets that were early and in profit on more than one of the pasted coins
+    const by = new Map();
+    for (const c of results) for (const b of c.buyers) {
+      if (b.pnlSol <= 0) continue;
+      const x = by.get(b.wallet) ?? { wallet: b.wallet, coins: [], pnl: 0, tags: new Set() };
+      x.coins.push(c.symbol || shortA(c.mint)); x.pnl += b.pnlSol; b.tags.forEach((t) => x.tags.add(t));
+      by.set(b.wallet, x);
+    }
+    const multi = [...by.values()].filter((x) => x.coins.length > 1).sort((a, b) => b.coins.length - a.coins.length || b.pnl - a.pnl);
+    html += `<div class="fsec"><h3>🎯 In profit on more than one of your coins <span class="count">${multi.length} wallet${multi.length === 1 ? '' : 's'}</span></h3>${multi.length
+      ? `<div class="fscroll"><table><tr><th>Wallet</th><th>Coins</th><th>Profit on them</th><th></th></tr>${multi.map((x) => `<tr><td>${walletLink(x.wallet)}${[...x.tags].map((t) => `<span class="ftag ${t}">${t}</span>`).join('')}</td><td>${x.coins.length} · ${esc(x.coins.join(', '))}</td><td class="num ${cls(x.pnl)}">${sol2(x.pnl)} SOL</td><td>${finderBtns(x.wallet)}</td></tr>`).join('')}</table></div>`
+      : '<div class="empty-msg">No wallet was early and in profit on more than one of these. Check each coin below.</div>'}</div>`;
+  }
+  for (const c of results) {
+    const good = c.buyers.filter((b) => b.pnlSol > 0).length;
+    html += `<div class="fsec"><div class="fhead">${c.image ? `<img src="${esc(c.image)}" alt="">` : ''}<div class="who">${esc(c.symbol || shortA(c.mint))}<small>${esc(c.name || c.mint)} · MC ${usdC(c.mcUsd)}</small></div></div>
+      <h3>Early buyers <span class="count">first ${c.scanned} trades${c.fromLaunch ? ' from launch' : ' (coin is busy: these are the oldest SolBoy could reach)'} · ${good} in profit</span></h3>
+      ${c.buyers.length ? `<div class="fscroll"><table><tr><th>#</th><th>Wallet</th><th>Bought</th><th>Entry MC</th><th>Sold</th><th>Now</th><th>PnL</th><th></th></tr>${c.buyers.map((b) => `<tr>
+        <td class="num">${b.rank}</td><td>${walletLink(b.wallet)}${b.tags.map((t) => `<span class="ftag ${t}">${t}</span>`).join('')}</td>
+        <td class="num">${b.buySol.toFixed(2)} SOL</td><td class="num">${usdC(b.entryMcUsd)}</td><td class="num">${b.sellSol.toFixed(2)} SOL</td>
+        <td>${esc(b.status)}${b.multiple ? ` <span class="addr">${b.multiple >= 10 ? Math.round(b.multiple) : b.multiple.toFixed(1)}x</span>` : ''}</td>
+        <td class="num ${cls(b.pnlSol)}">${sol2(b.pnlSol)} SOL</td><td>${finderBtns(b.wallet)}</td></tr>`).join('')}</table></div>` : '<div class="empty-msg">No buyers found for this coin yet.</div>'}</div>`;
+  }
+  $('finderView').innerHTML = html + '<div class="hint">Tags: dev = made the coin, bundle = bought in the same block it launched, sniper = bought within a few seconds. Open a wallet to see its full record before copying it.</div>';
+}
+const finderBtns = (w) => `<span class="fbtns"><button class="btn" data-fprofile="${esc(w)}">Profile</button><button class="btn primary" data-fcopy="${esc(w)}">Copy</button></span>`;
+
+async function openProfile(address) {
+  const view = ++F.view;
+  const box = $('finderView');
+  box.innerHTML = loading('Reading the wallet…');
+  try {
+    const p = await finderJob(`/api/finder/wallet?a=${encodeURIComponent(address)}`, view, (s) => (box.innerHTML = loading(s)));
+    F.profile = p;
+    renderProfile(p);
+    loadLinked(address, view);
+  } catch (e) {
+    if (!e.stale) box.innerHTML = `<div class="empty-msg">${esc(e.message)}</div>`;
+  }
+}
+
+function calendarHtml(id, cal, month) {
+  const keys = Object.keys(cal).sort();
+  if (!keys.length) return '<div class="empty-msg">No finished trades yet, so nothing to show on the calendar.</div>';
+  month ??= keys.at(-1).slice(0, 7);
+  F.cal[id] = { cal, month };
+  const [y, m] = month.split('-').map(Number);
+  const first = new Date(y, m - 1, 1), days = new Date(y, m, 0).getDate();
+  const lead = (first.getDay() + 6) % 7; // weeks start on Monday
+  const inMonth = keys.filter((k) => k.startsWith(month)).map((k) => cal[k]);
+  const max = Math.max(0.0001, ...Object.values(cal).map((d) => Math.abs(d.pnl)));
+  const total = inMonth.reduce((s, d) => s + d.pnl, 0), up = inMonth.filter((d) => d.pnl > 0).length, down = inMonth.filter((d) => d.pnl < 0).length;
+  const now = new Date(), today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  let cells = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<div class="dow">${d}</div>`).join('') + '<div class="cal-day blank"></div>'.repeat(lead);
+  for (let d = 1; d <= days; d++) {
+    const key = `${month}-${String(d).padStart(2, '0')}`, c = cal[key];
+    const a = c ? 0.35 + 0.65 * Math.min(1, Math.abs(c.pnl) / max) : 0;
+    const bg = c ? (c.pnl >= 0 ? `rgba(74,222,128,${a})` : `rgba(255,84,112,${a})`) : '';
+    cells += `<div class="cal-day${c ? (c.pnl >= 0 ? ' win' : ' loss') : ''}${key === today ? ' today' : ''}"${c ? ` style="background:${bg}" title="${esc(`${key}: ${sol2(c.pnl, 3)} SOL · ${c.wins} won, ${c.losses} lost`)}"` : ''}><span class="d">${d}</span>${c ? `<span class="p">${sol2(c.pnl)}</span><span class="n">${c.trades} trade${c.trades === 1 ? '' : 's'}</span>` : ''}</div>`;
+  }
+  const label = first.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+  return `<div class="cal" data-cal="${id}"><div class="cal-top"><button class="mini" data-calmove="-1" aria-label="Previous month">◀</button><b>${esc(label)}</b><button class="mini" data-calmove="1" aria-label="Next month">▶</button>
+    <span class="sum">Month <b class="${cls(total)}">${sol2(total, 3)} SOL</b> · ${up} green day${up === 1 ? '' : 's'} · ${down} red</span></div><div class="cal-grid">${cells}</div></div>`;
+}
+
+function renderProfile(p) {
+  const s = p.stats, usd = (x) => (p.solUsd && x != null ? ` <small>≈ ${usdC(x * p.solUsd)}</small>` : '');
+  const card = (label, value, extra = '', c = '') => `<div class="fcard"><span>${label}</span><b class="${c}">${value}</b>${extra}</div>`;
+  const maxH = Math.max(1, ...p.hours);
+  const coinRow = (r) => `<tr><td>${coinCell(r)}</td><td class="num">${r.solIn.toFixed(2)}</td><td class="num">${r.solOut.toFixed(2)}</td><td class="num">${r.valueSol ? r.valueSol.toFixed(2) : '-'}</td><td class="num ${cls(r.pnlSol)}">${sol2(r.pnlSol)}</td><td class="num">${r.roi == null ? '-' : `${Math.round(r.roi)}%`}</td><td class="num">${usdC(r.entryMcUsd)}</td><td class="num">${dur(r.holdSec)}</td><td>${r.firstBuy ? ago(r.firstBuy * 1000) : '-'}</td></tr>`;
+  const coinHead = '<tr><th>Coin</th><th>Spent</th><th>Got back</th><th>Still worth</th><th>PnL (SOL)</th><th>ROI</th><th>Entry MC</th><th>Held</th><th>Bought</th></tr>';
+  $('finderView').innerHTML = `
+    <div class="fhead"><div class="who">${esc(shortA(p.address))}<small>${esc(p.address)}</small></div>
+      <span class="verdict ${p.verdict.level}">${esc(p.verdict.text)}</span><span class="spacer"></span>
+      <a class="btn" href="https://solscan.io/account/${encodeURIComponent(p.address)}" target="_blank" rel="noopener">Solscan</a>
+      <button class="btn" data-frefresh="${esc(p.address)}">Refresh</button><button class="btn primary" data-fcopy="${esc(p.address)}">Copy this wallet</button></div>
+    <div class="fcards">
+      ${card('Net worth', `${p.netWorthSol.toFixed(2)} SOL`, usd(p.netWorthSol))}${card('SOL balance', p.sol.toFixed(2), usd(p.sol))}${card('Coins held (value)', `${p.tokensValueSol.toFixed(2)} SOL`, `<small>${p.portfolio.length} coins</small>`)}
+      ${card('Win rate', pct(s.winRate), `<small>${s.closed} finished trades</small>`)}${card('Realized PnL', `${sol2(s.realizedAll)} SOL`, usd(s.realizedAll), cls(s.realizedAll))}
+      ${card('Last 7 days', `${sol2(s.pnl7d)} SOL`, '', cls(s.pnl7d))}${card('Last 30 days', `${sol2(s.pnl30d)} SOL`, '', cls(s.pnl30d))}${card('Open (unrealized)', `${sol2(s.unrealized)} SOL`, '', cls(s.unrealized))}
+      ${card('Coins traded', s.coins, `<small>${s.trades} trades</small>`)}${card('Avg buy', `${s.avgBuySol.toFixed(2)} SOL`)}${card('Typical hold', dur(s.holdMedSec))}${card('Typical entry MC', usdC(s.entryMcMedUsd))}
+      ${card('Trades a day', s.tradesPerDay.toFixed(1))}${card('Copyable', pct(s.copyable), '<small>trades not flipped in 15s</small>')}${card('Dead bags', s.rugged, '<small>coins it still holds near zero</small>')}
+    </div>
+    <div class="fcard" style="margin-bottom:6px"><span>Style</span><b style="white-space:normal">${esc(s.style)}${s.botLike ? ' · looks like a bot' : ''}</b></div>
+    <div class="hint" style="margin-top:4px">Read from its last ${p.scanned} transactions${p.capped ? ' (busy wallet: older trades not included)' : ''} · scanned ${ago(p.scannedAt)}.</div>
+
+    <div class="fsec"><h3>📅 PnL calendar <span class="count">profit or loss from coins it finished selling, by day</span></h3>${calendarHtml('profile', p.calendar)}</div>
+
+    <div class="fsec"><h3>💼 Holdings now <span class="count">${p.portfolio.length} coins</span></h3>${p.portfolio.length ? `<div class="fscroll"><table><tr><th>Coin</th><th>Amount</th><th>Worth</th><th title="What it spent minus what it already took out">Still in</th><th>PnL</th><th>Bought</th></tr>${p.portfolio.slice(0, 50).map((h) => `<tr><td>${coinCell(h)}</td><td class="num">${h.amount >= 1e6 ? `${(h.amount / 1e6).toFixed(2)}M` : h.amount.toFixed(0)}</td><td class="num">${h.valueSol == null ? '-' : `${h.valueSol.toFixed(3)} SOL`}</td><td class="num">${h.costSol == null ? '-' : h.costSol <= 0 ? '<span class="pos">free ride</span>' : h.costSol.toFixed(3)}</td><td class="num ${cls(h.pnlSol)}">${sol2(h.pnlSol, 3)}</td><td>${h.boughtAt ? ago(h.boughtAt * 1000) : '-'}</td></tr>`).join('')}</table></div>` : '<div class="empty-msg">Holds no coins right now.</div>'}</div>
+
+    <div class="fsec"><h3>🏆 Best and worst trades</h3><div class="fscroll"><table>${coinHead}${p.best.map(coinRow).join('')}${p.worst.filter((w) => w.realized < 0 && !p.best.some((b) => b.mint === w.mint)).map(coinRow).join('')}</table></div></div>
+
+    <div class="fsec"><h3>🕒 When it trades <span class="count">trades by hour of the day (your time)</span></h3><div class="hours">${p.hours.map((n, h) => `<i style="height:${(n / maxH) * 100}%" title="${h}:00 · ${n} trades"></i>`).join('')}</div><div class="hours-x">${p.hours.map((_, h) => `<span>${h % 6 ? '' : h}</span>`).join('')}</div></div>
+
+    <div class="fsec" id="fLinked"><h3>🔗 Possibly linked wallets</h3>${loading('Looking for linked wallets…')}</div>
+
+    <div class="fsec" id="fReplay"><h3>🧪 What if I'd copied it? <span class="ftabs"><button data-freplay="7">7 days</button><button data-freplay="30">30 days</button></span></h3><div class="empty-msg">Pick 7 or 30 days to replay its trades with your settings.</div></div>
+
+    <div class="fsec"><h3>📜 Every coin it traded <span class="count">${p.coins.length} most recent</span></h3><div class="fscroll"><table>${coinHead}${p.coins.map(coinRow).join('')}</table></div></div>`;
+}
+
+async function loadLinked(address, view) {
+  try {
+    const l = await finderJob(`/api/finder/linked?a=${encodeURIComponent(address)}`, view, (s) => { const b = $('fLinked'); if (b) b.innerHTML = `<h3>🔗 Possibly linked wallets</h3>${loading(s)}`; });
+    const b = $('fLinked');
+    if (!b) return;
+    const f = l.funder;
+    b.innerHTML = `<h3>🔗 Possibly linked wallets <span class="count">${l.linked.length} found · exchanges left out</span></h3>
+      ${f ? `<div class="hint" style="margin:0 0 10px">First funded by ${f.exchange ? `<b>${esc(f.exchange)}</b> (an exchange, so it says nothing about who owns it)` : walletLink(f.wallet)} with ${f.sol.toFixed(2)} SOL${f.at ? `, ${ago(f.at * 1000)}` : ''}.</div>` : ''}
+      ${l.linked.length ? `<div class="fscroll"><table><tr><th>Wallet</th><th>Link</th><th>Why</th><th></th></tr>${l.linked.map((x) => `<tr><td>${walletLink(x.wallet)}</td><td><span class="conf ${x.confidence}">${x.confidence}</span></td><td><ul class="reasons">${x.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul></td><td>${finderBtns(x.wallet)}</td></tr>`).join('')}</table></div>` : '<div class="empty-msg">No linked wallets found. That\'s normal for a wallet funded from an exchange.</div>'}
+      <div class="hint">"Linked" is a guess from money moving between wallets, a shared funder, and buying the same coins in the same block. High means several signs agree.</div>`;
+  } catch (e) {
+    if (!e.stale && $('fLinked')) $('fLinked').innerHTML = `<h3>🔗 Possibly linked wallets</h3><div class="empty-msg">${esc(e.message)}</div>`;
+  }
+}
+
+async function loadReplay(address, days) {
+  const view = F.view, b = $('fReplay');
+  b.querySelectorAll('[data-freplay]').forEach((x) => x.classList.toggle('on', x.dataset.freplay === String(days)));
+  const body = () => { let el = b.querySelector('.rbody'); if (!el) { b.querySelector('.empty-msg')?.remove(); el = document.createElement('div'); el.className = 'rbody'; b.append(el); } return el; };
+  body().innerHTML = loading('Replaying its trades…');
+  try {
+    const r = await finderJob(`/api/finder/replay?a=${encodeURIComponent(address)}&days=${days}`, view, (s) => (body().innerHTML = loading(s)));
+    const sk = r.skipped, skippedTotal = sk.tooFast + sk.alreadyHeld + sk.slotsFull + sk.small;
+    body().innerHTML = `<div class="fcards">
+        <div class="fcard"><span>You'd have made</span><b class="${cls(r.pnlSol)}">${sol2(r.pnlSol, 3)} SOL</b></div>
+        <div class="fcard"><span>Trades copied</span><b>${r.copied}</b><small>${r.open} still open</small></div>
+        <div class="fcard"><span>Win rate</span><b>${pct(r.winRate)}</b></div>
+        <div class="fcard"><span>Skipped</span><b>${skippedTotal}</b><small>${sk.tooFast} too fast · ${sk.slotsFull} slots full · ${sk.alreadyHeld} already held · ${sk.small} too small</small></div></div>
+      ${calendarHtml('replay', r.calendar, null)}
+      <div class="hint">Uses ${r.size} SOL a trade and your settings (take profit ${r.settings.tp ?? 'off'}${r.settings.tp ? '%' : ''}, stop loss ${r.settings.sl ?? 'off'}${r.settings.sl ? '%' : ''}, max ${r.settings.maxOpen} at once), with a slightly worse price than theirs because a copy lands a moment later. It's an estimate, not a promise.</div>`;
+  } catch (e) {
+    if (!e.stale) body().innerHTML = `<div class="empty-msg">${esc(e.message)}</div>`;
+  }
+}
+
+$('finderForm').onsubmit = (e) => { e.preventDefault(); finderGo($('finderInput').value); };
+$('finderInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finderGo($('finderInput').value); } });
+$('finderRecent').onclick = (e) => { const r = e.target.closest('[data-frecent]'); if (r) finderGo(r.dataset.frecent); };
+$('finderView').addEventListener('click', (e) => {
+  const prof = e.target.closest('[data-fprofile]');
+  if (prof) { $('finderInput').value = prof.dataset.fprofile; rememberFinder(prof.dataset.fprofile); openProfile(prof.dataset.fprofile); $('tab-finder').scrollIntoView({ behavior: 'smooth' }); return; }
+  const cp = e.target.closest('[data-fcopy]');
+  if (cp) { openAddWallet(); $('wAddr').value = cp.dataset.fcopy; $('wName').focus(); return; }
+  const rf = e.target.closest('[data-frefresh]');
+  if (rf) { api(`/api/finder/wallet?a=${encodeURIComponent(rf.dataset.frefresh)}&refresh=1`).then(() => openProfile(rf.dataset.frefresh)).catch((err) => toast('loss', 'Error', err.message)); return; }
+  const rp = e.target.closest('[data-freplay]');
+  if (rp && F.profile) { loadReplay(F.profile.address, Number(rp.dataset.freplay)); return; }
+  const mv = e.target.closest('[data-calmove]');
+  if (mv) {
+    const wrap = mv.closest('[data-cal]'), id = wrap.dataset.cal, st = F.cal[id];
+    const [y, m] = st.month.split('-').map(Number), d = new Date(y, m - 1 + Number(mv.dataset.calmove), 1);
+    wrap.outerHTML = calendarHtml(id, st.cal, `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+});
+renderRecent();
+
 /* ---------- keyboard ---------- */
-const TABS = { 1: 'history', 2: 'board', 3: 'loadout', 4: 'account' };
+const TABS = { 1: 'history', 2: 'board', 3: 'loadout', 4: 'account', 5: 'finder' };
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { closeModal(); closeChat(); return; }
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;

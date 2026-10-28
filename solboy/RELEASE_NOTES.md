@@ -1,4 +1,10 @@
-**New in 1.9.0**
+**New in 1.9.0: Wallet Finder**
+- **Find the wallets behind coins that ran:** open the new **Finder** tab (key 5) and paste one or more coins from Axiom. SolBoy lists each coin's early buyers with what they spent, the market cap they got in at, what they sold, and their profit, tagged dev / bundle / sniper. Paste several coins and it shows the wallets that were early **and** in profit on more than one of them.
+- **Full wallet profile:** click **Profile** on any wallet (or paste a wallet) to see its net worth, SOL balance and every coin it holds with values, win rate, profit for 7 / 30 days and overall, typical hold time and entry market cap, trading style, a "good to copy?" verdict, best and worst trades, and every coin it traded.
+- **PnL calendar for each wallet you check:** a month view with green and red days showing how much that wallet made or lost each day. Use ◀ ▶ to go back through the months.
+- **Possibly linked wallets:** wallets that sent it money, were paid by the same wallet that funded it, or kept buying the same coins in the same block, each marked high / medium / low with the reasons. Exchanges are left out.
+- **What if I'd copied it?** Replays its last 7 or 30 days with your settings and shows what you'd have made, with its own calendar.
+- **Copy this wallet** in one click.
 - **Pulse removed:** SolBoy is back to doing one thing really well, copy trading. Use Axiom (or any terminal) for finding coins.
 - **Copy trading prices brand-new Pump.fun coins on its own:** it reads the coin's bonding curve straight from the chain, so paper trades, take profit and stop loss work on coins Jupiter can't price yet.
 
