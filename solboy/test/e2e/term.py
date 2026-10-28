@@ -20,5 +20,5 @@ for a in answers:
     if not pump(2.5 if a.startswith(('ask', 'Ek')) else 1.2): break
 pump(2)
 print(re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', out.decode(errors='replace')))
-try: os.kill(pid, 9)
+try: os.killpg(pid, 15)
 except: pass

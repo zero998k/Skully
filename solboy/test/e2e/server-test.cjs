@@ -1,7 +1,8 @@
+const BASE = process.env.SOLBOY_TEST_URL || 'http://localhost:7777';
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const up = async () => { for (let i = 0; i < 40; i++) { try { await fetch('http://127.0.0.1:7777/'); return; } catch { await sleep(300); } } throw new Error('server never came up'); };
+const up = async () => { for (let i = 0; i < 40; i++) { try { await fetch(BASE + '/'); return; } catch { await sleep(300); } } throw new Error('server never came up'); };
 const emit = (side) => fetch(`http://127.0.0.1:18900/emit?side=${side}`, { method: 'POST' });
 (async () => {
   const E = process.argv[2]; const R = {};
@@ -11,7 +12,7 @@ const emit = (side) => fetch(`http://127.0.0.1:18900/emit?side=${side}`, { metho
   R.setupCodeInLog = /setup code: k7q2m9x4/.test(out);
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1300, height: 950 } });
   const errors = []; p.on('pageerror', (e) => errors.push(String(e))); p.on('dialog', (d) => d.accept());
-  await p.goto('http://127.0.0.1:7777/'); await sleep(500);
+  await p.goto(BASE + '/'); await sleep(500);
   await p.screenshot({ path: `${E}/s1-setup.png`, fullPage: true });
   const fill = async (code) => { await p.fill('[name=code]', code); await p.fill('[name=password]', 'correct horse battery'); await p.fill('[name=password2]', 'correct horse battery');
     await p.fill('[name=rpc]', 'http://127.0.0.1:18900'); await p.fill('[name=wallets]', 'AqzPs1UDhnK2Ga37PphobfMukGtN53erw5N3KhoR6qky whale1'); await p.click('#go'); await sleep(1200); };
@@ -22,9 +23,9 @@ const emit = (side) => fetch(`http://127.0.0.1:18900/emit?side=${side}`, { metho
   await p.fill('#pw', 'correct horse battery'); await p.click('button'); await sleep(2500);
   R.dashboard = { url: p.url(), online: await p.textContent('#conn'), logoutVisible: await p.isVisible('#logoutBtn') };
   await emit('buy'); await sleep(3500); R.positionAfterBuy = await p.locator('.slot:not(.empty)').count();
-  R.apiWithoutLogin = (await fetch('http://127.0.0.1:7777/api/state')).status;
-  R.pageWithoutLogin = (await fetch('http://127.0.0.1:7777/', { redirect: 'manual' })).status;
-  R.settingsWithoutLogin = (await fetch('http://127.0.0.1:7777/api/settings', { method: 'POST', body: '{"setting":"takeProfitPct","value":"99"}' })).status;
+  R.apiWithoutLogin = (await fetch(BASE + '/api/state')).status;
+  R.pageWithoutLogin = (await fetch(BASE + '/', { redirect: 'manual' })).status;
+  R.settingsWithoutLogin = (await fetch(BASE + '/api/settings', { method: 'POST', body: '{"setting":"takeProfitPct","value":"99"}' })).status;
   await p.keyboard.press('3'); await sleep(400); await p.fill('#quick [name=takeProfitPct]', '35'); await p.click('#quick button[type=submit]'); await sleep(1200);
   R.serverQuickSaved = JSON.parse(require('fs').readFileSync(`${E}/srv/config.json`, 'utf8')).takeProfitPct;
   // risky actions need the password
@@ -40,7 +41,7 @@ const emit = (side) => fetch(`http://127.0.0.1:18900/emit?side=${side}`, { metho
   await p.click('#logoutBtn'); await sleep(800); R.afterLogout = p.url();
   // restart: already set up, so straight to login
   app.kill('SIGTERM'); await sleep(1500); out = ''; app = start(); app.stdout.on('data', (d) => (out += d)); await up(); await sleep(1500);
-  R.restartGoesToLogin = (await fetch('http://127.0.0.1:7777/', { redirect: 'manual' })).headers.get('location');
+  R.restartGoesToLogin = (await fetch(BASE + '/', { redirect: 'manual' })).headers.get('location');
   R.restartNoSetup = !/setup code/i.test(out);
   R.errors = errors; console.log(JSON.stringify(R, null, 1));
   app.kill('SIGTERM'); await b.close();

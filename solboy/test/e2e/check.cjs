@@ -108,5 +108,13 @@ check('lobby', 'friends cannot kick, read others\' DMs, post without logging in,
 check('hypothetical', 'Hypothetical PnL lists each copy with what-ifs and a size box', fl.hypoShown === true && fl.hypoRows >= 1 && fl.hypoScaled === true, `${fl.hypoRows} ${fl.hypoScaled}`);
 check('finder', 'fits a phone', fl.finderPhoneOverflow === false, fl.finderPhoneOverflow);
 
+check('speed', 'live buy shows confirmation time separately from submission', f.livePumpTiming?.paper === false && f.livePumpTiming?.side === 'buy' && f.livePumpTiming.confirmed >= f.livePumpTiming.last && f.livePumpTiming.complete >= f.livePumpTiming.confirmed, f.livePumpTiming);
+check('speed', 'live sell is timed too', f.liveSellTiming?.side === 'sell' && f.liveSellTiming?.confirmed >= f.liveSellTiming?.last, f.liveSellTiming);
+check('speed', 'completed simulated buy and sell reach the screen in under a second while full state is stalled', f.streamBuyWhileStateStalled && f.streamSellWhileStateStalled && f.streamBuyMs < 1000 && f.streamSellMs < 1000, [f.streamBuyMs, f.streamSellMs]);
+check('speed', 'older state cannot hide a new buy or restore a sold position', f.staleStateCannotHideBuy && f.staleStateCannotRestoreSold, [f.staleStateCannotHideBuy, f.staleStateCannotRestoreSold]);
+check('speed', 'paper timing is clearly labelled', /Sell.*paper/.test(f.paperSpeedLabel ?? ''), f.paperSpeedLabel);
+const speed = json('speed.json');
+for (const name of ['paperIsNotConfirmed', 'noRouteCacheSkipsRedundantQuote', 'expiredRouteCacheRechecks', 'confirmedBuyWithoutExtraLookup', 'sellsAreTimed', 'failedConfirmationDoesNotOpenOrDuplicate', 'currentFreeJupiterEndpoint']) check('speed', name, speed[name] === true, speed[name] ?? speed.crashed);
+
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

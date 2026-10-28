@@ -1,3 +1,4 @@
+const BASE = process.env.SOLBOY_TEST_URL || 'http://localhost:7777';
 // Drives every dashboard feature of the packaged app against fake.cjs. Prints a JSON report.
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -7,7 +8,7 @@ const emit = (side, frac = 1) => F(`/emit?side=${side}&frac=${frac}`);
 const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) { const v = await fn(); if (v || Date.now() > end) return v; await sleep(250); } };
 (async () => {
   const [E, APP] = process.argv.slice(2);
-  for (let i = 0; i < 60 && !(await fetch('http://localhost:7777/').then(() => true).catch(() => false)); i++) await sleep(500);
+  for (let i = 0; i < 60 && !(await fetch(BASE + '/').then(() => true).catch(() => false)); i++) await sleep(500);
   const b = await chromium.launch();
   const p = await b.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = []; p.on('pageerror', (e) => errors.push(String(e)));
@@ -17,7 +18,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   const cfg = () => JSON.parse(fs.readFileSync(`${APP}/config.json`, 'utf8'));
   const toasts = () => p.locator('#toasts').innerText().catch(() => '');
   const lastTrade = async () => (await S()).trades[0];
-  await p.goto('http://localhost:7777/'); await sleep(2000);
+  await p.goto(BASE + '/'); await sleep(2000);
   R.online = await p.textContent('#conn');
 
   // ---- Quick settings: set take profit 30, stop loss "-20", bad value rejected ----
@@ -146,9 +147,11 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   // real money, brand-new Pump.fun coin read from the logs: bought straight on its curve through PumpPortal
   const lp = await F('/emit-pump?side=buy&sol=1');
   R.livePumpBought = await until(async () => (await S()).inventory.some((x) => x.mint === lp.mint), 10000);
+  R.livePumpTiming = (await S()).copySpeed;
   R.livePumpTradeLocal = (await (await fetch('http://127.0.0.1:18903/pp/tradelocal')).json()).map((x) => `${x.action}:${x.mint === lp.mint}`).join();
   await F('/set?mult=1'); await F(`/emit-pump?side=sell&mint=${lp.mint}&tokens=900000000000000000`);
   R.livePumpSold = await until(async () => !(await S()).inventory.some((x) => x.mint === lp.mint), 10000);
+  R.liveSellTiming = (await S()).copySpeed;
   await sleep(10500); await key('4'); await sleep(800);
   await p.fill('#wdTo', '5NU3oN4fNnx1CknHtaH8kGPHAaK4UJ3X4E2WdEyY3h1y'); await p.fill('#wdAmt', '0.3');
   await p.click('#wdForm button[type=submit]'); await sleep(2500);
@@ -181,6 +184,8 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.fastSpeed = (await S()).copySpeed;
   await F(`/emit-pump?side=sell&mint=${fp.mint}&tokens=900000000000000000`);
   R.fastSold = await until(async () => !(await S()).inventory.some((x) => x.mint === fp.mint), 6000);
+
+  Object.assign(R, await require('./stream.cjs')(p, F));
 
   // pause with coins open: choose "pause and sell everything"
   await F('/set?mult=1'); await emit('buy'); await until(async () => (await S()).inventory.length >= 1, 6000);
@@ -240,7 +245,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.guestProfile = await until(async () => gp.locator('#finderView .cal').count().then((n) => n > 0), 30000);
   await gp.screenshot({ path: `${E}/9-guest-finder.png`, fullPage: true });
   const tok = new URL(R.shareUrl).pathname.split('/')[2];
-  const st = (path, headers = {}) => new Promise((ok) => require('http').get({ host: '127.0.0.1', port: 7777, path, headers }, (r) => { r.resume(); ok(r.statusCode); }).on('error', () => ok(0)));
+  const st = (path, headers = {}) => new Promise((ok) => require('http').get({ host: '127.0.0.1', port: Number(new URL(BASE).port), path, headers }, (r) => { r.resume(); ok(r.statusCode); }).on('error', () => ok(0)));
   R.shareBlocks = { ownerPageViaTunnel: await st('/', { 'cf-connecting-ip': '1.2.3.4' }), ownerPageOtherHost: await st('/', { host: 'abc.trycloudflare.com' }), ownerApiViaTunnel: await st('/api/state?t=x', { 'x-forwarded-for': '1.2.3.4' }),
     wrongToken: await st('/g/AAAAAAAAAAAAAAAA'), otherGuestPath: await st(`/g/${tok}/api/state`), guestApi: await st(`/g/${tok}/api/finder/kind?a=${FA.SMART}`, { 'cf-connecting-ip': '1.2.3.4' }) };
   // ---- Social Lobby: host sets a name, a friend joins through the link, profiles, chat, reactions, DMs, calls ----
@@ -287,7 +292,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.lobbyDm = (await gp.locator('#clubBody').innerText()).includes('private alpha');
   // what a friend can't do
   const sess = await gp.evaluate(() => localStorage.getItem('lobbySession'));
-  const gpost = (what, body, s2 = sess) => fetch(`http://127.0.0.1:7777/g/${tok}/api/club/${what}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-club-session': s2 }, body: JSON.stringify(body) }).then((r) => r.status);
+  const gpost = (what, body, s2 = sess) => fetch(`${BASE}/g/${tok}/api/club/${what}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-club-session': s2 }, body: JSON.stringify(body) }).then((r) => r.status);
   R.lobbyBlocks = { kick: await gpost('kick', { id: 'host' }), otherDm: await gpost('send', { room: 'dm:aaaa:bbbb', text: 'x' }), noSession: await gpost('send', { room: 'lounge', text: 'x' }, 'nope'), fakeFlex: await gpost('send', { room: 'lounge', text: '', card: { type: 'pnl', total: 999 } }), svg: await gpost('profile', { avatar: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=' }) };
   // host removes the friend: their session stops working
   await p.click(`#clubNav [data-cprofile="${buddyId}"]`); await sleep(400); await p.click('[data-ckick]'); await sleep(600);
@@ -312,7 +317,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await p.setViewportSize({ width: 390, height: 900 }); await key('3'); await sleep(500);
   await p.screenshot({ path: `${E}/5-phone-loadout.png`, fullPage: true });
   R.phoneOverflow = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth);
-  R.noPulseLink = (await p.locator('#pulseLink').count()) === 0 && (await fetch('http://localhost:7777/pulse')).status === 404;
+  R.noPulseLink = (await p.locator('#pulseLink').count()) === 0 && (await fetch(BASE + '/pulse')).status === 404;
   R.errors = errors; R.fakeUnhandled = w2.log;
   console.log(JSON.stringify(R, null, 1));
   await b.close();

@@ -1,3 +1,4 @@
+const BASE = process.env.SOLBOY_TEST_URL || 'http://localhost:7777';
 // Update flow: damaged download refused, then a real update to 1.1.1 with the page reloading by itself.
 const { chromium } = require('playwright');
 const fs = require('fs'); const crypto = require('crypto'); const { execFileSync } = require('child_process');
@@ -7,10 +8,10 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
 const sha = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 (async () => {
   const [E, APP] = process.argv.slice(2); const R = {};
-  for (let i = 0; i < 60 && !(await fetch('http://localhost:7777/').then(() => true).catch(() => false)); i++) await sleep(500);
+  for (let i = 0; i < 60 && !(await fetch(BASE + '/').then(() => true).catch(() => false)); i++) await sleep(500);
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = []; p.on('pageerror', (e) => errors.push(String(e))); p.on('dialog', (d) => d.accept());
-  await p.goto('http://localhost:7777/'); await sleep(2000);
+  await p.goto(BASE + '/'); await sleep(2000);
   await F('/emit?side=buy'); await until(async () => (await p.evaluate(() => S.inventory.length)) === 1);
   const before = { env: sha(`${APP}/.env`), cfg: sha(`${APP}/config.json`), pos: sha(`${APP}/data/positions-paper.json`) };
   R.versionBefore = await p.evaluate(() => S.update.version);
