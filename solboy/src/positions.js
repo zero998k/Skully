@@ -1,7 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const today = () => new Date().toISOString().slice(0, 10);
+// "Today" follows this computer's clock, from midnight (or from the last reset, if later).
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 /** Open positions and daily profit/loss, saved to a JSON file so a restart doesn't lose them. */
 export class Positions {
@@ -26,6 +30,24 @@ export class Positions {
     this.save();
   }
   todayPnl() { return this.data.pnlByDay[today()] ?? 0; }
+
+  /** Start today's profit/loss (and so the daily loss limit) from zero again. */
+  resetDay() {
+    this.data.pnlByDay[today()] = 0;
+    this.data.dayResetAt = new Date().toISOString();
+    this.save();
+  }
+  dayStart() {
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const reset = this.data.dayResetAt ? new Date(this.data.dayResetAt) : null;
+    return reset > midnight ? reset : midnight;
+  }
+  /** When today was last reset, or null if it wasn't. */
+  resetToday() {
+    const start = this.dayStart();
+    return start.getHours() || start.getMinutes() || start.getSeconds() || start.getMilliseconds() ? start.toISOString() : null;
+  }
 
   save() {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });

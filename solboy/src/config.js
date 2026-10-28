@@ -13,6 +13,8 @@ export const DEFAULTS = {
   priorityFeeMaxLamports: 1_000_000,
   followSells: true,
   sellMode: 'mirror',
+  onlyFirstBuy: true,
+  sellOnlyOnFullExit: true,
   takeProfitPct: null,
   stopLossPct: null,
   priceCheckSeconds: 20,

@@ -85,6 +85,9 @@ body { min-height: 100vh; overflow-x: hidden; }
 .btn.danger { color: var(--loss); }
 .btn.danger:hover { background: var(--loss); color: #fff; border-color: #000; box-shadow: 5px 5px 0 #fafafa; }
 .btn.update { background: var(--sun); color: #0a0a0a; border-color: #000; box-shadow: 3px 3px 0 #fafafa; animation: wiggle 2.5s infinite; }
+.mini { margin-top: 8px; font-family: var(--display); font-weight: 800; font-size: 12px; color: var(--ink-2); background: transparent; border: 2px solid var(--edge); border-radius: 10px; padding: 4px 10px; cursor: pointer; }
+.mini:hover { color: var(--ink); border-color: var(--accent); }
+.since { color: var(--ink-3); }
 .btn.paused { background: var(--warn); color: #0a0a0a; border-color: #000; box-shadow: 3px 3px 0 #fafafa; }
 kbd { font-family: var(--mono); font-size: 10px; padding: 1px 5px; border: 1.5px solid currentColor; opacity: .55; border-radius: 5px; }
 
@@ -328,7 +331,7 @@ code { font-family: var(--mono); font-size: 12px; color: var(--sky); word-break:
 
   <section class="stats">
     <div class="card cut"><div class="label"><span class="ic">$</span>Total PnL</div><div class="big" id="score">0</div><div class="sub" id="today">today 0</div></div>
-    <div class="card cut"><div class="label"><span class="ic">♥</span>HP · daily risk left</div><div class="bar hp" id="hpBar"><i id="hp"></i></div><div class="sub" id="hpText">-</div></div>
+    <div class="card cut"><div class="label"><span class="ic">♥</span>HP · daily risk left</div><div class="bar hp" id="hpBar"><i id="hp"></i></div><div class="sub" id="hpText">-</div><button class="mini" id="resetDay" title="Start today's profit/loss from zero">↺ Reset today</button></div>
     <div class="card cut"><div class="label"><span class="ic">✓</span>Win rate</div><div class="big" id="acc">-</div><div class="sub" id="wl">0W · 0L</div></div>
     <div class="card cut"><div class="label"><span class="ic">↯</span>Streak</div><div class="big" id="streak">-</div><div class="sub" id="streakSub">no closed trades yet</div></div>
     <div class="card cut"><div class="label"><span class="ic">★</span>Level</div><div class="big" id="level">LVL 1</div><div class="bar xp"><i id="xp"></i></div><div class="sub" id="xpText">0 / 10 XP</div></div>
@@ -495,6 +498,7 @@ function render() {
   $('hp').style.width = `${frac * 100}%`;
   $('hpBar').className = `bar hp${frac < 0.3 ? ' low' : frac < 0.6 ? ' mid' : ''}`;
   $('hpText').innerHTML = left <= 0 ? '<span class="ko">K.O. · buying stopped for today</span>' : `${left.toFixed(3)} of ${S.dailyLossLimit} SOL left today`;
+  if (S.dayResetAt) $('hpText').innerHTML += ` <span class="since">· since ${new Date(S.dayResetAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>`;
   $('acc').textContent = s.winRate == null ? '-' : `${Math.round(s.winRate * 100)}%`;
   $('acc').className = 'big';
   $('wl').textContent = `${s.wins}W · ${s.losses}L`;
@@ -580,7 +584,7 @@ openTab(store.get('tab', 'intel'));
 
 function renderReports() {
   $('reports').innerHTML = S.reports.length
-    ? S.reports.map((r) => `<button class="report cut" data-file="${esc(r.file)}"><div class="top"><span class="sym">$${esc(r.symbol)}</span><span class="when">${ago(r.at)}</span></div><div class="tldr">TL;DR</div><p>${esc(r.narrative || 'Open to read the breakdown')}</p></button>`).join('')
+    ? S.reports.map((r) => `<button class="report cut" data-file="${esc(r.file)}"><div class="top"><span class="sym">$${esc(r.symbol)}</span><span class="when">${ago(r.at)}</span></div><div class="tldr">AI overview</div><p>${esc(r.narrative || 'Open to read the breakdown')}</p></button>`).join('')
     : `<div class="empty-msg">${S.research ? 'No intel yet. Reports appear when SolBoy buys a token, or paste a token address above and hit Scan.' : 'AI research is off. Add a free Groq key to .env to turn it on (see README).'}</div>`;
 }
 $('reports').onclick = async (e) => {
@@ -599,7 +603,7 @@ function mdToHtml(md) {
     else if (item) html += `<li>${inline(item[1])}</li>`;
     else if (l === '---') html += '<hr style="border:0;border-top:1px solid rgba(255,255,255,.08)">';
     else if (l.startsWith('http')) html += `<p><a href="${esc(l)}" target="_blank" rel="noopener" style="color:var(--volt)">${esc(l)}</a></p>`;
-    else if (/^\**TL;DR/.test(l)) html += `<p class="tldr-box">${inline(l)}</p>`;
+    else if (/^\**(TL;DR|What it is|Why it's|Biggest risk)/.test(l)) html += `<p class="tldr-box">${inline(l)}</p>`;
     else if (l) html += `<p>${inline(l)}</p>`;
   }
   return html + (list ? '</ul>' : '');
@@ -709,6 +713,13 @@ function renderLoadout() {
           <label>AI research runs on <small>"Every coin" starts the moment a wallet buys.</small><select name="researchOn">
             <option value="detected" ${q.researchOn === 'detected' ? 'selected' : ''}>Every coin my wallets buy</option>
             <option value="buys" ${q.researchOn === 'buys' ? 'selected' : ''}>Only coins SolBoy buys</option></select></label></div>
+        <div class="row2">
+          <label>Copy their buys <small>Adding to a coin they already hold isn't copied.</small><select name="onlyFirstBuy">
+            <option value="true" ${q.onlyFirstBuy !== false ? 'selected' : ''}>Only their first buy of a coin</option>
+            <option value="false" ${q.onlyFirstBuy === false ? 'selected' : ''}>Every buy, including adds</option></select></label>
+          <label>Copy their sells <small>Your take profit and stop loss still work either way.</small><select name="sellOnlyOnFullExit">
+            <option value="true" ${q.sellOnlyOnFullExit !== false ? 'selected' : ''}>Only when they fully sell out</option>
+            <option value="false" ${q.sellOnlyOnFullExit === false ? 'selected' : ''}>Every sell, the same %</option></select></label></div>
         <div class="err" id="quickErr">${esc(quickError)}</div>
         <div><button class="btn primary" type="submit">Save</button></div>
       </form></div>
@@ -733,6 +744,12 @@ function renderLoadout() {
     document.activeElement?.blur?.(); quickSig = null; renderLoadout(); refresh();
   };
 }
+
+$('resetDay').onclick = async () => {
+  if (!confirm("Reset today's profit/loss to 0? Your daily loss limit fills back up and SolBoy can buy again. Past trades stay in your history.")) return;
+  try { await api('/api/reset-day', {}); toast('win', 'Fresh start', `Today's profit/loss is back to 0. ${S.dailyLossLimit} SOL of daily risk available.`); juice('win'); refresh(); }
+  catch (e) { toast('loss', "Couldn't reset", e.message); }
+};
 
 /* ---------- one-click updates ---------- */
 let updating = false;

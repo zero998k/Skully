@@ -18,7 +18,7 @@ import { createAuth } from './auth.js';
 import { RESTART_CODE } from './update.js';
 
 // Settings the dashboard's Quick settings card can change while SolBoy runs.
-const QUICK = ['takeProfitPct', 'stopLossPct', 'buyAmountSol', 'dailyLossLimitSol', 'maxOpenPositions', 'researchOn'];
+const QUICK = ['takeProfitPct', 'stopLossPct', 'buyAmountSol', 'dailyLossLimitSol', 'maxOpenPositions', 'researchOn', 'onlyFirstBuy', 'sellOnlyOnFullExit'];
 
 function classify(text) {
   if (/BOUGHT/.test(text)) return 'buy';
@@ -124,7 +124,8 @@ export async function startDashboard({ cfg, bot, book, account, researchDir, res
       mode: book.mode,
       account: await accountState(),
       paused: bot.isBuyingPaused(),
-      summary: summarize(trades),
+      summary: summarize(trades, positions.dayStart()),
+      dayResetAt: positions.resetToday(),
       todayPnl: positions.todayPnl(),
       dailyLossLimit: cfg.dailyLossLimitSol,
       maxSlots: cfg.maxOpenPositions,
@@ -278,6 +279,11 @@ export async function startDashboard({ cfg, bot, book, account, researchDir, res
         } catch (e) {
           return send(res, 400, { error: assistantError(e) });
         }
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/reset-day') {
+        bot.resetDay();
+        return send(res, 200, { ok: true });
       }
 
       if (req.method === 'POST' && url.pathname === '/api/update') {

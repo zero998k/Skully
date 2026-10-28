@@ -99,6 +99,7 @@ export function createBot({ cfg, connection, book, onToken, rpcFetch }) {
   function buySkipReason(w, t) {
     if (w.retiring) return `${w.label} was removed, so SolBoy only follows its sells for tokens you still hold`;
     if (buyingPaused) return 'copying is paused (from the dashboard)';
+    if (cfg.onlyFirstBuy && t.heldBefore) return `${w.label} already held this coin and is adding more; SolBoy only copies their first buy`;
     if (positions.has(t.mint)) return 'already holding this token';
     if (cfg.blocklist.includes(t.mint)) return 'token is on your blocklist';
     if (t.solAmount < cfg.minSourceBuySol) return `their buy is under minSourceBuySol (${cfg.minSourceBuySol} SOL)`;
@@ -170,6 +171,11 @@ export function createBot({ cfg, connection, book, onToken, rpcFetch }) {
     const pos = positions.get(t.mint);
     if (!pos || !cfg.followSells) return;
     if (pos.source !== w.address) return log(`  not selling: this position was copied from ${pos.sourceLabel}`);
+    const out = t.fractionSold >= 0.98;
+    if (cfg.sellOnlyOnFullExit) {
+      if (!out) return log(`  not selling yet: ${w.label} sold ${Math.round(t.fractionSold * 100)}% but still holds some. SolBoy sells when they fully exit`);
+      return sellPosition(t.mint, 1, `${w.label} sold out`);
+    }
     const fraction = cfg.sellMode === 'all' ? 1 : t.fractionSold;
     await sellPosition(t.mint, fraction, `${w.label} sold ${Math.round(t.fractionSold * 100)}%`);
   }
@@ -323,8 +329,15 @@ export function createBot({ cfg, connection, book, onToken, rpcFetch }) {
     }, 10 * 60 * 1000);
   }
 
+  /** Start today's profit/loss from zero (both paper and real money), refilling the daily loss limit. */
+  function resetDay() {
+    for (const mode of ['paper', 'live']) book.positionsFor(mode).resetDay();
+    log(`Today's profit/loss reset to 0. Daily loss limit is full again (${cfg.dailyLossLimitSol} SOL).`);
+  }
+
   return {
     start,
+    resetDay,
     handleSignature,
     checkExits,
     setBuyingPaused(value) {

@@ -189,9 +189,7 @@ SolBoy is free to share. Each friend runs their own copy, with their own free ke
 
 The moment a wallet you copy buys a token, AI writes a quick breakdown of it (at the same time as the copy, so it never slows the trade). That includes coins launched seconds ago:
 
-- **TL;DR:** 3–4 plain sentences saying what the coin is, why it's going up (or that it's falling) using the real numbers, and the biggest risk
-
-- **Core narrative:** what the coin is about
+- **AI overview (like GMGN's):** what the coin is, why it's pumping (or dumping) with the real numbers (price change, volume spike, buyers vs sellers, the post behind it), and the biggest risk. Straight to the point, no "maybe"s
 - **Why now:** what triggered it
 - **Imagery and audience:** the meme style and who's buying
 - **Lifespan and copycat risk**

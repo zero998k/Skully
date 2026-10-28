@@ -28,7 +28,10 @@ function ago(iso) {
 
 /** The report's TL;DR (falls back to the core narrative for older reports). */
 export function reportSummary(text) {
-  return (text.match(/TL;DR:\**\s*(.*)/)?.[1] ?? text.match(/Core Narrative:\**\s*(.*)/)?.[1] ?? '').replaceAll('*', '').trim();
+  const what = text.match(/What it is:\**\s*(.*)/)?.[1];
+  const why = text.match(/Why it's (?:pumping|dumping):\**\s*(.*)/)?.[1];
+  const line = what ? [what, why].filter(Boolean).join(' ') : text.match(/TL;DR:\**\s*(.*)/)?.[1] ?? text.match(/Core Narrative:\**\s*(.*)/)?.[1] ?? '';
+  return line.replaceAll('*', '').trim();
 }
 
 /** Plain-English settings, shared by the terminal and the dashboard. */
@@ -40,7 +43,8 @@ export function settingsRows(cfg, research) {
     ['Spend per copied buy', `${cfg.buyAmountSol} SOL (some wallets may have their own amount)`],
     ['Ignore their buys under', `${cfg.minSourceBuySol} SOL`],
     ['Most tokens held at once', cfg.maxOpenPositions],
-    ['Sell when they sell', cfg.followSells ? (cfg.sellMode === 'all' ? 'yes, everything' : 'yes, the same % they sell') : 'no'],
+    ['Copy their buys', cfg.onlyFirstBuy ? 'only their first buy of a coin' : 'every buy, including when they add more'],
+    ['Sell when they sell', !cfg.followSells ? 'no' : cfg.sellOnlyOnFullExit ? 'only when they fully sell out' : cfg.sellMode === 'all' ? 'yes, everything' : 'yes, the same % they sell'],
     ['Take profit at', cfg.takeProfitPct ? `+${cfg.takeProfitPct}%` : 'off'],
     ['Stop loss at', cfg.stopLossPct ? `-${cfg.stopLossPct}%` : 'off'],
     ['Stop buying after losing', `${cfg.dailyLossLimitSol} SOL in a day`],
@@ -75,6 +79,7 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
       `    ${c.cyan('add')} <address> <nickname>    start copying a new wallet (saved for next time)`,
       `    ${c.cyan('remove')} <nickname>          stop copying a wallet`,
       `    ${c.cyan('account')}                    your SolBoy wallet address and balance`,
+      `    ${c.cyan('reset')}                      start today's profit/loss and daily loss limit from zero`,
       `    ${c.cyan('tp')} <percent> / ${c.cyan('sl')} <percent>      set take profit / stop loss, like ${c.cyan('tp 50')} or ${c.cyan('sl off')}`,
       dashboard ? `    ${c.cyan('ask')} <question>             ask the SolBoy Assistant anything` : '',
       updater?.status().available ? `    ${c.cyan('update')}                     ${c.green(`install SolBoy ${updater.status().available.version} (keeps all your settings)`)}` : '',
@@ -137,7 +142,7 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
       process.stdout.write('\n  No trades yet. They appear here as soon as the bot copies something.\n');
       return closeHint();
     }
-    const sum = summarize(trades);
+    const sum = summarize(trades, book.positions.dayStart());
     process.stdout.write(`\n  ${c.bold('Summary')}\n`);
     process.stdout.write(`    Buys: ${sum.buys}   Sells: ${sum.sells}   Wins: ${c.green(sum.wins)}   Losses: ${c.red(sum.losses)}`);
     process.stdout.write(sum.winRate != null ? `   Win rate: ${Math.round(sum.winRate * 100)}%\n` : '\n');
@@ -255,6 +260,9 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
           log(c.red(msg === 'NO_KEY' ? 'The assistant needs a free Groq key. Add it in the dashboard (Ask SolBoy button).' : `Assistant error: ${msg}`));
         });
       return;
+    }
+    if (pick === 'reset') {
+      return bot.resetDay();
     }
     if (pick === 'update' && updater) {
       const st = updater.status();

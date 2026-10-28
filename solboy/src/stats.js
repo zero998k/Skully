@@ -3,10 +3,10 @@
 const isSell = (t) => t.action.endsWith('sell') && t.pnl_sol !== '';
 const pnlOf = (t) => Number(t.pnl_sol);
 
-export function summarize(trades) {
+/** dayStart: when "today" began (midnight, or the last reset of the day). */
+export function summarize(trades, dayStart = new Date(new Date().setHours(0, 0, 0, 0))) {
   const sells = trades.filter(isSell);
   const wins = sells.filter((t) => pnlOf(t) > 0).length;
-  const today = new Date().toISOString().slice(0, 10);
 
   // Current streak: consecutive wins (or losses) counting back from the latest closed trade.
   let streak = 0;
@@ -24,7 +24,7 @@ export function summarize(trades) {
     losses: sells.length - wins,
     winRate: sells.length ? wins / sells.length : null,
     totalPnl: sells.reduce((s, t) => s + pnlOf(t), 0),
-    todayPnl: sells.filter((t) => t.time.startsWith(today)).reduce((s, t) => s + pnlOf(t), 0),
+    todayPnl: sells.filter((t) => new Date(t.time) >= dayStart).reduce((s, t) => s + pnlOf(t), 0),
     streak,
     // Running total after each closed trade, for the profit chart.
     curve: sells.reduce((pts, t) => [...pts, { time: t.time, pnl: (pts.at(-1)?.pnl ?? 0) + pnlOf(t) }], []),
