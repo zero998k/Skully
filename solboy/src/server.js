@@ -340,6 +340,19 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
             return;
           }
           if (req.method === 'GET' && url.pathname === '/api/pulse/coin') return send(res, 200, { ...(await pulse.coin(checkMint(mintParam))), position: await positionFor(checkMint(mintParam)), mode: book.mode });
+          if (req.method === 'GET' && url.pathname === '/api/pulse/health') {
+            const checks = await pulse.health();
+            const t0 = Date.now();
+            let ai;
+            try {
+              const out = await writeNarrative(cfg, { name: 'Dogwifhat', symbol: 'WIF', description: 'a dog wearing a pink knitted hat', cacheKey: '' });
+              ai = out.needsKey ? { ok: false, detail: 'no Groq key yet: add your free key in Ask SolBoy on the dashboard' } : out.text ? { ok: true, detail: `ok: "${out.text.slice(0, 90)}${out.text.length > 90 ? '…' : ''}"` } : { ok: false, detail: 'answered, but empty' };
+            } catch (e) {
+              ai = { ok: false, detail: e.message };
+            }
+            checks.push({ name: 'AI story (Groq)', ...ai, ms: Date.now() - t0 });
+            return send(res, 200, { checks });
+          }
           if (req.method === 'GET' && url.pathname === '/api/pulse/narrative') {
             const mint = checkMint(mintParam);
             const facts = pulse.storyFacts(mint);

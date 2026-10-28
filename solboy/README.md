@@ -129,6 +129,8 @@ Pulse trades with the same SolBoy wallet and mode as copy trading: paper mode by
 
 **Where the data comes from (all free):** PumpPortal's public live feed (every Pump.fun and Bonk launch, trade and migration), Pump.fun's coin lists (to fill the columns when SolBoy starts; the board is also saved in `data/pulse-cache.json`), GeckoTerminal for the recent trades of coins SolBoy didn't watch from launch, IPFS for coin pictures (fetched once by SolBoy and kept in memory), DexScreener for migrated coins, GeckoTerminal for older charts, and your own Helius connection for holders, the launch check and the insider check. For brand-new coins Jupiter can't trade yet, real-money trades are built by PumpPortal (it charges a 0.5% fee on those trades).
 
+**Is everything working on real coins?** Click ⚙ (top right of Pulse) → **📡 Live data check → Check now**. It tests every source above from your computer and shows ✓ or ✗ for each.
+
 **How live it is:** New Pairs, Final Stretch and the curve coins' charts update from PumpPortal's feed the moment each trade arrives (the board refreshes twice a second, an open coin's trades are pushed instantly). Migrated coins you have open are watched straight on the chain: SolBoy follows the pool's two vaults through your Helius connection at "processed" speed, so every trade moves the chart within about half a second instead of waiting for DexScreener (about 20 seconds). The top bar shows **⏱ how far behind the chain** the feed really is, measured every minute while Pulse is open, and each coin's market cap shows where its price comes from: **● live**, **● live (pool)** or **● ~20s delay**.
 
 **What's different from Axiom:**

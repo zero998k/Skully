@@ -115,6 +115,7 @@ PP('quick trade box opens and drags', pp.floatVisible === true && pp.dragged ===
 PP('quick trade box pops out into its own window', pp.popupQuickMode === true && /MCAT/.test(pp.popupCoin ?? '') && pp.popupHasBuy === true, 'popupQuickMode');
 PP('cards show the X post a coin came from, and a bigger look on hover', pp.cardStory === true && pp.peek === true, 'cardStory');
 PP('coin page story: X post, website and AI one-liner', pp.storyBar === true && /✨ Story\s*[^\sR]/.test(pp.storyText ?? ''), 'storyText');
+PP('live data check tests every source', pp.health?.length === 9 && pp.health.every((x) => x.startsWith('OK')), 'health');
 PP('back to the board', pp.backOnBoard === true, 'backOnBoard');
 PP('no page errors', Array.isArray(pp.errors) && pp.errors.length === 0, 'errors');
 

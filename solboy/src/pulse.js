@@ -152,6 +152,7 @@ export function createPulse({ cfg, connection }) {
   } catch {}
   let historyDirty = false;
   const focus = new Map(); // coins someone has open: mint -> count of viewers
+  const stats = { metaOk: 0, metaFail: 0, tweetOk: 0, tweetFail: 0, imgOk: 0, imgFail: 0, seed: null, seedError: null, geckoOk: 0, geckoFail: 0 }; // for the live check
 
   function saveJson(target, data) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -463,8 +464,8 @@ export function createPulse({ cfg, connection }) {
       const t = storyQueue.shift();
       storyBusy++;
       fetchTweet(t.meta.twitter)
-        .then((tw) => { t.tweet = tw; t.storyState = 'done'; })
-        .catch(() => { t.storyState = 'failed'; })
+        .then((tw) => { t.tweet = tw; t.storyState = 'done'; stats.tweetOk++; })
+        .catch(() => { t.storyState = 'failed'; stats.tweetFail++; })
         .finally(() => { storyBusy--; pumpStories(); });
     }
   }
@@ -568,7 +569,9 @@ export function createPulse({ cfg, connection }) {
         historyDirty = true;
       }
       tok.metaState = 'done';
+      stats.metaOk++;
     } catch {
+      if (tok.metaTries) stats.metaFail++;
       // IPFS gateways are often slow for brand-new files: try once more a little later
       tok.metaState = tok.metaTries ? 'failed' : 'none';
       tok.metaTries = (tok.metaTries ?? 0) + 1;
@@ -961,7 +964,10 @@ export function createPulse({ cfg, connection }) {
       }
       if (!got.length) return;
       tok.trades = [...got, ...tok.trades].sort((a, b) => a.t - b.t).slice(-TRADES_KEPT);
-    } catch {}
+      stats.geckoOk++;
+    } catch {
+      stats.geckoFail++;
+    }
   }
   async function history5m(mint) {
     const tok = tokens.get(mint);
@@ -1031,6 +1037,8 @@ export function createPulse({ cfg, connection }) {
     const results = await Promise.allSettled(lists.map((q) => getJson(`${PUMP_API()}/coins?offset=0&limit=50&includeNsfw=false&${q}`, 8000)));
     let n = 0;
     for (const r of results) if (r.status === 'fulfilled' && Array.isArray(r.value)) for (const c of r.value) { seedCoin(c); n++; }
+    stats.seed = n;
+    stats.seedError = results.find((r) => r.status === 'rejected')?.reason?.message ?? null;
     if (n) log(`Pulse loaded ${n} coins from Pump.fun to fill the columns.`);
   }
   function saveCache() {
@@ -1091,6 +1099,7 @@ export function createPulse({ cfg, connection }) {
       return { type, buf };
     }))
       .then((v) => {
+        stats.imgOk++;
         imgCache.set(mint, v);
         imgBytes += v.buf.length;
         while (imgBytes > 80e6 || imgCache.size > 800) {
@@ -1101,6 +1110,7 @@ export function createPulse({ cfg, connection }) {
         return v;
       })
       .catch(() => {
+        stats.imgFail++;
         imgFail.set(mint, Date.now());
         if (imgFail.size > 2000) imgFail.delete(imgFail.keys().next().value);
         return null;
@@ -1122,6 +1132,52 @@ export function createPulse({ cfg, connection }) {
     coin,
     analyze,
     history: history5m,
+    /** Live check of every outside source Pulse uses, run from this computer. */
+    async health() {
+      const timed = (p, ms = 8000) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('no answer in 8s')), ms))]);
+      const check = async (name, fn) => { const t0 = Date.now(); try { return { name, ok: true, detail: await timed(fn()), ms: Date.now() - t0 }; } catch (e) { return { name, ok: false, detail: e.message, ms: Date.now() - t0 }; } };
+      const recent = [...tokens.values()].filter((t) => t.meta?.image || t.dex?.image).sort((a, b) => (b.lastTradeAt ?? 0) - (a.lastTradeAt ?? 0));
+      const WIF = 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm';
+      const pct = (ok, bad) => (ok + bad ? `${Math.round((ok / (ok + bad)) * 100)}% of ${ok + bad}` : 'none tried yet');
+      return Promise.all([
+        check('Live coin feed (PumpPortal)', async () => {
+          if (wsState !== 'live') throw new Error(`feed is ${wsState}`);
+          if (Date.now() - lastMessageAt > 60_000) throw new Error('connected, but no coins in the last minute');
+          return `live, ${tokens.size} coins tracked, last message ${Math.round((Date.now() - lastMessageAt) / 1000)}s ago`;
+        }),
+        check('Pump.fun coin lists', async () => {
+          const list = await getJson(`${PUMP_API()}/coins?offset=0&limit=5&sort=market_cap&order=DESC&includeNsfw=false&complete=false`, 8000);
+          if (!Array.isArray(list) || !list.length) throw new Error('answered, but with no coins');
+          return `${list.length} coins, e.g. $${clip(list[0].symbol, 12)}`;
+        }),
+        check('Coin pictures (IPFS)', async () => {
+          if (!recent.length) throw new Error('no coin pictures known yet; wait a minute and check again');
+          const v = await image(recent[0].mint);
+          if (!v) throw new Error(`couldn't load $${recent[0].symbol}'s picture (all time: ${pct(stats.imgOk, stats.imgFail)} loaded)`);
+          return `$${recent[0].symbol}'s picture loaded; all time ${pct(stats.imgOk, stats.imgFail)}; coin details ${pct(stats.metaOk, stats.metaFail)}`;
+        }),
+        check('X posts', async () => {
+          const t = await fetchTweet('https://x.com/elonmusk/status/1585341984679469056');
+          if (!t?.text) throw new Error('answered, but with no post');
+          return `post loaded; coins so far: ${pct(stats.tweetOk, stats.tweetFail)}`;
+        }),
+        check('Older trades and charts (GeckoTerminal)', async () => {
+          const d = await getJson(`${GECKO_API()}/networks/solana/tokens/${WIF}/pools?page=1`, 8000);
+          if (!d.data?.length) throw new Error('answered, but with no pools');
+          return `ok; coins so far: ${pct(stats.geckoOk, stats.geckoFail)}`;
+        }),
+        check('Market data (DexScreener)', async () => {
+          const d = await getJson(`${dexApi()}/tokens/v1/solana/${WIF}`, 8000);
+          if (!Array.isArray(d) || !d.length) throw new Error('answered, but with no pairs');
+          return `ok, $WIF at $${Number(d[0].priceUsd).toPrecision(4)}`;
+        }),
+        check('Your Solana connection (Helius)', async () => `ok, slot ${await connection.getSlot('processed')}`),
+        check('SOL price', async () => {
+          if (!solUsd) throw new Error('no SOL price yet');
+          return `$${solUsd.toFixed(2)}`;
+        }),
+      ]);
+    },
     storyFacts(mint) {
       const t = tokens.get(mint);
       if (!t) return null;

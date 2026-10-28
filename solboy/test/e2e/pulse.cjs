@@ -186,6 +186,13 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.storyText = (await p.locator('#storyBar').innerText()).replace(/\s+/g, ' ').slice(0, 300);
   await p.screenshot({ path: `${E}/p5-story.png` });
 
+  // live data check from the ⚙ window
+  await p.click('#prefsBtn'); await p.click('#pHealth');
+  await until(async () => (await p.locator('#healthOut .hc').count()) >= 9, 20000);
+  R.health = await p.locator('#healthOut .hc').evaluateAll((els) => els.map((e) => `${e.classList.contains('ok') ? 'OK' : 'NO'} ${e.querySelector('b').textContent}: ${e.querySelector('span').textContent}`));
+  await p.screenshot({ path: `${E}/p6-health.png` });
+  await p.click('#pClose');
+
   // back to the board
   await p.click('#back'); await sleep(1200);
   R.backOnBoard = await p.isVisible('#board');

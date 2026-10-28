@@ -1,3 +1,8 @@
+**New in 1.4.3**
+- **📡 Live data check:** in Pulse, click ⚙ (top right) → **Check now**. SolBoy tests every source it uses on real coins from your computer (live feed, Pump.fun, coin pictures, X posts, charts, prices, your Solana connection and the AI story) and shows a ✓ or ✗ for each.
+- **Tidier coin cards:** the X handle no longer shows twice, and the X post's picture on a coin page is a neat thumbnail.
+- **Works on a phone:** the top bar now fits small screens, and the story strip isn't cut off.
+
 **New in 1.4.2: know what you're buying**
 - **The story behind every coin:** each card shows the X post the coin came from (or the creator's description) right under its name. Hover over a coin's picture for a big preview with its story.
 - **Story strip on every coin page:** the coin's picture, a one-line **✨ Story** of what the coin is about and where it comes from (written by your free Groq AI), the X post itself with who posted it, likes and its picture, the coin's website, and the creator's description.

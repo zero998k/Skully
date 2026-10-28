@@ -251,7 +251,9 @@ td a:hover { color: var(--accent); }
 .peek p { margin: 0; font-size: 12px; color: var(--ink-2); line-height: 1.45; max-height: 7.5em; overflow: hidden; }
 .tw { display: grid; gap: 6px; border: 1px solid var(--edge-2); border-radius: 12px; padding: 9px 10px; background: var(--bg); font-size: 12px; line-height: 1.45; }
 .tw .who { display: flex; align-items: center; gap: 6px; color: var(--ink-3); } .tw .who img { width: 20px; height: 20px; border-radius: 50%; } .tw .who b { color: var(--ink); }
-.tw .t { color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; } .tw .media { width: 100%; max-height: 160px; object-fit: cover; border-radius: 8px; }
+.tw .t { color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.tw.media-on { grid-template-columns: minmax(0, 1fr) 84px; column-gap: 10px; } .tw.media-on > :not(.media) { grid-column: 1; }
+.tw .media { grid-column: 2; grid-row: 1 / span 3; width: 84px; height: 84px; object-fit: cover; border-radius: 8px; }
 .tw .q { border-left: 2px solid var(--edge-2); padding-left: 8px; color: var(--ink-2); }
 a.tw:hover { border-color: var(--accent); }
 .story-bar { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--edge); background: linear-gradient(90deg, rgba(255,45,149,.06), transparent 60%); max-height: 230px; overflow-y: auto; }
@@ -261,6 +263,15 @@ a.tw:hover { border-color: var(--accent); }
 .sb-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
 .sb-site { font-size: 12px; color: var(--ink-2); border: 1px solid var(--edge-2); border-radius: 12px; padding: 9px 10px; background: var(--bg); } .sb-site a { color: var(--ink); font-weight: 600; }
 .sb-desc { font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+.health { display: grid; gap: 6px; } .hc { display: grid; gap: 2px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--edge-2); font-size: 12px; }
+.hc.ok b { color: var(--up); } .hc.bad b { color: var(--down); } .hc.bad { border-color: rgba(255,77,94,.4); } .hc span { color: var(--ink-2); overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .top { height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 8px; }
+  .logo { font-size: 18px; } .logo img { width: 36px; height: 36px; } .logo .sub, #delayChip, #solChip, .btn kbd { display: none; }
+  .nav a { padding: 5px 8px; }
+  .story-bar { grid-template-columns: 56px minmax(0, 1fr); max-height: none; } .story-bar .pic { width: 56px; height: 56px; font-size: 18px; }
+  .peek { display: none; }
+}
 @media (max-width: 1100px) { .board { grid-template-columns: 1fr; overflow-y: auto; } .col { height: 80vh; border-right: 0; border-bottom: 1px solid var(--edge); } body { overflow: auto; } main { height: auto; } .coin { grid-template-columns: 1fr; } .coin-main { height: 120vh; } }
 </style>
 </head>
@@ -410,7 +421,7 @@ function card(r) {
         ${r.devSold ? '<span class="down" title="The creator sold everything">DS</span>' : ''}
         ${r.twitterReuses ? `<span class="warn" title="This X account was used by ${r.twitterReuses} other coin(s)">♻ ${r.twitterReuses}</span>` : ''}
       </div>
-      ${r.xHandle ? `<div class="handle">@${esc(r.xHandle)}</div>` : ''}
+      ${r.xHandle && !r.tweet ? `<div class="handle">@${esc(r.xHandle)}</div>` : ''}
       <div class="pcts">
         ${pctChip('👤', 'Top 10 holders', r.top10, 30)}
         ${pctChip('🧑‍🍳', 'Dev holding', r.dev, 10)}
@@ -666,7 +677,7 @@ async function wantNarrative() {
   } catch (err) { if (NARR.mint === c.mint) NARR = { ...NARR, state: 'error', text: err.message }; }
   renderStory();
 }
-const tweetHtml = (tw, full = true) => tw ? `<a class="tw" href="${esc(tw.url ?? '#')}" target="_blank" rel="noopener">
+const tweetHtml = (tw, full = true) => tw ? `<a class="tw${full && tw.image ? ' media-on' : ''}" href="${esc(tw.url ?? '#')}" target="_blank" rel="noopener">
     <div class="who">${tw.avatar ? `<img src="${esc(tw.avatar)}" alt="" onerror="this.remove()">` : '<b>𝕏</b>'}<b>${esc(tw.author ?? '')}</b>@${esc(tw.handle ?? '')}${tw.verified ? '<i class="vf">✓</i>' : ''}${tw.at ? ` · ${ago(tw.at)}` : ''}${tw.likes != null ? ` · ♥ ${tw.likes >= 1000 ? (tw.likes / 1000).toFixed(1) + 'K' : tw.likes}` : ''}</div>
     <div class="t">${esc(tw.text ?? '')}</div>${tw.quote ? `<div class="q">@${esc(tw.quote.handle ?? '')}: ${esc(tw.quote.text ?? '')}</div>` : ''}${full && tw.image ? `<img class="media" src="${esc(tw.image)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</a>` : '';
 function renderStory() {
@@ -902,10 +913,22 @@ $('prefsBtn').onclick = () => {
       <label class="f box">Quick sell amounts (% of your coins)<input id="pSell" value="${esc(CFG.quickSell.join(', '))}"></label>
       <label class="f box">KOL / tracked wallets: one per line, address then a name. They get a KOL tag in trades and holders.<textarea id="pKols" rows="7" style="font:12px var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--edge-2);border-radius:8px;padding:8px">${esc(CFG.kols.map((k) => `${k.address} ${k.label}`).join('\n'))}</textarea></label>
       <div class="note">Your copied wallets are tagged automatically. Take profit and stop loss (Dashboard → Loadout) also apply to coins you buy here.</div>
+      <div class="box"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">📡 Live data check</b><button class="btn" id="pHealth">Check now</button></div>
+        <div class="note">Tests every source Pulse uses (live feed, Pump.fun, pictures, X posts, charts, prices, AI) from this computer, on real coins.</div><div id="healthOut"></div></div>
     </div><footer><span style="flex:1"></span><button class="btn primary" id="pSave">Save</button></footer></div>`;
 };
 $('prefsModal').addEventListener('click', async (e) => {
   if (e.target === $('prefsModal') || e.target.id === 'pClose') { $('prefsModal').hidden = true; return; }
+  if (e.target.id === 'pHealth') {
+    e.target.disabled = true; e.target.textContent = 'Checking…'; $('healthOut').innerHTML = '<div class="note">Checking (up to 10 seconds)…</div>';
+    try {
+      const { checks } = await api('/api/pulse/health');
+      $('healthOut').innerHTML = `<div class="health">${checks.map((c) => `<div class="hc ${c.ok ? 'ok' : 'bad'}"><b>${c.ok ? '✓' : '✗'} ${esc(c.name)}</b><span>${esc(c.detail)}${c.ms != null ? ` · ${(c.ms / 1000).toFixed(1)}s` : ''}</span></div>`).join('')}</div>
+        <div class="note">${checks.every((c) => c.ok) ? 'Everything is working on real coins.' : 'Anything with ✗ isn\'t reaching SolBoy from this computer. Screenshot this and send it over.'}</div>`;
+    } catch (err) { $('healthOut').innerHTML = `<div class="note down">${esc(err.message)}</div>`; }
+    e.target.disabled = false; e.target.textContent = 'Check again';
+    return;
+  }
   if (e.target.id === 'pSave') {
     const nums = (s) => s.split(/[,\s]+/).map(Number).filter((n) => n > 0);
     const kols = $('pKols').value.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [address, ...name] = l.split(/\s+/); return { address, label: name.join(' ') }; });
