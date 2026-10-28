@@ -1,6 +1,10 @@
 SOLBOY - START HERE (Windows)
 =============================
 
+EASIEST: open PowerShell (Start menu > type PowerShell > Enter), paste this line and press Enter:
+   irm https://raw.githubusercontent.com/zero998k/Skully/claude/hopeful-edison-2b8ltm/solboy/scripts/install-windows.ps1 | iex
+   It installs SolBoy in Documents\SolBoy, adds a desktop shortcut and opens it. Then skip to step 3.
+
 1. Unzip this folder somewhere you'll keep it, like Documents\SolBoy.
    (Right-click the zip > Extract All. Don't run it from inside the zip.)
 

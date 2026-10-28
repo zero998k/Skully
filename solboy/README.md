@@ -214,7 +214,15 @@ Helius key. The link works while SolBoy runs on your computer and stops when you
 computer off, or click **Stop sharing**; each share makes a new link. It uses a free Cloudflare quick tunnel
 (a small tool downloaded once into `tools/`), or localhost.run if Cloudflare can't be reached.
 
-**Their own SolBoy, for copy trading:**
+**Their own SolBoy, for copy trading (every feature, same speed):** on Windows they open PowerShell and paste
+
+```
+irm https://raw.githubusercontent.com/zero998k/Skully/claude/hopeful-edison-2b8ltm/solboy/scripts/install-windows.ps1 | iex
+```
+
+(on a Mac, the `install-mac.sh` line from Updating SolBoy). It installs the newest SolBoy, adds a desktop
+shortcut and opens it; the first start asks for their own free Helius key. Or:
+
 
 
 SolBoy is free to share. Each friend runs their own copy, with their own free keys and their own SolBoy wallet. Nobody ever holds anyone else's money.
