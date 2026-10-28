@@ -329,15 +329,15 @@ export function createBot({ cfg, connection, book, onToken, rpcFetch }) {
     }, 10 * 60 * 1000);
   }
 
-  /** Start today's profit/loss from zero (both paper and real money), refilling the daily loss limit. */
-  function resetDay() {
-    for (const mode of ['paper', 'live']) book.positionsFor(mode).resetDay();
-    log(`Today's profit/loss reset to 0. Daily loss limit is full again (${cfg.dailyLossLimitSol} SOL).`);
+  /** Start profit/loss from zero (paper and real money): totals, today, and the daily loss limit. */
+  function resetPnl() {
+    for (const mode of ['paper', 'live']) book.positionsFor(mode).resetPnl();
+    log(`Profit/loss reset to 0. Totals and today start fresh, and the daily loss limit is full again (${cfg.dailyLossLimitSol} SOL). Your trade history is kept.`);
   }
 
   return {
     start,
-    resetDay,
+    resetPnl,
     handleSignature,
     checkExits,
     setBuyingPaused(value) {

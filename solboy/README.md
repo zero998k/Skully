@@ -65,7 +65,7 @@ When SolBoy starts, it opens a dashboard in your browser at **http://localhost:7
 | **Intel** | AI research reports. Paste a token address and hit **SCAN** |
 | **History / Wallets / Loadout** | Trade history, your wallets ranked by profit (add and remove them here) and settings. **Quick settings** in Loadout change take profit, stop loss, SOL per buy, daily loss limit, max tokens held and what AI research runs on. They work instantly, no restart |
 
-**Buttons and keys:** **PAUSE COPYING** (or `P`) stops new buys while sells keep following the copied wallets. `S` toggles sound effects (off by default). `1`–`5` switch tabs, and `Esc` closes a report. The terminal keeps working as before, and trading speed is the same whether the dashboard is open or not.
+**Buttons and keys:** **PAUSE COPYING** (or `P`) stops new buys while sells keep following the copied wallets. **↺ reset** (next to today's profit, or **↺ Reset PnL** under the HP bar) sets your profit/loss back to 0: total, today, win rate and chart start fresh, the daily loss limit refills, and your trade history is kept. `S` toggles sound effects (off by default). `1`–`5` switch tabs, and `Esc` closes a report. The terminal keeps working as before, and trading speed is the same whether the dashboard is open or not.
 
 To turn the dashboard off, set `"dashboard": { "enabled": false }` in `config.json`.
 

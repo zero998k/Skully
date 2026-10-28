@@ -79,7 +79,7 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
       `    ${c.cyan('add')} <address> <nickname>    start copying a new wallet (saved for next time)`,
       `    ${c.cyan('remove')} <nickname>          stop copying a wallet`,
       `    ${c.cyan('account')}                    your SolBoy wallet address and balance`,
-      `    ${c.cyan('reset')}                      start today's profit/loss and daily loss limit from zero`,
+      `    ${c.cyan('reset')}                      reset your profit/loss to 0 (history is kept)`,
       `    ${c.cyan('tp')} <percent> / ${c.cyan('sl')} <percent>      set take profit / stop loss, like ${c.cyan('tp 50')} or ${c.cyan('sl off')}`,
       dashboard ? `    ${c.cyan('ask')} <question>             ask the SolBoy Assistant anything` : '',
       updater?.status().available ? `    ${c.cyan('update')}                     ${c.green(`install SolBoy ${updater.status().available.version} (keeps all your settings)`)}` : '',
@@ -142,7 +142,7 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
       process.stdout.write('\n  No trades yet. They appear here as soon as the bot copies something.\n');
       return closeHint();
     }
-    const sum = summarize(trades, book.positions.dayStart());
+    const sum = summarize(book.positions.counted(trades), book.positions.dayStart());
     process.stdout.write(`\n  ${c.bold('Summary')}\n`);
     process.stdout.write(`    Buys: ${sum.buys}   Sells: ${sum.sells}   Wins: ${c.green(sum.wins)}   Losses: ${c.red(sum.losses)}`);
     process.stdout.write(sum.winRate != null ? `   Win rate: ${Math.round(sum.winRate * 100)}%\n` : '\n');
@@ -208,7 +208,7 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
 
   function showScoreboard() {
     openScreen('WALLET SCOREBOARD: which copied wallets make money');
-    const rows = scoreboard(readTrades(book.tradeLogFile), cfg.wallets);
+    const rows = scoreboard(book.positions.counted(readTrades(book.tradeLogFile)), cfg.wallets);
     process.stdout.write(`\n  ${pad('Wallet', 16)}${pad('Buys copied', 13)}${pad('Closed', 9)}${pad('Win rate', 10)}Profit/loss\n`);
     for (const s of rows) {
       const rate = s.closed ? `${Math.round((s.wins / s.closed) * 100)}%` : '-';
@@ -262,7 +262,7 @@ export function createMenu({ cfg, bot, book, account, researchDir, research, das
       return;
     }
     if (pick === 'reset') {
-      return bot.resetDay();
+      return bot.resetPnl();
     }
     if (pick === 'update' && updater) {
       const st = updater.status();

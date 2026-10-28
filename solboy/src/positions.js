@@ -31,11 +31,18 @@ export class Positions {
   }
   todayPnl() { return this.data.pnlByDay[today()] ?? 0; }
 
-  /** Start today's profit/loss (and so the daily loss limit) from zero again. */
-  resetDay() {
+  /** Start profit/loss from zero again: today's (so the daily loss limit refills) and the running totals. */
+  resetPnl() {
+    const now = new Date().toISOString();
     this.data.pnlByDay[today()] = 0;
-    this.data.dayResetAt = new Date().toISOString();
+    this.data.dayResetAt = now;
+    this.data.statsResetAt = now;
     this.save();
+  }
+  /** Trades that count toward the totals: those since the last reset (older ones stay in the history). */
+  counted(trades) {
+    const since = this.data.statsResetAt;
+    return since ? trades.filter((t) => t.time >= since) : trades;
   }
   dayStart() {
     const midnight = new Date();

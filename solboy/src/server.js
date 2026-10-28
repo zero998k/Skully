@@ -125,7 +125,7 @@ export async function startDashboard({ cfg, bot, book, account, researchDir, res
       mode: book.mode,
       account: await accountState(),
       paused: bot.isBuyingPaused(),
-      summary: summarize(trades, positions.dayStart()),
+      summary: summarize(positions.counted(trades), positions.dayStart()),
       dayResetAt: positions.resetToday(),
       todayPnl: positions.todayPnl(),
       dailyLossLimit: cfg.dailyLossLimitSol,
@@ -133,7 +133,7 @@ export async function startDashboard({ cfg, bot, book, account, researchDir, res
       defaultBuy: cfg.buyAmountSol,
       inventory,
       trades: recent.map((t) => ({ ...t, name: name(t.token) })),
-      wallets: walletRows(trades),
+      wallets: walletRows(positions.counted(trades)),
       reports: listReports(),
       research: Boolean(research),
       settings: settingsRows(cfg, research).map(([k, v]) => [k, String(v)]),
@@ -282,8 +282,8 @@ export async function startDashboard({ cfg, bot, book, account, researchDir, res
         }
       }
 
-      if (req.method === 'POST' && url.pathname === '/api/reset-day') {
-        bot.resetDay();
+      if (req.method === 'POST' && url.pathname === '/api/reset-pnl') {
+        bot.resetPnl();
         return send(res, 200, { ok: true });
       }
 

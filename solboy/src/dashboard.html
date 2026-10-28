@@ -332,7 +332,7 @@ code { font-family: var(--mono); font-size: 12px; color: var(--sky); word-break:
 
   <section class="stats">
     <div class="card cut"><div class="label"><span class="ic">$</span>Total PnL</div><div class="big" id="score">0</div><div class="sub" id="today">today 0</div></div>
-    <div class="card cut"><div class="label"><span class="ic">♥</span>HP · daily risk left</div><div class="bar hp" id="hpBar"><i id="hp"></i></div><div class="sub" id="hpText">-</div><button class="mini" id="resetDay" title="Start today's profit/loss from zero">↺ Reset today</button></div>
+    <div class="card cut"><div class="label"><span class="ic">♥</span>HP · daily risk left</div><div class="bar hp" id="hpBar"><i id="hp"></i></div><div class="sub" id="hpText">-</div><button class="mini" id="resetDay" title="Reset your profit/loss to 0">↺ Reset PnL</button></div>
     <div class="card cut"><div class="label"><span class="ic">✓</span>Win rate</div><div class="big" id="acc">-</div><div class="sub" id="wl">0W · 0L</div></div>
     <div class="card cut"><div class="label"><span class="ic">↯</span>Streak</div><div class="big" id="streak">-</div><div class="sub" id="streakSub">no closed trades yet</div></div>
     <div class="card cut"><div class="label"><span class="ic">★</span>Level</div><div class="big" id="level">LVL 1</div><div class="bar xp"><i id="xp"></i></div><div class="sub" id="xpText">0 / 10 XP</div></div>
@@ -494,7 +494,7 @@ function render() {
   pb.innerHTML = S.paused ? 'Paused · resume <kbd>P</kbd>' : 'Pause copying <kbd>P</kbd>';
 
   countTo($('score'), s.totalPnl);
-  $('today').innerHTML = `today <span class="${cls(S.todayPnl)}">${fmt(S.todayPnl)} SOL</span> <button class="mini inline" data-reset-day title="Start today's profit/loss from zero">↺ reset</button>`;
+  $('today').innerHTML = `today <span class="${cls(S.todayPnl)}">${fmt(S.todayPnl)} SOL</span> <button class="mini inline" data-reset-pnl title="Reset your profit/loss to 0">↺ reset</button>`;
   const left = Math.max(0, S.dailyLossLimit + Math.min(0, S.todayPnl)), frac = left / S.dailyLossLimit;
   $('hp').style.width = `${frac * 100}%`;
   $('hpBar').className = `bar hp${frac < 0.3 ? ' low' : frac < 0.6 ? ' mid' : ''}`;
@@ -746,11 +746,11 @@ function renderLoadout() {
   };
 }
 
-document.addEventListener('click', (e) => { if (e.target.closest('[data-reset-day]')) resetDay(); });
-$('resetDay').onclick = () => resetDay();
-async function resetDay() {
-  if (!confirm("Reset today's profit/loss to 0? Your daily loss limit fills back up and SolBoy can buy again. Past trades stay in your history.")) return;
-  try { await api('/api/reset-day', {}); toast('win', 'Fresh start', `Today's profit/loss is back to 0. ${S.dailyLossLimit} SOL of daily risk available.`); juice('win'); refresh(); }
+document.addEventListener('click', (e) => { if (e.target.closest('[data-reset-pnl]')) resetPnl(); });
+$('resetDay').onclick = () => resetPnl();
+async function resetPnl() {
+  if (!confirm('Reset your profit/loss to 0?\n\nYour total and today\'s profit, win rate, streak and chart start fresh from now, and your daily loss limit fills back up. Your trade history is kept. Open positions stay open.')) return;
+  try { await api('/api/reset-pnl', {}); toast('win', 'Fresh start', `Profit/loss is back to 0. ${S.dailyLossLimit} SOL of daily risk available.`); juice('win'); refresh(); }
   catch (e) { toast('loss', "Couldn't reset", e.message); }
 }
 

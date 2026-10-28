@@ -1,6 +1,9 @@
+**New in 1.2.2**
+- **Reset PnL now resets everything you see:** the big total, today's profit, win rate, streak, chart and wallet stats all go back to 0 (before, only today's number and the daily loss limit did). Your trade history is kept, and the daily loss limit refills.
+
 **New in 1.2.1**
 - **Scans fixed:** research requests are smaller, so they fit Groq's free limits, and if one free AI model says no, SolBoy automatically tries the next one. If a scan still fails, the dashboard now tells you why.
-- **Reset today's PnL** is easier to find: a ↺ reset button right next to today's profit/loss (and under the HP bar). You can also ask SolBoy: "reset my daily pnl".
+- **Reset PnL** is easy to find: a ↺ reset button right next to today's profit/loss (and under the HP bar). You can also ask SolBoy: "reset my pnl".
 
 **Also in 1.2.0**
 - **Straight-to-the-point research, like GMGN's AI overview:** every report now opens with *What it is*, *Why it's pumping* (or dumping) with the real numbers (price change, volume spike, buyers vs sellers, the X post behind it), and the *Biggest risk*. No more vague "maybe"s.

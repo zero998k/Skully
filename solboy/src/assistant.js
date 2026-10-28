@@ -37,8 +37,8 @@ const TOOLS = [
     parameters: { type: 'object', properties: { paused: { type: 'boolean' } }, required: ['paused'] },
   },
   {
-    name: 'reset_day',
-    description: "Propose resetting today's profit/loss (daily PnL) to zero. This refills the daily loss limit (HP bar) so SolBoy can buy again. Past trades stay in history.",
+    name: 'reset_pnl',
+    description: "Propose resetting the user's profit/loss (PnL) to zero: total PnL, today's PnL, win rate, streak and chart start fresh, and the daily loss limit (HP bar) refills. Past trades stay in the history.",
     parameters: { type: 'object', properties: {} },
   },
   {
@@ -70,7 +70,7 @@ TOOLS.push(...Object.entries(READ_TOOLS).map(([name, t]) => ({ name, description
 
 const GUIDE = `SolBoy is a Solana meme coin copy-trading app that runs on the user's own computer. It watches wallets the user picks and copies their buys and sells about 1-3 seconds later through Jupiter, using a free Helius connection.
 Modes: Paper (practice with real prices, no money) and Real money (trades SOL from the user's own SolBoy wallet; switched on the Account tab after depositing; withdrawals there too). Paper and real-money trades are tracked separately.
-Copy rules (Loadout tab): by default only a wallet's FIRST buy of a coin is copied (not when they add more), and SolBoy sells only when they fully sell out (partial sells are ignored); both can be switched. Safety features: daily loss limit (the HP bar; at zero, no new buys until tomorrow or until the user clicks Reset today), max open positions, skip tokens with mint/freeze authority, skip buys too slow to copy, optional take profit / stop loss, pause copying. Removing a wallet you still hold tokens from keeps following its sells until they're sold.
+Copy rules (Loadout tab): by default only a wallet's FIRST buy of a coin is copied (not when they add more), and SolBoy sells only when they fully sell out (partial sells are ignored); both can be switched. Safety features: daily loss limit (the HP bar; at zero, no new buys until tomorrow or until the user resets their PnL with the ↺ reset button), max open positions, skip tokens with mint/freeze authority, skip buys too slow to copy, optional take profit / stop loss, pause copying. Removing a wallet you still hold tokens from keeps following its sells until they're sold.
 Dashboard: Positions, Live feed, PnL curve, tabs Intel (AI token reports with a TL;DR; Scan box), History, Wallets (ranked, add/remove), Loadout (settings), Account (deposit QR, mode switch, withdraw, key backup). Keys: A add wallet, P pause, S sound, 1-5 tabs.
 Copy trading usually loses money even when the copied wallet wins (you buy after them at a worse price, fees ~1% each way on Pump.fun). Judge a wallet after ~10 closed trades. Free Helius plan: about 3-10 wallets.`;
 
@@ -159,8 +159,8 @@ export function createAssistant({ cfg, bot, book, research, getState }) {
         const held = book.positions.entries().filter(([, p]) => p.source === w.address).length;
         return { tool: call.name, args: { nickname: w.label }, summary: `Remove wallet ${w.label}${held ? ` (you hold ${held} token(s) from it, so SolBoy keeps following its sells for those)` : ''}` };
       }
-      case 'reset_day':
-        return { tool: call.name, args: {}, summary: "Reset today's profit/loss to 0 (your daily loss limit fills back up)" };
+      case 'reset_pnl':
+        return { tool: call.name, args: {}, summary: 'Reset your profit/loss to 0 (totals, today and the daily loss limit start fresh; history is kept)' };
       case 'set_copying': {
         const paused = a.paused === true || a.paused === 'true';
         if (paused === bot.isBuyingPaused()) throw new Error(`copying is already ${paused ? 'paused' : 'running'}`);
@@ -287,8 +287,8 @@ export function createAssistant({ cfg, bot, book, research, getState }) {
       case 'set_copying':
         bot.setBuyingPaused(p.args.paused);
         break;
-      case 'reset_day':
-        bot.resetDay();
+      case 'reset_pnl':
+        bot.resetPnl();
         break;
       case 'sell_position':
         await bot.sellNow(p.args.mint);
