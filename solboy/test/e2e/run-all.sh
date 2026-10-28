@@ -39,46 +39,33 @@ fresh_app() { # $1 = folder; $2 = extra .env lines
   true
 }
 
-echo "1/5 Dashboard: every feature..."
+echo "1/4 Dashboard: every feature..."
 fresh_app "$OUT/app"
 start_fake full
 (sleep 1200 | "$OUT/app/SolBoy" > "$OUT/app-full.txt" 2>&1) &
 timeout 600 node full.cjs "$OUT" "$OUT/app" > "$OUT/full.json"
 stop_all
 
-echo "2/5 Terminal menu..."
+echo "2/4 Terminal menu..."
 start_fake term
 python3 term.py "$OUT/app/SolBoy" 1 "" 2 "" 3 "" 4 "" "tp 40" "sl -15" "sl 120" "tp" "tp off" \
   "add 5NU3oN4fNnx1CknHtaH8kGPHAaK4UJ3X4E2WdEyY3h1y buddy" "remove buddy" reset account "ask hey" "blah" > "$OUT/term.txt"
 stop_all
 
-echo "3/5 Online server mode..."
+echo "3/4 Online server mode..."
 rm -rf "$OUT/srv" && mkdir -p "$OUT/srv" && cp "$OUT/SolBoy" "$OUT/srv/SolBoy"
 printf 'SETUP_CODE=k7q2m9x4\nJUPITER_API_URL=http://127.0.0.1:18902\n' > "$OUT/srv/.env"
 start_fake server
 timeout 300 node server-test.cjs "$OUT" > "$OUT/server.json"
 stop_all
 
-echo "4/5 One-click update to $NEXT..."
+echo "4/4 One-click update to $NEXT..."
 fresh_app "$OUT/upd" "SOLBOY_UPDATE_API=http://127.0.0.1:18903/repos/zero998k/Skully
 SOLBOY_UPDATE_SITE=http://127.0.0.1:18903/gh"
 start_fake update
 curl -s -X POST "http://127.0.0.1:18900/set?release=1" >/dev/null
 (sleep 1200 | "$OUT/upd/SolBoy" > "$OUT/app-update.txt" 2>&1) &
 timeout 300 node update.cjs "$OUT" "$OUT/upd" > "$OUT/update.json"
-stop_all
-
-echo "5/5 Pulse trading terminal..."
-fresh_app "$OUT/pulse" "PUMPPORTAL_WS_URL=ws://127.0.0.1:18904
-SOL_PRICE_URL=http://127.0.0.1:18903/price
-GECKO_API_URL=http://127.0.0.1:18903/gecko
-PULSE_ALLOW_LOCAL_URLS=1
-PUMPPORTAL_API_URL=http://127.0.0.1:18903/pp-api
-PUMP_API_URL=http://127.0.0.1:18903/pump-api"
-node -e "const f='$OUT/pulse/config.json',c=JSON.parse(require('fs').readFileSync(f));c.pulse={backfillGapMs:300};require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
-start_fake pulse
-(sleep 1200 | "$OUT/pulse/SolBoy" > "$OUT/app-pulse.txt" 2>&1) &
-timeout 300 node pulse.cjs "$OUT" > "$OUT/pulse.json"
 stop_all
 
 node check.cjs "$OUT" "$VERSION" "$NEXT"

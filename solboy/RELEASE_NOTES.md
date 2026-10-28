@@ -1,3 +1,7 @@
+**New in 1.9.0**
+- **Pulse removed:** SolBoy is back to doing one thing really well, copy trading. Use Axiom (or any terminal) for finding coins.
+- **Copy trading prices brand-new Pump.fun coins on its own:** it reads the coin's bonding curve straight from the chain, so paper trades, take profit and stop loss work on coins Jupiter can't price yet.
+
 **New in 1.8.0**
 - **Same coins as Axiom with "Pump" ticked:** a Pump.fun coin that graduated now stays in Migrated when you filter to Pump only (before, it was hidden because it trades on PumpSwap after graduating).
 - **Set where Final Stretch starts:** Pulse → ⚙ → "Final Stretch starts at this bonding curve %" (45% by default).

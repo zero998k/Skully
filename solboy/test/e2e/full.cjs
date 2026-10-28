@@ -143,6 +143,12 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.liveSold = (await S()).inventory.length === 0 ? (await lastTrade()).action : 'still held';
   const w = await (await fetch('http://127.0.0.1:18900/state', { method: 'POST' })).json();
   R.swapsSentOnChain = w.sent.filter((s) => s.kind === 'swap').length;
+  // real money, brand-new Pump.fun coin read from the logs: bought straight on its curve through PumpPortal
+  const lp = await F('/emit-pump?side=buy&sol=1');
+  R.livePumpBought = await until(async () => (await S()).inventory.some((x) => x.mint === lp.mint), 10000);
+  R.livePumpTradeLocal = (await (await fetch('http://127.0.0.1:18903/pp/tradelocal')).json()).map((x) => `${x.action}:${x.mint === lp.mint}`).join();
+  await F('/set?mult=1'); await F(`/emit-pump?side=sell&mint=${lp.mint}&tokens=900000000000000000`);
+  R.livePumpSold = await until(async () => !(await S()).inventory.some((x) => x.mint === lp.mint), 10000);
   await sleep(10500); await key('4'); await sleep(800);
   await p.fill('#wdTo', '5NU3oN4fNnx1CknHtaH8kGPHAaK4UJ3X4E2WdEyY3h1y'); await p.fill('#wdAmt', '0.3');
   await p.click('#wdForm button[type=submit]'); await sleep(2500);
@@ -189,6 +195,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await p.setViewportSize({ width: 390, height: 900 }); await key('3'); await sleep(500);
   await p.screenshot({ path: `${E}/5-phone-loadout.png`, fullPage: true });
   R.phoneOverflow = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+  R.noPulseLink = (await p.locator('#pulseLink').count()) === 0 && (await fetch('http://localhost:7777/pulse')).status === 404;
   R.errors = errors; R.fakeUnhandled = w2.log;
   console.log(JSON.stringify(R, null, 1));
   await b.close();

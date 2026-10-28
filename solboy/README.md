@@ -116,36 +116,6 @@ Edit `config.json` in the app's folder with any text editor (Notepad or TextEdit
 
 For Pump.fun coins, SolBoy reads the watched wallet's trade straight from the notification at the earliest moment the network reports it ("processed"), checks the coin and prepares the order at the same time, and buys straight on the bonding curve. The dashboard shows ⚡ how long each copy took, from their trade to your order going out. Trades on other exchanges are downloaded first, which adds about half a second. How fast the order then lands is up to the network: Axiom and similar terminals pay for priority landing services; SolBoy uses your normal Helius connection and priority fee.
 
-## Pulse: the trading terminal
-
-Click **📈 Pulse** at the top of the dashboard (or go to `http://localhost:7777/pulse`). It works like Axiom's Pulse page, for free:
-
-- **Three live columns:** **New Pairs** (coins launched seconds ago), **Final Stretch** (coins past 45% of their bonding curve) and **Migrated** (coins that finished the curve and moved to a DEX). Hovering over a column pauses it so cards don't jump while you read.
-- **Every card shows:** age, socials (X, website, Telegram, search the address on X), holders, the creator's earlier coins, volume, market cap, fees, transactions, buys vs sells, bonding curve progress, Dex paid, "dev sold" and reused X accounts, plus the percentages: **top 10 holders, dev, snipers, insiders, bundlers**.
-- **Filters (⚙ Filters on each column):** search and exclude keywords, launchpads, and the same Audit, $ Metrics and Socials filters as Axiom (age, top 10 %, dev %, snipers %, insiders %, bundle %, holders, dev migrations, dev coins created, liquidity, volume, market cap, curve %, fees, txns, buys, sells, X reuses, has X / website / Telegram / any social, Dex paid, address ends in "pump"). Three presets, apply to all columns, and import, export or share your filters with friends.
-- **The story behind each coin:** every card shows the X post the coin came from (or the creator's description), and hovering over the picture shows a big preview. Each coin page opens with a story strip: a one-line **✨ Story** written by your free Groq AI (what the coin is about and where it comes from, never advice), the X post with who posted it and its likes, the website's title and the creator's description.
-- **⚡ quick buy** on every card buys the amount typed in the column header.
-- **Click a coin** for its page: a live chart (market cap or price; 1s, 15s, 1m, 5m), every buy and sell as it happens (filter by dev, KOL, snipers, bundlers, big buys), holders with % held, what each bought and sold and their profit, top traders, snipers and bundles (still holding or sold), and the dev's other coins. **🐀 Analyze insiders** checks who funded the top holders' wallets: wallets funded by the creator are insiders, and holders funded by the same wallet are a cluster.
-- **Trade box:** buy with preset amounts, sell 25/50/100%, set slippage, and see your position's profit. **⚡ Quick trade** (top right) opens a floating trade box you can drag anywhere, and **⧉** pops it out into its own small window.
-- **KOL wallets:** add them under ⚙ (top right) to see a KOL tag wherever they trade or hold. Your copied wallets are tagged too.
-
-Pulse trades with the same SolBoy wallet and mode as copy trading: paper mode by default, real money when you switch it on in the Account tab. Coins you buy show up in your positions, and your take profit and stop loss apply to them too.
-
-**Where the data comes from (all free):** PumpPortal's public live feed (every Pump.fun and Bonk launch, trade and migration), Pump.fun's coin lists (to fill the columns when SolBoy starts; the board is also saved in `data/pulse-cache.json`), GeckoTerminal for the recent trades of coins SolBoy didn't watch from launch, IPFS for coin pictures (fetched once by SolBoy and kept in memory), DexScreener for migrated coins, GeckoTerminal for older charts, and your own Helius connection for holders, the launch check and the insider check. For brand-new coins Jupiter can't trade yet, real-money trades are built by PumpPortal (it charges a 0.5% fee on those trades).
-
-**Is everything working on real coins?** Click ⚙ (top right of Pulse) → **📡 Live data check → Check now**. It tests every source above from your computer and shows ✓ or ✗ for each.
-
-**How live it is:** New Pairs, Final Stretch and the curve coins' charts update from PumpPortal's feed the moment each trade arrives (the board refreshes twice a second, an open coin's trades are pushed instantly). Migrated coins you have open are watched straight on the chain: SolBoy follows the pool's two vaults through your Helius connection at "processed" speed, so every trade moves the chart within about half a second instead of waiting for DexScreener (about 20 seconds). The top bar shows **⏱ how far behind the chain** the feed really is, measured every minute while Pulse is open, and each coin's market cap shows where its price comes from: **● live**, **● live (pool)** or **● ~20s delay**.
-
-**What's different from Axiom:**
-- Axiom runs its own Solana servers, so it can be a few hundred milliseconds ahead of a free feed. The delay meter shows you the real gap.
-- Buying takes 1 to 3 seconds to land (Jupiter or PumpPortal, then the chain); Axiom uses paid fast-landing services.
-- Live data covers **Pump.fun and Bonk** launches (the launchpads that matter most) plus their migrations. Other launchpads are listed in the filter but marked "soon".
-- Snipers and bundles: bundled buys land in the same block as the launch, so SolBoy reads each Final Stretch coin's first transactions from the chain (and any coin you open) to get them exact. Other New Pairs coins show what the live feed saw.
-- Insiders are worked out when you click Analyze insiders, not for every coin.
-- Recent Visitors and Pro Traders are Axiom's own data, so those two filters are greyed out.
-- Holders, dev coins and X-reuse counts are exact for coins SolBoy saw launch. The dev and X history builds up the longer SolBoy runs.
-
 ## Ask SolBoy (built-in AI assistant)
 
 Click **Ask SolBoy** in the bottom corner of the dashboard (or press `/`). Ask anything:

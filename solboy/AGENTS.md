@@ -3,7 +3,7 @@
 SolBoy is a Solana meme coin copy-trading app for a non-technical owner. It runs on the owner's Mac (and a
 friend's Windows PC, and optionally a Linux server). It copies the buys and sells of wallets the owner picks,
 in paper (practice) or real-money mode, shows a game-style dashboard in the browser, and has a built-in
-assistant ("Ask SolBoy") on a free Groq key. (The old AI research reports were removed in 1.3.0; Pulse coin pages now have a short AI "Story" line, `src/narrative.js`, from the coin's X post, website and description.) The owner talks in short,
+assistant ("Ask SolBoy") on a free Groq key. (AI research reports were removed in 1.3.0, and the Pulse trading terminal in 1.9.0: the owner uses Axiom for finding coins.) The owner talks in short,
 casual messages; explain results in plain English, no jargon.
 
 ## Layout
@@ -12,12 +12,7 @@ casual messages; explain results in plain English, no jargon.
   starts it again when it exits with code 75 (that is how one-click updates restart it). `src/index.js`
   is the app itself.
 - `src/bot.js` copy trading (detect a watched wallet's trade, copy it, take profit / stop loss, copy rules).
-  `src/detect.js` turns a transaction into buys and sells. `src/jupiter.js` swaps. `src/rpc.js` rate limiter.
-- `src/pulse.js` Pulse trading terminal backend: PumpPortal live feed, per-coin state (curve, trades, wallets,
-  dev/sniper/bundler tags), metrics, Axiom-style filters (`passes`), DexScreener enrichment, on-chain launch check
-  (backfill) and insider check. `src/pulse.html` the Pulse page (baked into `src/pulse-html.js` with the
-  lightweight-charts library by `npm run embed`). Manual trades: `bot.manualTrade` (Jupiter, falling back to the
-  curve price in paper mode and to PumpPortal's trade-local API in real-money mode).
+  `src/detect.js` turns a transaction (or a Pump.fun trade event in its logs) into buys and sells; `bot.js` reads Pump.fun bonding curves from the chain to price coins Jupiter can't route yet. `src/jupiter.js` swaps. `src/rpc.js` rate limiter.
 - `src/assistant.js` Ask SolBoy (tools only *propose* changes; the owner clicks Do it).
 - `src/settings.js` settings that can change while running (Quick settings, assistant, terminal `tp`/`sl`).
 - `src/server.js` dashboard HTTP server and API. `src/dashboard.html` the whole dashboard (one file),
@@ -56,4 +51,4 @@ Pushes without a version bump just check that the build works.
 - Settings, keys, wallets and trades live in files next to the app; updates must never touch them.
 - Keep it free: no paid APIs by default. Groq is the free AI.
 - Real money: the assistant must never switch real-money mode on, withdraw or reveal keys.
-- Keep the style: matte black with bright hot pink (#ff2d95) accents (losses and sells stay red), cartoony sticker look on the dashboard, dense Axiom-like Pulse; works on a phone.
+- Keep the style: matte black with bright hot pink (#ff2d95) accents (losses and sells stay red), cartoony sticker look on the dashboard; works on a phone.

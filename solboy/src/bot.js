@@ -11,7 +11,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * The copy-trading engine. Everything it talks to is passed in so it can be tested without a network.
  * The book says whether we're paper or real-money trading, and holds the trading keypair.
  */
-export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
+const PUMP_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
+
+export function createBot({ cfg, connection, book, rpcFetch }) {
   const positions = book.positions;
   const seen = new Set();
   const locks = new Map();
@@ -84,6 +86,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     if (fast.length) {
       for (const t of fast) {
         t.seenAt = seenAt;
+        if (t.curve) rememberCurve(t.mint, t.curve);
         log(`${w.label} ${t.side.toUpperCase()} ${short(t.mint)} for ${t.solAmount.toFixed(3)} SOL (seen live)`);
         if (t.side === 'buy') await withLock(t.mint, () => copyBuy(w, t));
         else await withLock(t.mint, () => copySell(w, t));
@@ -165,7 +168,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
       quote = prefetched ? await prefetched : await getQuote({ inputMint, outputMint, amount: amountRaw.toString(), slippageBps });
       if (quote instanceof Error) throw quote;
     } catch (e) {
-      const c = pulse?.curveOf(mint);
+      const c = await curveOf(mint);
       if (!c) throw e;
       if (cfg.dryRun) return { outRaw: curveOut(side, c, amountRaw), sig: null, via: 'curve', sentAt: Date.now() };
       return pumpPortalSwap(side, mint, amountRaw, slippageBps, prioLamports);
@@ -179,6 +182,31 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
   async function curveSwap(side, mint, amountRaw, slippageBps, curve) {
     if (cfg.dryRun) return { outRaw: curveOut(side, curve, amountRaw), sig: null, via: 'curve', sentAt: Date.now() };
     return pumpPortalSwap(side, mint, amountRaw, slippageBps);
+  }
+
+  // A Pump.fun coin's bonding curve, read straight from the chain (or from the last trade seen in the logs), so
+  // brand-new coins Jupiter can't price yet still get a price. null once the curve is complete (or for other coins).
+  const curves = new Map();
+  function rememberCurve(mint, curve) {
+    curves.set(mint, { at: Date.now(), curve });
+    if (curves.size > 500) curves.delete(curves.keys().next().value);
+  }
+  async function curveOf(mint) {
+    const hit = curves.get(mint);
+    if (hit && Date.now() - hit.at < 2000) return hit.curve;
+    let curve = null;
+    try {
+      const [pda] = PublicKey.findProgramAddressSync([Buffer.from('bonding-curve'), new PublicKey(mint).toBuffer()], PUMP_PROGRAM);
+      const info = await connection.getAccountInfo(pda, 'processed');
+      const d = info?.data;
+      // layout: 8-byte id, virtual tokens, virtual SOL, real tokens, real SOL, supply (u64 each), complete (bool at 48)
+      if (d?.length >= 49 && d[48] === 0) {
+        const vTokens = Number(d.readBigUInt64LE(8)) / 1e6, vSol = Number(d.readBigUInt64LE(16)) / 1e9;
+        if (vTokens > 0 && vSol > 0) curve = { vSol, vTokens };
+      }
+    } catch {}
+    rememberCurve(mint, curve);
+    return curve;
   }
 
   // Pump.fun curve maths (constant product on virtual reserves, ~1% fee). Tokens have 6 decimals.
@@ -226,45 +254,9 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
       const q = await getQuote({ inputMint: mint, outputMint: WSOL, amount: String(tokensRaw), slippageBps: cfg.sellSlippageBps });
       return BigInt(q.outAmount);
     } catch {
-      const c = pulse?.curveOf(mint);
-      if (c) return curveOut('sell', c, BigInt(tokensRaw));
-      const p = pulse?.priceSol(mint);
-      return p ? BigInt(Math.floor((Number(tokensRaw) / 1e6) * p * LAMPORTS)) : null;
+      const c = await curveOf(mint);
+      return c ? curveOut('sell', c, BigInt(tokensRaw)) : null;
     }
-  }
-
-  /** A buy or sell you made yourself (Pulse quick trade). Sells reuse the normal sell path. */
-  async function manualTrade({ mint, side, sol, percent, solAmount, initial, slippagePct, prioritySol }) {
-    new PublicKey(mint);
-    const slip = slippagePct ? Math.round(Number(slippagePct) * 100) : null;
-    const prio = Number(prioritySol) > 0 ? Math.min(Math.round(Number(prioritySol) * LAMPORTS), 50_000_000) : null; // capped at 0.05 SOL
-    if (side === 'sell') {
-      const pos = positions.get(mint);
-      if (!pos) throw new Error("You don't hold this coin.");
-      let fraction = Math.min(1, Math.max(0.01, Number(percent ?? 100) / 100));
-      if (solAmount != null || initial) {
-        // sell a SOL amount's worth (or your initial investment): work out what share of the position that is
-        const value = await valueOf(mint, pos.tokens);
-        if (!value) throw new Error("Can't price this coin right now, so a SOL amount can't be worked out. Sell by % instead.");
-        const want = initial ? pos.solSpent : Number(solAmount);
-        if (!(want > 0)) throw new Error('Pick an amount to sell.');
-        fraction = Math.min(1, (want * LAMPORTS) / Number(value));
-      }
-      return withLock(mint, () => sellPosition(mint, fraction, initial ? 'sold initial investment (Pulse)' : 'sold by you (Pulse)', slip, true, prio));
-    }
-    const amount = Number(sol);
-    if (!(amount > 0) || amount > 1000) throw new Error('Enter how much SOL to buy with, like 0.1.');
-    if (cfg.blocklist?.includes(mint)) throw new Error("That coin is on your blocklist.");
-    return withLock(mint, async () => {
-      const lamports = BigInt(Math.round(amount * LAMPORTS));
-      const { outRaw, sig } = await swap('buy', mint, lamports, slip ?? cfg.buySlippageBps, null, prio);
-      const pos = positions.get(mint);
-      if (pos) positions.update(mint, { solSpent: pos.solSpent + amount, boughtTotal: (pos.boughtTotal ?? pos.solSpent) + amount, tokens: (BigInt(pos.tokens) + outRaw).toString() });
-      else positions.open(mint, { source: 'manual', sourceLabel: 'You (Pulse)', solSpent: amount, boughtTotal: amount, soldTotal: 0, tokens: outRaw.toString(), openedAt: new Date().toISOString() });
-      log(c.green(`  ${tag()}BOUGHT ${amount} SOL of ${short(mint)}`) + ' (you, from Pulse)' + (sig ? `  tx: ${sig}` : ''));
-      recordTrade(book.tradeLogFile, { action: `${tag()}buy`, mint, wallet: 'You (Pulse)', sol: amount, reason: 'bought by you (Pulse)', tx: sig });
-      return { ok: true, side: 'buy', sol: amount, tokens: outRaw.toString(), sig };
-    });
   }
 
   async function copyBuy(w, t) {
@@ -552,7 +544,6 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     },
     sellAll,
     sellNow: (mint) => withLock(mint, () => sellPosition(mint, 1, 'sold by you from the dashboard')),
-    manualTrade,
     valueOf,
     addWallet,
     removeWallet,
