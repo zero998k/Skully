@@ -1,3 +1,6 @@
+**New in 1.9.1**
+- **Coin scans in under 15 seconds:** the Finder reads a coin's early trades in parallel and checks every buyer's holdings in one go. On a very busy coin it stops going back after a few seconds and shows the earliest trades it reached (it tells you when that happens). If your Helius plan has the "oldest first" lookup, SolBoy uses it and jumps straight to the launch. The time each scan took shows next to the coin.
+
 **New in 1.9.0: Wallet Finder**
 - **Find the wallets behind coins that ran:** open the new **Finder** tab (key 5) and paste one or more coins from Axiom. SolBoy lists each coin's early buyers with what they spent, the market cap they got in at, what they sold, and their profit, tagged dev / bundle / sniper. Paste several coins and it shows the wallets that were early **and** in profit on more than one of them.
 - **Full wallet profile:** click **Profile** on any wallet (or paste a wallet) to see its net worth, SOL balance and every coin it holds with values, win rate, profit for 7 / 30 days and overall, typical hold time and entry market cap, trading style, a "good to copy?" verdict, best and worst trades, and every coin it traded.

@@ -91,6 +91,7 @@ check('dashboard', 'real money: a brand-new Pump.fun coin is bought on its curve
 check('dashboard', 'Pulse is gone from the dashboard', f.noPulseLink === true, f.noPulseLink);
 
 check('finder', 'pasted coins: wallets early and in profit on both, with sniper/dev tags', fl.finderMulti === true && fl.finderSmartOnBoth === true && fl.finderTags === true, fl.finderSmartOnBoth);
+check('finder', 'each coin scanned in under 15 seconds (free plan path, fast lookup tried once)', fl.finderCoinSeconds?.length === 2 && fl.finderCoinSeconds.every((x) => x < 15) && fl.finderTriedFast === 1, `${fl.finderCoinSeconds} tried ${fl.finderTriedFast}`);
 check('finder', 'wallet profile: verdict, net worth, holdings', /good to copy/.test(fl.finderVerdict ?? '') && fl.finderNetWorth === '14.90' && fl.finderHolds === true, `${fl.finderVerdict} ${fl.finderNetWorth}`);
 check('finder', 'PnL calendar with green and red days', fl.finderProfile === true && fl.finderCalDays >= 6, fl.finderCalDays);
 check('finder', 'linked wallet found with high confidence and reasons', fl.finderLinked === true && /same funder|same wallet/i.test(fl.finderLinkedWhy ?? '') && /same block/.test(fl.finderLinkedWhy ?? ''), fl.finderLinkedWhy);

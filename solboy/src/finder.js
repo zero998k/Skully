@@ -12,10 +12,10 @@ import { short } from './log.js';
 
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 const TOKEN_2022 = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCCEpPxuEb');
+const ATA_PROGRAM = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWAN6qDZTWnPC9DH');
 const SOL_PRICE_URL = () => process.env.SOL_PRICE_URL || `https://lite-api.jup.ag/price/v3?ids=${WSOL}`;
 const LAMPORTS = 1e9;
 const HISTORY_SIGS = 1500; // transactions read for a profile
-const COIN_SIGS = 60_000; // how far back a coin's trades are paged to find its launch
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Exchange hot wallets: money from or to these says nothing about who owns a wallet, so they never count as links.
@@ -343,16 +343,78 @@ export function createFinder({ cfg, connection, bot }) {
     return { address, funder: funderInfo, linked, checkedCoins: recentCoins.length };
   }
 
-  // ---- early buyers of a coin ----
+  // ---- early buyers of a coin (aim: done in under 15 seconds) ----
+  let fastHistory = true; // Helius's oldest-first lookup (paid Helius plans); switched off after it's refused once
+  async function earliestTrades(mint, step) {
+    if (!fastHistory) return null;
+    try {
+      const out = [];
+      let paginationToken;
+      for (let page = 0; page < 3; page++) {
+        const r = await connection._rpcRequest('getTransactionsForAddress', [mint, { transactionDetails: 'full', sortOrder: 'asc', limit: 100, encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed', filters: { status: 'succeeded' }, ...(paginationToken ? { paginationToken } : {}) }]);
+        if (r.error || !Array.isArray(r.result?.data)) throw new Error(r.error?.message ?? 'no data');
+        out.push(...r.result.data);
+        step(`Reading the coin's first trades: ${out.length}…`);
+        paginationToken = r.result.paginationToken;
+        if (!paginationToken || r.result.data.length < 100) break;
+      }
+      return out;
+    } catch {
+      fastHistory = false;
+      return null;
+    }
+  }
+  /** Parsed transactions for many signatures, a few batches at a time. */
+  async function parsedFast(sigs, onStep) {
+    const out = new Array(sigs.length);
+    let next = 0, done = 0;
+    await Promise.all(Array.from({ length: 4 }, async () => {
+      while (next < sigs.length) {
+        const i = next; next += 10;
+        const part = await parsed(sigs.slice(i, i + 10));
+        part.forEach((tx, k) => (out[i + k] = tx));
+        done += part.length;
+        onStep?.(done, sigs.length);
+      }
+    }));
+    return out;
+  }
+  // How much of `mint` each wallet holds, from their token accounts (both token programs) in one or two requests.
+  async function holdingsOf(wallets, mint) {
+    const m = new PublicKey(mint), out = new Map(wallets.map((w) => [w, 0]));
+    const keys = wallets.flatMap((w) => [TOKEN_PROGRAM, TOKEN_2022].map((prog) => [w, PublicKey.findProgramAddressSync([new PublicKey(w).toBuffer(), prog.toBuffer(), m.toBuffer()], ATA_PROGRAM)[0]]));
+    for (let i = 0; i < keys.length; i += 100) {
+      const part = keys.slice(i, i + 100);
+      const infos = await connection.getMultipleAccountsInfo(part.map(([, k]) => k)).catch(() => []);
+      infos.forEach((acc, k) => { if (acc?.data?.length >= 72) out.set(part[k][0], out.get(part[k][0]) + Number(acc.data.readBigUInt64LE(64)) / 1e6); });
+    }
+    return out;
+  }
+
   async function buildCoin(mint, step) {
+    const saved = load(`coin-${mint}`);
+    if (saved && Date.now() - saved.at < 5 * 60_000) return saved.result;
+    const began = Date.now();
     step('Finding the coin\'s first trades…');
-    // a coin that ran can have tens of thousands of trades: page back to its launch (only the oldest are read in full)
-    const all = await signatures(mint, COIN_SIGS, null, (n) => step(`Going back to the coin's launch: ${n.toLocaleString()} trades so far…`));
-    const fromLaunch = all.length < COIN_SIGS;
-    const sigs = all.filter((s) => !s.err);
-    const early = sigs.slice(-250).reverse();
-    const txs = await parsed(early.map((s) => s.signature), (n, total) => step(`Reading early trades: ${n} of ${total}…`));
-    const launchSlot = early[0]?.slot ?? null;
+    const infoP = Promise.all([solPrice(), coinInfo([mint])]); // prices load while the chain is read
+    let txs = await earliestTrades(mint, step), fromLaunch = true;
+    if (!txs) {
+      // free plan: page back towards the launch, but only for about 7 seconds (a huge coin has too many trades)
+      const all = [];
+      let before;
+      for (;;) {
+        const page = await connection.getSignaturesForAddress(new PublicKey(mint), { limit: 1000, before });
+        all.push(...page);
+        step(`Going back to the coin's launch: ${all.length.toLocaleString()} trades so far…`);
+        if (page.length < 1000) break;
+        if (Date.now() - began > 7000) { fromLaunch = false; break; }
+        before = page.at(-1).signature;
+      }
+      const early = all.filter((x) => !x.err).slice(-200).reverse();
+      txs = await parsedFast(early.map((x) => x.signature), (n, total) => step(`Reading early trades: ${n} of ${total}…`));
+    }
+    txs = txs.filter(Boolean).sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0));
+    const launchSlot = txs[0]?.slot ?? null;
     const buyers = new Map();
     let dev = null;
     txs.forEach((tx, i) => {
@@ -367,13 +429,12 @@ export function createFinder({ cfg, connection, bot }) {
       }
     });
     step('Checking what they still hold…');
-    const [usd, info] = await Promise.all([solPrice(), coinInfo([mint])]);
+    const list = [...buyers.values()].filter((b) => b.buySol > 0).sort((a, b) => a.rank - b.rank).slice(0, 40);
+    const [[usd, info], held] = await Promise.all([infoP, holdingsOf(list.map((b) => b.wallet), mint)]);
     let priceSol = info.get(mint)?.priceSol ?? null;
     if (!priceSol) { const v = await bot.valueOf(mint, 1_000_000_000n).catch(() => null); if (v) priceSol = Number(v) / LAMPORTS / 1000; }
-    const list = [...buyers.values()].filter((b) => b.buySol > 0).sort((a, b) => a.rank - b.rank).slice(0, 40);
     for (const b of list) {
-      const res = await connection.getParsedTokenAccountsByOwner(new PublicKey(b.wallet), { mint: new PublicKey(mint) }).catch(() => ({ value: [] }));
-      b.holding = res.value.reduce((s, a) => s + Number(a.account.data.parsed?.info?.tokenAmount?.uiAmount ?? 0), 0);
+      b.holding = held.get(b.wallet) ?? 0;
       const entry = b.boughtTok ? b.buySol / b.boughtTok : null;
       b.entryMcUsd = entry && usd ? entry * 1e9 * usd : null;
       b.multiple = entry && priceSol ? priceSol / entry : null;
@@ -383,7 +444,9 @@ export function createFinder({ cfg, connection, bot }) {
       b.tags = [b.wallet === dev ? 'dev' : null, fromLaunch && b.firstSlot === launchSlot && b.wallet !== dev ? 'bundle' : null, fromLaunch && b.firstSlot - launchSlot <= 10 && b.firstSlot !== launchSlot ? 'sniper' : null].filter(Boolean);
     }
     const i = info.get(mint) ?? {};
-    return { mint, symbol: i.symbol ?? null, name: i.name ?? null, image: i.image ?? null, mcUsd: i.mcUsd ?? (priceSol && usd ? priceSol * 1e9 * usd : null), fromLaunch, scanned: early.length, buyers: list.sort((a, b) => b.pnlSol - a.pnlSol) };
+    const result = { mint, symbol: i.symbol ?? null, name: i.name ?? null, image: i.image ?? null, mcUsd: i.mcUsd ?? (priceSol && usd ? priceSol * 1e9 * usd : null), fromLaunch, scanned: txs.length, seconds: Math.round((Date.now() - began) / 100) / 10, buyers: list.sort((a, b) => b.pnlSol - a.pnlSol) };
+    save(`coin-${mint}`, { at: Date.now(), result });
+    return result;
   }
 
   // ---- "what if I'd copied them" ----

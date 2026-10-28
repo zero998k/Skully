@@ -196,11 +196,14 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   // ---- Wallet Finder: paste two coins that ran, see who was early on both, open a wallet's profile ----
   const FA = await fetch('http://127.0.0.1:18900/finder/addrs').then((r) => r.json());
   const sh = (a) => `${a.slice(0, 4)}…${a.slice(-4)}`;
+  await fetch('http://127.0.0.1:18900/finder/set?fast=0'); // free Helius plan: the oldest-first lookup is refused
   await key('5'); await sleep(300);
   await p.fill('#finderInput', `${FA.COIN_A}\n${FA.COIN_B}`); await p.click('#finderForm button[type=submit]');
   R.finderMulti = await until(async () => (await p.locator('#finderView').innerText()).includes('In profit on more than one'), 30000);
   const fv = await p.locator('#finderView').innerText();
   R.finderSmartOnBoth = (fv.match(new RegExp(sh(FA.SMART), 'g')) ?? []).length >= 3 && fv.includes('RUNA') && fv.includes('RUNB');
+  R.finderCoinSeconds = [...fv.matchAll(/scanned in ([\d.]+)s/g)].map((m) => Number(m[1]));
+  R.finderTriedFast = (await fetch('http://127.0.0.1:18900/finder/stats').then((r) => r.json())).fastCalls;
   R.finderTags = await p.locator('#finderView .ftag.sniper').count() > 0 && await p.locator('#finderView .ftag.dev').count() > 0;
   await p.screenshot({ path: `${E}/6-finder-coins.png`, fullPage: true });
   await p.locator(`[data-fprofile="${FA.SMART}"]`).first().click();

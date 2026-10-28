@@ -85,11 +85,29 @@ function sigList(addr, opts = {}) {
   return list.slice(0, opts.limit ?? 1000).map(({ s, t }) => ({ signature: s, slot: t.slot, err: null, memo: null, blockTime: t.time, confirmationStatus: 'finalized' }));
 }
 const known = (a) => BY.has(a) || COINS.has(a);
+// token accounts (ATAs) of every holder, so a holdings lookup by account address works
+const ATA = new Map();
+const ATA_PROGRAM = new web3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWAN6qDZTWnPC9DH');
+for (const [owner, m] of HOLD) for (const [mint, n] of m) {
+  const key = web3.PublicKey.findProgramAddressSync([new web3.PublicKey(owner).toBuffer(), new web3.PublicKey(TOKEN).toBuffer(), new web3.PublicKey(mint).toBuffer()], ATA_PROGRAM)[0].toBase58();
+  ATA.set(key, { owner, mint, n });
+}
+const S = { fastHistory: true, fastCalls: 0 };
 
 /** Answer an RPC call if it's about the finder's fake world; undefined otherwise. */
 function rpc(method, params) {
   const a = params?.[0];
   if (method === 'getTransaction' && TX.has(a)) return parsedTx(a);
+  if (method === 'getMultipleAccounts' && Array.isArray(a) && a.some((k) => ATA.has(k))) return ok(a.map((k) => {
+    const x = ATA.get(k); if (!x || x.n <= 0) return null;
+    const d = Buffer.alloc(165); new web3.PublicKey(x.mint).toBuffer().copy(d, 0); new web3.PublicKey(x.owner).toBuffer().copy(d, 32); d.writeBigUInt64LE(BigInt(Math.round(x.n * 1e6)), 64); d[108] = 1;
+    return { data: [d.toString('base64'), 'base64'], executable: false, lamports: 2039280, owner: TOKEN, rentEpoch: 0, space: 165 };
+  }));
+  if (method === 'getTransactionsForAddress' && COINS.has(a)) {
+    S.fastCalls++;
+    if (!S.fastHistory) throw new Error('getTransactionsForAddress is only available on paid plans');
+    return { data: sigList(a, { limit: 100000 }).reverse().map((x) => parsedTx(x.signature)), paginationToken: null };
+  }
   if (!known(a)) return undefined;
   switch (method) {
     case 'getSignaturesForAddress': return sigList(a, params[1]);
@@ -109,4 +127,4 @@ function dex(p) {
   if (!list.length) return null;
   return list.map((m) => { const c = COINS.get(m); return { chainId: 'solana', dexId: 'pumpswap', pairAddress: pk(), baseToken: { address: m, name: c.name, symbol: c.symbol }, priceNative: String(c.price), priceUsd: String(c.price * 150), marketCap: c.price * 1e9 * 150, liquidity: { usd: 20000 } }; });
 }
-module.exports = { A, rpc, dex };
+module.exports = { A, S, rpc, dex };

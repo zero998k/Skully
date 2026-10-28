@@ -1201,7 +1201,7 @@ async function showCoins(mints, view) {
   for (const c of results) {
     const good = c.buyers.filter((b) => b.pnlSol > 0).length;
     html += `<div class="fsec"><div class="fhead">${c.image ? `<img src="${esc(c.image)}" alt="">` : ''}<div class="who">${esc(c.symbol || shortA(c.mint))}<small>${esc(c.name || c.mint)} · MC ${usdC(c.mcUsd)}</small></div></div>
-      <h3>Early buyers <span class="count">first ${c.scanned} trades${c.fromLaunch ? ' from launch' : ' (coin is busy: these are the oldest SolBoy could reach)'} · ${good} in profit</span></h3>
+      <h3>Early buyers <span class="count">first ${c.scanned} trades${c.fromLaunch ? ' from launch' : ' SolBoy could reach in time (very busy coin: not all the way back to launch)'} · ${good} in profit${c.seconds != null ? ` · scanned in ${c.seconds}s` : ''}</span></h3>
       ${c.buyers.length ? `<div class="fscroll"><table><tr><th>#</th><th>Wallet</th><th>Bought</th><th>Entry MC</th><th>Sold</th><th>Now</th><th>PnL</th><th></th></tr>${c.buyers.map((b) => `<tr>
         <td class="num">${b.rank}</td><td>${walletLink(b.wallet)}${b.tags.map((t) => `<span class="ftag ${t}">${t}</span>`).join('')}</td>
         <td class="num">${b.buySol.toFixed(2)} SOL</td><td class="num">${usdC(b.entryMcUsd)}</td><td class="num">${b.sellSol.toFixed(2)} SOL</td>

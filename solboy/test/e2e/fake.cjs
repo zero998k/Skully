@@ -115,6 +115,8 @@ const mainHttp = http.createServer(async (r, res) => { const b = await body(r); 
   if (u.pathname === '/pp/fund') { const to = who(u.searchParams.get('holder')); const from = who(u.searchParams.get('from')); const sig = bs58.encode(require('crypto').randomBytes(64)); P.funds.set(to, sig); P.fundSigs.set(sig, { from, to }); return json(res, { to, from }); }
   if (u.pathname === '/pp/noroute') { P.noroute.add(u.searchParams.get('mint')); return json(res, { ok: true }); }
   if (u.pathname === '/finder/addrs') return json(res, FF.A);
+  if (u.pathname === '/finder/set') { FF.S.fastHistory = u.searchParams.get('fast') !== '0'; return json(res, FF.S); }
+  if (u.pathname === '/finder/stats') return json(res, FF.S);
   if (u.pathname === '/pp/who') return json(res, { address: who(u.searchParams.get('name')) });
   if (u.pathname === '/pp/subs') return json(res, [...P.clients].map((c) => ({ newToken: c.newToken, migration: c.migration, keys: c.keys.size })));
   const q = JSON.parse(b || '{}'); const handle = (x) => { try { return { jsonrpc: '2.0', id: x.id, result: rpc(x.method, x.params) }; } catch (e) { return { jsonrpc: '2.0', id: x.id, error: { code: -32015, message: e.message } }; } };
