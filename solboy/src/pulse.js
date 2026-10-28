@@ -13,6 +13,17 @@ const PUMPPORTAL_WS = () => process.env.PUMPPORTAL_WS_URL || 'wss://pumpportal.f
 const SOL_PRICE_URL = () => process.env.SOL_PRICE_URL || 'https://lite-api.jup.ag/price/v3?ids=So11111111111111111111111111111111111111112';
 const GECKO_API = () => process.env.GECKO_API_URL || 'https://api.geckoterminal.com/api/v2';
 
+const WSOL_MINT = 'So11111111111111111111111111111111111111112';
+const PUMP_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
+const PUMP_AMM_PROGRAM = new PublicKey('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
+// The PumpSwap pool a Pump.fun coin migrates into (pool index 0, made by the coin's Pump.fun pool authority).
+function pumpSwapPool(mint) {
+  const m = new PublicKey(mint);
+  const [authority] = PublicKey.findProgramAddressSync([Buffer.from('pool-authority'), m.toBuffer()], PUMP_PROGRAM);
+  const index = Buffer.alloc(2);
+  const [pool] = PublicKey.findProgramAddressSync([Buffer.from('pool'), index, authority.toBuffer(), m.toBuffer(), new PublicKey(WSOL_MINT).toBuffer()], PUMP_AMM_PROGRAM);
+  return pool.toBase58();
+}
 const SUPPLY = 1e9; // Pump.fun and Bonk coins all have 1 billion tokens
 const PUMP_START_VTOKENS = 1_073_000_191; // virtual tokens in a fresh Pump.fun curve
 const PUMP_CURVE_TOKENS = 793_100_191; // tokens sold before the curve completes
@@ -274,7 +285,11 @@ export function createPulse({ cfg, connection }) {
     const amount = num(d.tokenAmount) ?? 0;
     const who = d.traderPublicKey;
     curve(tok, d);
-    if (d.pool && d.pool !== 'pump' && d.pool !== 'bonk') tok.pool = d.pool;
+    if (d.pool && d.pool !== 'pump' && d.pool !== 'bonk') {
+      tok.pool = d.pool;
+      tok.feedAmmTradeAt = now;
+    }
+    if (d.signature && viewers > 0 && Date.now() - lastDelaySample > (delays.length < 3 ? 8_000 : 60_000)) sampleDelay(d.signature, now);
     tok.lastTradeAt = now;
     tok.volSol += sol;
     buy ? tok.buys++ : tok.sells++;
@@ -316,6 +331,105 @@ export function createPulse({ cfg, connection }) {
       historyDirty = true;
     }
     follow(d.mint);
+  }
+
+  // ---- how far behind the chain the live feed is (measured, not guessed) ----
+  // Every minute while Pulse is open: look up one trade's block time and compare it with when it reached SolBoy.
+  // Block times are whole seconds, so this averages several samples. 2 Solana requests per sample.
+  let lastDelaySample = 0;
+  let viewers = 0;
+  const delays = [];
+  async function sampleDelay(sig, receivedAt) {
+    lastDelaySample = Date.now();
+    try {
+      await new Promise((r) => setTimeout(r, 4000));
+      const st = (await connection.getSignatureStatuses([sig])).value[0];
+      if (!st?.slot) return;
+      const bt = await connection.getBlockTime(st.slot);
+      if (!bt) return;
+      delays.push(receivedAt / 1000 - (bt + 0.5)); // a block time is rounded down to the second
+      if (delays.length > 12) delays.shift();
+    } catch {}
+  }
+  const feedDelay = () => (delays.length >= 2 ? Math.max(0.1, delays.reduce((a, b) => a + b, 0) / delays.length) : null);
+
+  // ---- live price for migrated coins you have open: watch the pool's two vaults on the chain ----
+  // Each change in the pool's token or SOL vault is a trade (or a liquidity change), seen at "processed" speed,
+  // so the chart moves with every trade instead of waiting for DexScreener. Only for coins someone is viewing.
+  const poolOf = (tok) => {
+    if (tok.dex?.pair) return tok.dex.pair;
+    try { return tok.protocol === 'pump' ? pumpSwapPool(tok.mint) : null; } catch { return null; }
+  };
+  async function watchPool(tok) {
+    if (!tok.migrated) return;
+    const pairAddr = poolOf(tok);
+    const w0 = tok.poolWatch;
+    // a pool that didn't work is tried again once DexScreener names another pool, or after 30 seconds
+    if (w0 && (w0.state === 'live' || w0.state === 'starting' || (w0.pair === pairAddr && Date.now() - w0.at < 30_000))) return;
+    if (!pairAddr) return;
+    const w = (tok.poolWatch = { state: 'starting', ids: [], pair: pairAddr, at: Date.now() });
+    try {
+      const pair = new PublicKey(pairAddr);
+      const [baseRes, quoteRes] = await Promise.all([
+        connection.getTokenAccountsByOwner(pair, { mint: new PublicKey(tok.mint) }, 'processed'),
+        connection.getTokenAccountsByOwner(pair, { mint: new PublicKey(WSOL_MINT) }, 'processed'),
+      ]);
+      if (tok.poolWatch !== w) return; // the coin was closed while this was starting
+      const base = baseRes.value[0];
+      const quote = quoteRes.value[0];
+      if (!base || !quote) return void (tok.poolWatch = { state: 'unsupported', ids: [], pair: pairAddr, at: Date.now() });
+      const amount = (data) => Number(Buffer.from(data).readBigUInt64LE(64));
+      w.base = amount(base.account.data) / 1e6;
+      w.quote = amount(quote.account.data) / 1e9;
+      w.pending = new Map();
+      const priceNow = () => (w.base > 0 ? w.quote / w.base : null);
+      const flush = (slot) => {
+        const p = w.pending.get(slot);
+        w.pending.delete(slot);
+        const price = priceNow();
+        if (price) {
+          tok.mcSol = price * SUPPLY;
+          tok.athMcSol = Math.max(tok.athMcSol, tok.mcSol);
+        }
+        if (!p || Math.abs(p.dq) < 0.0005) return;
+        if (p.db && Math.sign(p.db) === Math.sign(p.dq)) return; // both sides grew or shrank: liquidity, not a trade
+        if (Date.now() - (tok.feedAmmTradeAt ?? 0) < 15_000) return; // the feed already shows these trades, with wallets
+        const buy = p.dq > 0;
+        const sol = Math.abs(p.dq);
+        const amountTok = Math.abs(p.db) || (price ? sol / price : 0);
+        const now = Date.now();
+        tok.volSol += sol;
+        buy ? tok.buys++ : tok.sells++;
+        tok.lastTradeAt = now;
+        const trade = { sig: null, t: now, side: buy ? 'buy' : 'sell', wallet: null, sol, tokens: amountTok, mcSol: tok.mcSol, slot, source: 'pool' };
+        tok.trades.push(trade);
+        if (tok.trades.length > TRADES_KEPT) tok.trades.splice(0, tok.trades.length - TRADES_KEPT);
+        for (const fn of listeners) fn({ mint: tok.mint, trade: decorateTrade(tok, trade) });
+      };
+      const onChange = (side) => (info, ctx) => {
+        const next = side === 'base' ? amount(info.data) / 1e6 : amount(info.data) / 1e9;
+        const delta = next - w[side];
+        w[side] = next;
+        const p = w.pending.get(ctx.slot) ?? { dq: 0, db: 0 };
+        side === 'quote' ? (p.dq += delta) : (p.db += delta);
+        if (!w.pending.has(ctx.slot)) setTimeout(() => flush(ctx.slot), 120); // wait for the other vault in the same slot
+        w.pending.set(ctx.slot, p);
+      };
+      w.ids.push(connection.onAccountChange(base.pubkey, onChange('base'), 'processed'));
+      w.ids.push(connection.onAccountChange(quote.pubkey, onChange('quote'), 'processed'));
+      w.state = 'live';
+      const price = priceNow();
+      if (price) tok.mcSol = price * SUPPLY;
+    } catch {
+      if (tok.poolWatch !== w) return;
+      tok.poolWatch = { state: 'failed', ids: [], pair: pairAddr, at: Date.now() };
+    }
+  }
+  function unwatchPool(tok) {
+    const w = tok?.poolWatch;
+    if (!w) return;
+    for (const id of w.ids ?? []) connection.removeAccountChangeListener(id).catch(() => {});
+    tok.poolWatch = null;
   }
 
   // ---- housekeeping ----
@@ -462,7 +576,8 @@ export function createPulse({ cfg, connection }) {
     const twKey = handleOf(twitter) ?? twitter?.toLowerCase();
     const devHist = t.creator ? history.devs[t.creator] : null;
     const onCurve = !t.migrated && t.vSol != null;
-    const mcUsd = t.migrated && t.dex?.mcUsd != null ? t.dex.mcUsd : t.mcSol != null && usd ? t.mcSol * usd : t.dex?.mcUsd ?? null;
+    const liveAmm = t.poolWatch?.state === 'live' || Date.now() - (t.feedAmmTradeAt ?? 0) < 60_000; // a live price beats DexScreener's
+    const mcUsd = t.migrated && !liveAmm && t.dex?.mcUsd != null ? t.dex.mcUsd : t.mcSol != null && usd ? t.mcSol * usd : t.dex?.mcUsd ?? null;
     return {
       mint: t.mint, name: t.name || t.dex?.name || '', symbol: t.symbol || '', protocol: t.migrated ? t.pool ?? 'pump-amm' : t.protocol,
       launchpad: t.protocol, image: m.image || t.dex?.image || null, description: m.description || '',
@@ -565,6 +680,7 @@ export function createPulse({ cfg, connection }) {
     if (!tok.dex || Date.now() - tok.dex.at > 20_000) await enrich([tok]);
     wantMeta(tok);
     wantBackfill(tok, true);
+    if (focus.has(mint)) watchPool(tok);
     const r = row(tok);
     const names = labels();
     let chain = [];
@@ -614,6 +730,7 @@ export function createPulse({ cfg, connection }) {
       devCreated: devHist?.created ?? null,
       analysis: tok.analysis ? { at: tok.analysis.at, insiders: tok.analysis.insiders.length, clusters: tok.analysis.clusters } : null,
       pair: tok.dex?.pair ?? null,
+      priceSource: !tok.migrated ? (tok.fromBirth || tok.trades.length ? 'feed' : 'waiting') : tok.poolWatch?.state === 'live' ? 'pool' : Date.now() - (tok.feedAmmTradeAt ?? 0) < 60_000 ? 'feed' : 'dexscreener',
       dexId: tok.dex?.dexId ?? null,
     };
   }
@@ -767,7 +884,10 @@ export function createPulse({ cfg, connection }) {
     history: history5m,
     priceSol,
     curveOf,
-    status: () => ({ feed: wsState === 'live' && Date.now() - lastMessageAt > 120_000 ? 'quiet' : wsState, solUsd, tracking: tokens.size, live: subscribed.size }),
+    status: () => ({ feed: wsState === 'live' && Date.now() - lastMessageAt > 120_000 ? 'quiet' : wsState, solUsd, tracking: tokens.size, live: subscribed.size, delaySec: feedDelay() }),
+    viewing(delta) {
+      viewers = Math.max(0, viewers + delta);
+    },
     filters: () => filters,
     setFilters(next) {
       if (!next?.presets) throw new Error('Bad filters.');
@@ -778,10 +898,14 @@ export function createPulse({ cfg, connection }) {
     open(mint) {
       focus.set(mint, (focus.get(mint) ?? 0) + 1);
       follow(mint);
+      const t = tokens.get(mint);
+      if (t?.migrated) watchPool(t);
     },
     close(mint) {
       const n = (focus.get(mint) ?? 1) - 1;
-      n > 0 ? focus.set(mint, n) : focus.delete(mint);
+      if (n > 0) return focus.set(mint, n);
+      focus.delete(mint);
+      setTimeout(() => !focus.has(mint) && unwatchPool(tokens.get(mint)), 30_000); // a short grace period for page reloads
     },
     onTrade(fn) {
       listeners.add(fn);

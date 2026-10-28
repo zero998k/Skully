@@ -128,7 +128,11 @@ Pulse trades with the same SolBoy wallet and mode as copy trading: paper mode by
 
 **Where the data comes from (all free):** PumpPortal's public live feed (every Pump.fun and Bonk launch, trade and migration), DexScreener for migrated coins, GeckoTerminal for older charts, and your own Helius connection for holders, the launch check and the insider check. For brand-new coins Jupiter can't trade yet, real-money trades are built by PumpPortal (it charges a 0.5% fee on those trades).
 
+**How live it is:** New Pairs, Final Stretch and the curve coins' charts update from PumpPortal's feed the moment each trade arrives (the board refreshes twice a second, an open coin's trades are pushed instantly). Migrated coins you have open are watched straight on the chain: SolBoy follows the pool's two vaults through your Helius connection at "processed" speed, so every trade moves the chart within about half a second instead of waiting for DexScreener (about 20 seconds). The top bar shows **⏱ how far behind the chain** the feed really is, measured every minute while Pulse is open, and each coin's market cap shows where its price comes from: **● live**, **● live (pool)** or **● ~20s delay**.
+
 **What's different from Axiom:**
+- Axiom runs its own Solana servers, so it can be a few hundred milliseconds ahead of a free feed. The delay meter shows you the real gap.
+- Buying takes 1 to 3 seconds to land (Jupiter or PumpPortal, then the chain); Axiom uses paid fast-landing services.
 - Live data covers **Pump.fun and Bonk** launches (the launchpads that matter most) plus their migrations. Other launchpads are listed in the filter but marked "soon".
 - Snipers and bundles: bundled buys land in the same block as the launch, so SolBoy reads each Final Stretch coin's first transactions from the chain (and any coin you open) to get them exact. Other New Pairs coins show what the live feed saw.
 - Insiders are worked out when you click Analyze insiders, not for every coin.

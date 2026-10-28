@@ -11,7 +11,7 @@ const DEV = '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU';
 const S = { groq413: 1, groqdown: 0, apidown: 0, release: 0, corrupt: 0, mult: 1, balanceLamports: 0, held: 0n, sent: [], groq: [], swaps: [], log: [] };
 // ---- fake Pump.fun world for Pulse (PumpPortal-style feed) ----
 const P0 = Date.now(); const slotNow = () => 1000 + Math.floor((Date.now() - P0) / 400);
-const P = { chainTx: new Map(), coins: new Map(), names: new Map(), accts: new Map(), funds: new Map(), fundSigs: new Map(), clients: new Set(), noroute: new Set() };
+const P = { chainTx: new Map(), coins: new Map(), names: new Map(), accts: new Map(), funds: new Map(), fundSigs: new Map(), clients: new Set(), noroute: new Set(), vaults: new Map() };
 const pk = () => web3.Keypair.generate().publicKey.toBase58();
 const who = (name) => { if (!P.names.has(name)) P.names.set(name, pk()); return P.names.get(name); };
 const acctFor = (mint, owner) => { const k = mint + owner; if (!P.accts.has(k)) { const a = pk(); P.accts.set(k, a); P.accts.set(a, owner); } return P.accts.get(k); };
@@ -31,6 +31,10 @@ function makeTx(side, frac = 1, held = 0, mint = MINT) {
   return sig;
 }
 const ok = (value) => ({ context: { slot: 1 }, value });
+// an SPL token account (165 bytes) with the amount at byte 64, as the RPC sends it in base64
+function vaultAcct(c, key) { const d = Buffer.alloc(165); new web3.PublicKey(key === c.vaultQuote ? 'So11111111111111111111111111111111111111112' : c.mint).toBuffer().copy(d, 0); new web3.PublicKey(c.pair).toBuffer().copy(d, 32);
+  d.writeBigUInt64LE(BigInt(Math.round(key === c.vaultQuote ? c.ammQuote * 1e9 : c.ammBase * 1e6)), 64); d[108] = 1;
+  return { data: [d.toString('base64'), 'base64'], executable: false, lamports: 2039280, owner: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', rentEpoch: 0, space: 165 }; }
 function rpc(method, params) {
   switch (method) {
     case 'getSlot': return 123;
@@ -54,13 +58,16 @@ function rpc(method, params) {
       return ok([{ address: DEV, amount: '600000000', decimals: 6, uiAmount: 600, uiAmountString: '600' }, { address: WHALE, amount: '100000000', decimals: 6, uiAmount: 100, uiAmountString: '100' }]);
     case 'getTokenSupply': if (P.coins.has(params[0])) return ok({ amount: '1000000000000000', decimals: 6, uiAmount: 1e9, uiAmountString: '1000000000' });
       return ok({ amount: '1000000000', decimals: 6, uiAmount: 1000, uiAmountString: '1000' });
-    case 'getTokenAccountsByOwner': return ok(S.held > 0n ? [{ pubkey: DEV, account: { data: { program: 'spl-token', parsed: { type: 'account', info: { mint: MINT, owner: params[0], tokenAmount: { amount: S.held.toString(), decimals: 6, uiAmount: Number(S.held) / 1e6, uiAmountString: String(Number(S.held) / 1e6) } } }, space: 165 }, executable: false, lamports: 2039280, owner: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', rentEpoch: 0, space: 165 } }] : []);
+    case 'getTokenAccountsByOwner': { const c = [...P.coins.values()].find((x) => x.pair && x.pair === params[0]); if (c) { const quote = params[1]?.mint?.startsWith('So111'); const key = quote ? c.vaultQuote : c.vaultBase; return ok([{ pubkey: key, account: vaultAcct(c, key) }]); } }
+      if (params[2]?.encoding === 'base64') return ok([]); // a pool SolBoy guessed that isn't on this fake chain
+      return ok(S.held > 0n ? [{ pubkey: DEV, account: { data: { program: 'spl-token', parsed: { type: 'account', info: { mint: MINT, owner: params[0], tokenAmount: { amount: S.held.toString(), decimals: 6, uiAmount: Number(S.held) / 1e6, uiAmountString: String(Number(S.held) / 1e6) } } }, space: 165 }, executable: false, lamports: 2039280, owner: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', rentEpoch: 0, space: 165 } }] : []);
     case 'sendTransaction': {
       const raw = Buffer.from(params[0], 'base64'); const sig = bs58.encode(raw.subarray(1, 65));
       // A plain SOL transfer (withdraw): take the amount off the balance.
       try { const t = web3.Transaction.from(raw); const ix = t.instructions[0]; if (ix.programId.equals(web3.SystemProgram.programId)) { const lam = Number(ix.data.readBigUInt64LE(4)); S.balanceLamports -= lam + 5000; S.sent.push({ kind: 'transfer', to: ix.keys[1].pubkey.toBase58(), lamports: lam, sig }); return sig; } } catch {}
       S.sent.push({ kind: 'swap', sig }); return sig;
     }
+    case 'getBlockTime': return Math.floor(Date.now() / 1000) - 1; // the fake feed runs about a second behind
     case 'getSignatureStatuses': return ok(params[0].map(() => ({ slot: 1, confirmations: null, err: null, confirmationStatus: 'confirmed' })));
     default: S.log.push('unhandled ' + method); return null;
   }
@@ -86,7 +93,13 @@ const mainHttp = http.createServer(async (r, res) => { const b = await body(r); 
     if (q.hidden) return json(res, { delivered: 0, wallet: w, hidden: true });
     const n = ppSend({ signature: tsig, mint: q.mint, traderPublicKey: w, txType: buy ? 'buy' : 'sell', tokenAmount: tok, solAmount: sol, newTokenBalance: c.bal.get(w), ...ppState(c), pool: 'pump' }, (cl) => cl.keys.has(q.mint));
     return json(res, { delivered: n, wallet: w, mc: ppState(c).marketCapSol }); }
-  if (u.pathname === '/pp/migrate') { const c = P.coins.get(u.searchParams.get('mint')); c.migrated = true; return json(res, { delivered: ppSend({ signature: pk(), mint: c.mint, txType: 'migrate', pool: 'pump-amm' }, (cl) => cl.migration) }); }
+  if (u.pathname === '/pp/migrate') { const c = P.coins.get(u.searchParams.get('mint')); c.migrated = true; c.pair = pk(); c.vaultBase = pk(); c.vaultQuote = pk(); c.ammBase = 200e6; c.ammQuote = 80; P.vaults.set(c.vaultBase, c); P.vaults.set(c.vaultQuote, c); return json(res, { delivered: ppSend({ signature: pk(), mint: c.mint, txType: 'migrate', pool: 'pump-amm' }, (cl) => cl.migration) }); }
+  if (u.pathname === '/pp/amm') { const c = P.coins.get(u.searchParams.get('mint')); const sol = Number(u.searchParams.get('sol')); const buy = u.searchParams.get('side') !== 'sell';
+    const k = c.ammBase * c.ammQuote; if (buy) { c.ammQuote += sol; c.ammBase = k / c.ammQuote; } else { c.ammQuote -= sol; c.ammBase = k / c.ammQuote; }
+    const slot = slotNow(); let sent = 0;
+    for (const [id, s2] of subs) if (s2.kind === 'account' && s2.ws.readyState === 1 && (s2.key === c.vaultBase || s2.key === c.vaultQuote)) { sent++;
+      s2.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'accountNotification', params: { result: { context: { slot }, value: vaultAcct(c, s2.key) }, subscription: id } })); }
+    return json(res, { sent, mcSol: (c.ammQuote / c.ammBase) * 1e9 }); }
   if (u.pathname === '/pp/fund') { const to = who(u.searchParams.get('holder')); const from = who(u.searchParams.get('from')); const sig = bs58.encode(require('crypto').randomBytes(64)); P.funds.set(to, sig); P.fundSigs.set(sig, { from, to }); return json(res, { to, from }); }
   if (u.pathname === '/pp/noroute') { P.noroute.add(u.searchParams.get('mint')); return json(res, { ok: true }); }
   if (u.pathname === '/pp/who') return json(res, { address: who(u.searchParams.get('name')) });
@@ -98,6 +111,8 @@ const onConn = (ws) => ws.on('message', (m) => { const r = JSON.parse(m);
   if (r.method === 'logsSubscribe') { const id = nextSub++; subs.set(id, { ws, kind: 'logs' }); ws.send(JSON.stringify({ jsonrpc: '2.0', id: r.id, result: id })); }
   else if (r.method === 'signatureSubscribe') { const id = nextSub++; ws.send(JSON.stringify({ jsonrpc: '2.0', id: r.id, result: id }));
     setTimeout(() => ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'signatureNotification', params: { result: { context: { slot: 1 }, value: { err: null } }, subscription: id } })), 50); }
+  else if (r.method === 'accountSubscribe') { const id = nextSub++; subs.set(id, { ws, kind: 'account', key: r.params[0] }); ws.send(JSON.stringify({ jsonrpc: '2.0', id: r.id, result: id })); }
+  else if (r.method === 'accountUnsubscribe') { subs.delete(r.params[0]); ws.send(JSON.stringify({ jsonrpc: '2.0', id: r.id, result: true })); }
   else ws.send(JSON.stringify({ jsonrpc: '2.0', id: r.id, result: true }));
 });
 new WebSocketServer({ server: mainHttp }).on('connection', onConn);
@@ -138,7 +153,7 @@ http.createServer(async (r, res) => { const b = await body(r); const u = new URL
   if (p === '/repos/zero998k/Skully/releases') { const base = 'http://127.0.0.1:18903/dl/';
     return json(res, !S.release ? [] : [{ tag_name: 'solboy-v1.0.9', draft: false, prerelease: false, assets: [] }, { tag_name: 'v9.9.9', draft: false, prerelease: false, assets: [] }, { tag_name: REL, draft: false, prerelease: false, html_url: 'https://github.com/zero998k/Skully/releases/tag/' + REL, body: '**New:** auto-updates from the dashboard.\n- Faster research', assets: ['SolBoy-Linux-x64', 'SHA256SUMS'].map((n) => ({ name: n, browser_download_url: base + n })) }]); }
   if (p.startsWith('/dl/')) { const name = p.slice(4); let data = require('fs').readFileSync((process.env.FAKE_REL_DIR || __dirname + '/rel') + '/' + name); if (S.corrupt && name !== 'SHA256SUMS') data = Buffer.concat([data, Buffer.from('x')]); res.setHeader('content-type', 'application/octet-stream'); return res.end(data); }
-  if (p.startsWith('/tokens/v1/solana/') && [...P.coins.values()].some((c) => c.migrated && p.includes(c.mint))) return json(res, [...P.coins.values()].filter((c) => c.migrated && p.includes(c.mint)).map((c) => ({ chainId: 'solana', dexId: 'pumpswap', pairAddress: pk(), baseToken: { address: c.mint, name: c.name, symbol: c.symbol }, priceUsd: '0.00008', marketCap: 80000, liquidity: { usd: 30000 }, volume: { h24: 120000 }, txns: { h24: { buys: 900, sells: 400 } }, priceChange: { h1: 20 }, pairCreatedAt: Date.now() - 600000, info: { imageUrl: 'http://127.0.0.1:18903/img.png', websites: [{ url: 'https://example.com' }], socials: [{ type: 'twitter', url: 'https://x.com/dexpaid' }] } })));
+  if (p.startsWith('/tokens/v1/solana/') && [...P.coins.values()].some((c) => c.migrated && p.includes(c.mint))) return json(res, [...P.coins.values()].filter((c) => c.migrated && p.includes(c.mint)).map((c) => ({ chainId: 'solana', dexId: 'pumpswap', pairAddress: c.pair, baseToken: { address: c.mint, name: c.name, symbol: c.symbol }, priceUsd: '0.00008', marketCap: 80000, liquidity: { usd: 30000 }, volume: { h24: 120000 }, txns: { h24: { buys: 900, sells: 400 } }, priceChange: { h1: 20 }, pairCreatedAt: Date.now() - 600000, info: { imageUrl: 'http://127.0.0.1:18903/img.png', websites: [{ url: 'https://example.com' }], socials: [{ type: 'twitter', url: 'https://x.com/dexpaid' }] } })));
   if (p === '/pp-api/trade-local') { const q = JSON.parse(b); P.tradeLocal = [...(P.tradeLocal ?? []), q]; const user = new web3.PublicKey(q.publicKey);
     const msg = new web3.TransactionMessage({ payerKey: user, recentBlockhash: '11111111111111111111111111111111', instructions: [new web3.TransactionInstruction({ programId: new web3.PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'), keys: [{ pubkey: user, isSigner: true, isWritable: true }], data: Buffer.from([2]) })] }).compileToV0Message();
     if (q.action === 'buy') { S.held += BigInt(Math.round(q.amount * 3e10)); S.balanceLamports -= Math.round(q.amount * 1e9); } else { const t = BigInt(Math.round(q.amount * 1e6)); S.held -= t > S.held ? S.held : t; S.balanceLamports += 5e7; }

@@ -17,6 +17,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
   const locks = new Map();
   let ignored = 0;
   let buyingPaused = false;
+  let buysInFlight = 0; // copy buys still being sent, so several at once can't go past maxOpenPositions
   const tag = () => (cfg.dryRun ? 'PAPER ' : '');
 
   // Run trades for the same token one at a time, so a fast buy-then-sell can't overlap.
@@ -99,7 +100,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     if (positions.has(t.mint)) return 'already holding this token';
     if (cfg.blocklist.includes(t.mint)) return 'token is on your blocklist';
     if (t.solAmount < cfg.minSourceBuySol) return `their buy is under minSourceBuySol (${cfg.minSourceBuySol} SOL)`;
-    if (positions.count() >= cfg.maxOpenPositions) return `already at maxOpenPositions (${cfg.maxOpenPositions})`;
+    if (positions.count() + buysInFlight >= cfg.maxOpenPositions) return `already at maxOpenPositions (${cfg.maxOpenPositions})`;
     if (positions.todayPnl() <= -cfg.dailyLossLimitSol) return `daily loss limit of ${cfg.dailyLossLimitSol} SOL reached`;
     return null;
   }
@@ -172,7 +173,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
         publicKey: owner.toBase58(), action: side, mint, pool: 'auto',
         amount: side === 'buy' ? Number(amountRaw) / LAMPORTS : Number(amountRaw) / 1e6,
         denominatedInSol: side === 'buy' ? 'true' : 'false',
-        slippage: Math.round(slippageBps / 100), priorityFee: Math.min(cfg.priorityFeeMaxLamports, 2_000_000) / LAMPORTS,
+        slippage: Math.max(1, Math.round(slippageBps / 100)), priorityFee: Math.min(cfg.priorityFeeMaxLamports, 2_000_000) / LAMPORTS,
       }),
       signal: AbortSignal.timeout(15_000),
     });
@@ -183,7 +184,12 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true, maxRetries: 2 });
     const { value } = await connection.confirmTransaction({ signature: sig, blockhash: tx.message.recentBlockhash, lastValidBlockHeight }, 'confirmed');
     if (value.err) throw new Error(`transaction ${sig} failed on-chain (often slippage): ${JSON.stringify(value.err)}`);
-    const after = side === 'buy' ? await tokenBalance(mint) : BigInt(await connection.getBalance(owner));
+    // the RPC can take a moment to show the new balance after the trade confirms
+    let after = before;
+    for (let i = 0; i < 6 && after === before; i++) {
+      if (i) await sleep(500);
+      after = side === 'buy' ? await tokenBalance(mint) : BigInt(await connection.getBalance(owner));
+    }
     return { outRaw: after > before ? after - before : 0n, sig, via: 'pumpportal' };
   }
 
@@ -227,8 +233,16 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
   async function copyBuy(w, t) {
     const why = buySkipReason(w, t);
     if (why) return log(`  skip: ${why}`);
-    if (await failsSafetyCheck(t.mint)) return;
+    buysInFlight++;
+    try {
+      if (await failsSafetyCheck(t.mint)) return;
+      await sendCopyBuy(w, t);
+    } finally {
+      buysInFlight--;
+    }
+  }
 
+  async function sendCopyBuy(w, t) {
     const lamports = Math.round((w.buyAmountSol ?? cfg.buyAmountSol) * LAMPORTS);
     try {
       const { outRaw, sig } = await swap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps);
@@ -310,6 +324,13 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     try {
       for (const [mint, pos] of positions.entries()) {
         try {
+          // a real-money position whose token count wasn't known yet: read it from the wallet first
+          if (!cfg.dryRun && BigInt(pos.tokens ?? 0) === 0n) {
+            const held = await tokenBalance(mint);
+            if (held === 0n) continue;
+            positions.update(mint, { tokens: held.toString() });
+            pos.tokens = held.toString();
+          }
           const value = await valueOf(mint, pos.tokens);
           if (value == null) throw new Error('no price yet');
           const pct = ((Number(value) / LAMPORTS - pos.solSpent) / pos.solSpent) * 100;

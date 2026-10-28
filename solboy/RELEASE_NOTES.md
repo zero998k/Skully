@@ -2,7 +2,10 @@
 - Click **📈 Pulse** on the dashboard: live **New Pairs**, **Final Stretch** and **Migrated** columns with every coin's age, socials, holders, volume, market cap and the top 10 / dev / snipers / insiders / bundlers percentages.
 - **Axiom-style filters** on each column: keywords, launchpads, Audit, $ Metrics and Socials, with 3 presets and import/export/share.
 - **Coin pages:** live chart, every buy and sell in real time, holders with % and profit, top traders, snipers and bundles (checked on the chain), dev's other coins, and an insider check.
+- **Live, not delayed:** migrated coins you open get their price straight from the pool on the chain (every trade, about half a second) instead of DexScreener's ~20 seconds. The top bar shows how many milliseconds behind the chain the feed is, and each coin shows whether its price is live.
+- **Polished look:** pulsing LIVE light, colour-coded columns, a bonding curve ring around each coin picture, market caps that flash green or red when they move, buys and sells that flash as they stream in, loading placeholders, smoother windows and toasts, and the coin's market cap in the browser tab. Shortcuts: **Q** opens the quick trade box, **/** searches, **Esc** closes things.
 - **Quick trading:** ⚡ buy from any card, a buy/sell panel on each coin, and a floating trade box you can drag around or pop out. Works in paper mode and with real money.
+- **Copy trading fixes:** several wallets buying at the same moment can no longer push you past your max open coins; a real-money buy of a brand-new coin can't trigger the stop loss by mistake while the chain catches up; very low slippage settings no longer make PumpPortal trades fail.
 
 **New in 1.3.0**
 - **Copying fixed for traders who keep a "moon bag":** SolBoy now sells when the wallet sells 90% or more. Before, a trader keeping a few % forever meant SolBoy never sold, your slots filled up, and new buys were skipped.

@@ -121,6 +121,20 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.bundleFoundOnChain = (await p.locator('#coinTable').innerText()).includes('BUNDLE');
   R.bundleChip = await p.evaluate(async (m) => (await (await fetch(`/api/pulse/coin?mint=${m}&t=${TOKEN}`)).json()).bundle, b2.mint);
 
+  // a migrated coin: its price comes straight from the pool's vaults on the chain, trade by trade
+  await p.goto(`http://localhost:7777/pulse#coin=${mig.mint}`); await sleep(4000); await p.click('[data-ctab="trades"]'); await sleep(300);
+  const coinApi = (m) => p.evaluate(async (m) => (await (await fetch(`/api/pulse/coin?mint=${m}&t=${TOKEN}`)).json()), m);
+  R.poolSource = await until(async () => (await coinApi(mig.mint)).priceSource === 'pool', 12000) ? 'pool' : (await coinApi(mig.mint)).priceSource;
+  const before = (await coinApi(mig.mint)).mcSol;
+  const amm = await F(`/pp/amm?mint=${mig.mint}&side=buy&sol=3`); R.poolNotified = amm.sent;
+  R.poolTradeShown = await until(async () => (await p.locator('#coinTable').innerText()).includes('pool trade'), 5000);
+  const after = (await coinApi(mig.mint)).mcSol;
+  R.poolMcMoved = after > before && Math.abs(after - amm.mcSol) / amm.mcSol < 0.01;
+  R.poolBadge = (await p.locator('#coinHead').innerText()).includes('live (pool)');
+  R.poolMcUsd = Math.round((await coinApi(mig.mint)).mcUsd);
+  for (let i = 0; i < 3; i++) { await F(`/pp/trade?mint=${a.mint}&side=buy&sol=0.1&wallet=w6`); await sleep(9000); }
+  R.delayChip = await until(async () => /behind chain/.test(await p.textContent('#delayChip')), 15000) ? (await p.textContent('#delayChip')).trim() : (await p.textContent('#delayChip'));
+
   // real money: a coin Jupiter can't route yet goes through PumpPortal's transaction builder
   const live = await p.evaluate(async (mint) => {
     const call = async (path, body) => { const r = await fetch(`${path}?t=${TOKEN}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };

@@ -102,6 +102,9 @@ PP('coin page: live trades with dev tag and chart', pp.tradesRows >= 3 && pp.dev
 PP('coin page: holders with bonding curve labelled', pp.holderRows >= 3 && pp.curveLabelled === true, 'holderRows');
 PP('insider check finds the dev-funded wallet', /1 insider/.test(pp.analyzeToast ?? '') && pp.insiderTagged >= 1, 'analyzeToast');
 PP('bundled launch buy found on the chain', pp.bundleFoundOnChain === true && pp.bundleChip > 0, 'bundleFoundOnChain');
+PP('migrated coin: live price from the pool on the chain', pp.poolSource === 'pool' && pp.poolNotified === 2 && pp.poolBadge === true, 'poolSource');
+PP('migrated coin: pool trades move the chart instantly', pp.poolTradeShown === true && pp.poolMcMoved === true && Math.abs(pp.poolMcUsd - 430.5625 * 150) < 700, 'poolTradeShown');
+PP('measured feed delay is shown', /behind chain/.test(pp.delayChip ?? ''), 'delayChip');
 PP('sell from the trade panel', /^Sold for/.test(pp.sellToast ?? ''), 'sellToast');
 PP('real money: buy and sell through PumpPortal when Jupiter has no route', pp.liveBuy?.mode === 200 && pp.liveBuy?.buy?.ok === true && pp.liveBuy?.sell?.ok === true && pp.tradeLocal?.join() === 'buy:true:auto,sell:false:auto', 'liveBuy');
 PP('quick trade box opens and drags', pp.floatVisible === true && pp.dragged === true && /MCAT/.test(pp.floatCoin ?? ''), 'dragged');

@@ -138,7 +138,7 @@ main { height: calc(100% - 52px); }
 table { width: 100%; border-collapse: collapse; font: 12px var(--mono); }
 th { position: sticky; top: 0; background: var(--panel); color: var(--ink-3); font-weight: 500; text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--edge); }
 td { padding: 6px 10px; border-bottom: 1px solid #141417; white-space: nowrap; }
-tr.new td { animation: flash .9s ease-out; }
+tr.new td { animation: flash .9s ease-out; } tr.new.buy td { animation: tickUp 1s ease-out; } tr.new.sell td { animation: tickDown 1s ease-out; }
 .tag { display: inline-block; font: 700 9px var(--mono); padding: 1px 5px; border-radius: 5px; margin-left: 4px; border: 1px solid; }
 .tag.dev { color: var(--sun); } .tag.sniper { color: var(--down); } .tag.bundler { color: var(--grape); } .tag.kol { color: var(--sky); } .tag.insider { color: #fb923c; } .tag.cluster { color: #f472b6; } .tag.pool { color: var(--ink-3); } .tag.you { color: var(--up); }
 .bar { height: 4px; background: var(--edge); border-radius: 2px; width: 90px; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--accent); }
@@ -173,6 +173,71 @@ body.quick-mode .floating { position: static; width: auto; border-radius: 0; bor
 .toast { background: var(--panel-2); border: 1px solid var(--edge-2); border-left: 3px solid var(--sky); border-radius: 10px; padding: 10px 12px; max-width: 340px; font-size: 13px; animation: in .2s ease-out; }
 .toast.win { border-left-color: var(--up); } .toast.loss { border-left-color: var(--down); }
 @keyframes in { from { transform: translateY(8px); opacity: 0; } }
+/* ---------- polish ---------- */
+::selection { background: rgba(255,45,149,.35); color: #fff; }
+* { scrollbar-width: thin; scrollbar-color: var(--edge-2) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--edge-2); border-radius: 8px; border: 2px solid var(--bg); } ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+.mono, table, .meta, .right, .pcts, .chip, .stat b, .info b, .pos, .amts button { font-variant-numeric: tabular-nums; }
+button, .card, .nav a, .tog, input, select { transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s, transform .08s, filter .15s; }
+button:active:not(:disabled) { transform: scale(.97); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus, select:focus { box-shadow: 0 0 0 3px rgba(255,45,149,.18); }
+input::placeholder { color: var(--ink-3); }
+.top { box-shadow: 0 1px 0 rgba(255,45,149,.12), 0 8px 24px rgba(0,0,0,.5); position: relative; z-index: 5; }
+.logo:hover img { transform: rotate(-6deg) scale(1.06); } .logo img { transition: transform .2s; }
+.chip .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 1px; box-shadow: 0 0 0 0 currentColor; animation: beat 1.6s infinite; }
+@keyframes beat { 0% { box-shadow: 0 0 0 0 rgba(22,199,132,.7); } 70% { box-shadow: 0 0 0 6px rgba(22,199,132,0); } 100% { box-shadow: 0 0 0 0 rgba(22,199,132,0); } }
+.btn:hover:not(:disabled) { filter: brightness(1.1); } .btn.primary { box-shadow: 0 0 16px rgba(255,45,149,.35); }
+kbd { font: 600 10px var(--mono); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--edge-2); border-bottom-width: 2px; color: var(--ink-2); background: var(--panel-2); }
+.btn kbd { background: rgba(0,0,0,.25); border-color: rgba(0,0,0,.35); color: inherit; margin-left: 4px; }
+/* columns */
+.col-head { background: linear-gradient(180deg, #101012, var(--panel)); }
+.col-head h2 { display: flex; align-items: center; gap: 8px; letter-spacing: .2px; }
+.cdot { width: 8px; height: 8px; border-radius: 50%; flex: none; } .cdot.new { background: var(--up); box-shadow: 0 0 8px var(--up); } .cdot.stretch { background: var(--sun); box-shadow: 0 0 8px var(--sun); } .cdot.migrated { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.col-head .count { background: rgba(255,45,149,.12); padding: 1px 7px; border-radius: 999px; }
+.col.is-paused .col-head { border-bottom-color: var(--sun); }
+/* cards */
+.card:hover .pic { transform: scale(1.04); } .pic { transition: transform .15s; }
+.picw { position: relative; isolation: isolate; }
+.picw[style*="--p"] .pic::before { content: ''; position: absolute; inset: -4px; border-radius: 13px; background: conic-gradient(var(--ring, var(--accent)) calc(var(--p) * 1%), #1a1a1e 0); z-index: -1; }
+.picw.hot { --ring: var(--sun); }
+.meta .age.old { color: var(--ink-2); font-weight: 600; }
+.right .mc b { display: inline-block; border-radius: 4px; padding: 0 2px; }
+.tick-up { animation: tickUp .9s ease-out; } .tick-down { animation: tickDown .9s ease-out; }
+@keyframes tickUp { from { background: rgba(22,199,132,.35); color: #fff; } }
+@keyframes tickDown { from { background: rgba(255,77,94,.35); color: #fff; } }
+.copy:hover { color: var(--accent); } .copy.done { color: var(--up); }
+.qbtn:hover { box-shadow: 0 0 18px rgba(255,45,149,.6); }
+.skel { display: grid; grid-template-columns: 72px 1fr 60px; gap: 10px; padding: 12px; border-bottom: 1px solid var(--edge); }
+.skel i { display: block; border-radius: 8px; background: linear-gradient(90deg, #111114 25%, #1b1b20 50%, #111114 75%); background-size: 300% 100%; animation: shimmer 1.4s infinite linear; }
+.skel .a { height: 72px; } .skel .b { height: 12px; margin: 6px 0; } .skel .b.s { width: 60%; } .skel .c { height: 12px; margin-top: 6px; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+.empty .big { display: block; font-size: 26px; margin-bottom: 6px; opacity: .8; }
+/* coin page */
+.coin-head { background: linear-gradient(180deg, #0d0d0f, var(--bg)); }
+.stat.big b { text-shadow: 0 0 18px rgba(255,45,149,.35); }
+.stat { padding: 0 2px; } .coin-head .stat + .stat { border-left: 1px solid var(--edge); padding-left: 14px; }
+th { text-transform: uppercase; font-size: 10px; letter-spacing: .6px; }
+tbody tr:hover td { background: rgba(255,255,255,.025); }
+td a:hover { color: var(--accent); }
+.panel { box-shadow: 0 1px 0 rgba(255,255,255,.02) inset; }
+.panel h4 { letter-spacing: .2px; }
+.info { transition: border-color .15s; } .info:hover { border-color: var(--edge-2); }
+.amts button:hover, .trade .bs button:hover { border-color: var(--ink-3); }
+.floating { box-shadow: 0 18px 50px rgba(0,0,0,.6), 0 0 0 1px rgba(255,45,149,.2), 0 0 30px rgba(255,45,149,.15); animation: pop .18s ease-out; }
+.floating .drag { background: linear-gradient(180deg, #141417, var(--panel)); border-radius: 14px 14px 0 0; }
+.floating .drag::before { content: '⋮⋮'; color: var(--ink-3); letter-spacing: -2px; font-size: 12px; }
+/* modals and toasts */
+.modal-bg { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: fade .15s ease-out; }
+.modal { box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(255,45,149,.12); animation: pop .18s ease-out; }
+@keyframes fade { from { opacity: 0; } } @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+.toast { position: relative; overflow: hidden; cursor: pointer; box-shadow: 0 10px 30px rgba(0,0,0,.5); display: flex; gap: 8px; align-items: flex-start; }
+.toast::after { content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: currentColor; opacity: .25; transform-origin: left; animation: life 5s linear forwards; }
+.toast .ic { flex: none; }
+@keyframes life { to { transform: scaleX(0); } }
+.toast.bye { opacity: 0; transform: translateX(12px); transition: opacity .2s, transform .2s; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media (max-width: 1100px) { .board { grid-template-columns: 1fr; overflow-y: auto; } .col { height: 80vh; border-right: 0; border-bottom: 1px solid var(--edge); } body { overflow: auto; } main { height: auto; } .coin { grid-template-columns: 1fr; } .coin-main { height: 120vh; } }
 </style>
 </head>
@@ -182,10 +247,11 @@ body.quick-mode .floating { position: static; width: auto; border-radius: 0; bor
   <nav class="nav"><a href="/" id="navDash">Dashboard</a><a href="/pulse" class="on">Pulse</a></nav>
   <span class="spacer"></span>
   <span class="chip" id="feedChip">connecting</span>
+  <span class="chip" id="delayChip" title="How far behind the blockchain the live feed is, measured on your connection">delay …</span>
   <span class="chip" id="solChip">SOL $-</span>
   <span class="chip" id="modeChip">-</span>
   <button class="icon-btn" id="prefsBtn" title="Quick buy amounts and KOL wallets">⚙</button>
-  <button class="btn primary" id="quickBtn" title="Show the floating quick trade box">⚡ Quick trade</button>
+  <button class="btn primary" id="quickBtn" title="Show the floating quick trade box (press Q)">⚡ Quick trade <kbd>Q</kbd></button>
 </header>
 <main>
   <section class="board" id="board">
@@ -219,8 +285,12 @@ async function api(path, body) {
   return data;
 }
 function toast(kind, text) {
-  const t = document.createElement('div'); t.className = `toast ${kind}`; t.textContent = text; $('toasts').prepend(t);
-  setTimeout(() => t.remove(), 5000);
+  const t = document.createElement('div'); t.className = `toast ${kind}`;
+  t.innerHTML = `<span class="ic">${kind === 'win' ? '✅' : kind === 'loss' ? '⚠️' : '💬'}</span><span></span>`; t.lastChild.textContent = text;
+  const bye = () => { t.classList.add('bye'); setTimeout(() => t.remove(), 200); };
+  t.onclick = bye; $('toasts').prepend(t);
+  while ($('toasts').children.length > 4) $('toasts').lastChild.remove();
+  setTimeout(bye, 5000);
 }
 const money = (n) => n == null ? '-' : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(n >= 1e5 ? 0 : 1)}K` : `$${n.toFixed(n < 10 ? 2 : 0)}`;
 const pctf = (n) => n == null ? '-' : `${n < 10 ? n.toFixed(1) : Math.round(n)}%`;
@@ -234,8 +304,11 @@ let STATUS = {}, MODE = 'paper', CFG = { quickBuy: [0.05, 0.1, 0.5, 1], quickSel
 function renderStatus() {
   const f = STATUS.feed;
   $('feedChip').className = `chip ${f === 'live' ? 'live' : f === 'connecting' ? '' : 'off'}`;
-  $('feedChip').textContent = f === 'live' ? `● LIVE · ${STATUS.tracking ?? 0} coins` : f === 'quiet' ? 'feed quiet' : f === 'connecting' ? 'connecting…' : 'feed offline';
+  $('feedChip').innerHTML = f === 'live' ? `<span class="dot"></span>LIVE · ${STATUS.tracking ?? 0} coins` : f === 'quiet' ? 'feed quiet' : f === 'connecting' ? 'connecting…' : 'feed offline';
   $('solChip').textContent = `SOL ${STATUS.solUsd ? '$' + STATUS.solUsd.toFixed(2) : '$-'}`;
+  const dl = STATUS.delaySec;
+  $('delayChip').textContent = dl == null ? 'delay: measuring…' : `⏱ ${dl < 1 ? Math.round(dl * 1000) + 'ms' : dl.toFixed(1) + 's'} behind chain`;
+  $('delayChip').className = `chip ${dl == null ? '' : dl < 1.5 ? 'live' : 'off'}`;
   $('modeChip').className = `chip ${MODE === 'live' ? 'real' : 'paper'}`;
   $('modeChip').textContent = MODE === 'live' ? 'REAL MONEY' : 'PAPER';
 }
@@ -247,9 +320,9 @@ const seen = new Set();
 const quick = { new: store.get('qb.new', 0.1), stretch: store.get('qb.stretch', 0.1), migrated: store.get('qb.migrated', 0.1) };
 const search = { new: '', stretch: '', migrated: '' };
 function colHead(c) {
-  return `<div class="col-head"><h2>${COLS[c]} <span class="count" id="cnt-${c}"></span></h2>
+  return `<div class="col-head"><h2><i class="cdot ${c}"></i>${COLS[c]} <span class="count" id="cnt-${c}"></span></h2>
     <span class="paused-tag" id="pz-${c}" hidden>PAUSED</span>
-    <input class="q" placeholder="Search ticker or name" data-search="${c}" value="${esc(search[c])}">
+    <input class="q" placeholder="Search…" title="Search ticker, name or address (press / )" data-search="${c}" value="${esc(search[c])}">
     <span class="qb" title="Quick buy amount (SOL) for the ⚡ buttons">⚡<input data-qb="${c}" value="${quick[c]}" inputmode="decimal"></span>
     <button class="icon-btn filters-dot" data-filter="${c}" title="Filters">⚙ Filters</button></div>
     <div class="list" id="list-${c}"></div>`;
@@ -257,8 +330,8 @@ function colHead(c) {
 document.querySelectorAll('.col').forEach((el) => {
   const c = el.dataset.col; el.innerHTML = colHead(c);
   const list = el.querySelector('.list');
-  list.onmouseenter = () => { paused[c] = true; $(`pz-${c}`).hidden = false; };
-  list.onmouseleave = () => { paused[c] = false; $(`pz-${c}`).hidden = true; renderCol(c); };
+  list.onmouseenter = () => { paused[c] = true; $(`pz-${c}`).hidden = false; list.parentElement.classList.add('is-paused'); };
+  list.onmouseleave = () => { paused[c] = false; $(`pz-${c}`).hidden = true; list.parentElement.classList.remove('is-paused'); renderCol(c); };
 });
 document.addEventListener('input', (e) => {
   const s = e.target.dataset.search; if (s) { search[s] = e.target.value.trim().toLowerCase(); renderCol(s, true); }
@@ -272,10 +345,10 @@ function card(r) {
   const img = r.image ? `style="background-image:url('${esc(r.image)}')"` : '';
   const bs = r.buys + r.sells ? Math.round((r.buys / (r.buys + r.sells)) * 100) : 50;
   return `<div class="card${seen.has(r.mint) ? '' : ' fresh'}" data-mint="${esc(r.mint)}">
-    <div><div class="pic" ${img}>${r.image ? '' : esc((r.symbol || '?').slice(0, 2))}<span class="proto">${PROTO_SHORT[r.protocol] ?? esc(r.protocol)}</span></div><div class="ca">${short(r.mint)}</div></div>
+    <div class="picw${r.progress >= 80 ? ' hot' : ''}"${r.progress != null && !r.migrated ? ` style="--p:${Math.round(r.progress)}"` : ''}><div class="pic" ${img}>${r.image ? '' : esc((r.symbol || '?').slice(0, 2))}<span class="proto">${PROTO_SHORT[r.protocol] ?? esc(r.protocol)}</span></div><div class="ca">${short(r.mint)}</div></div>
     <div class="mid">
       <div class="name"><b>${esc(r.symbol || '???')}</b><span>${esc(r.name)}</span><button class="copy" data-copy="${esc(r.mint)}" title="Copy address">⧉</button></div>
-      <div class="meta"><span class="age">${ageOf(r.ageSec)}</span>
+      <div class="meta"><span class="age${r.ageSec > 3600 ? ' old' : ''}" title="Age">${ageOf(r.ageSec)}</span>
         <span class="soc">${r.twitter ? `<a href="${esc(r.twitter)}" target="_blank" rel="noopener" title="X">𝕏</a> ` : ''}${r.website ? `<a href="${esc(r.website)}" target="_blank" rel="noopener" title="Website">🌐</a> ` : ''}${r.telegram ? `<a href="${esc(r.telegram)}" target="_blank" rel="noopener" title="Telegram">✈</a> ` : ''}<a href="https://x.com/search?q=${encodeURIComponent(r.mint)}" target="_blank" rel="noopener" title="Search the address on X">🔍</a></span>
         <span title="Holders">👥 ${r.holders ?? '-'}</span>
         ${r.devPairs != null ? `<span title="Coins this dev launched before (that SolBoy saw)">🛠 ${r.devPairs}</span>` : ''}
@@ -294,7 +367,7 @@ function card(r) {
     </div>
     <div class="right">
       <div class="v">V <b>${money(r.volUsd)}</b></div>
-      <div class="mc">MC <b>${money(r.mcUsd)}</b></div>
+      <div class="mc">MC <b class="${tick(r)}">${money(r.mcUsd)}</b></div>
       <div class="dim">F ${money(r.feesUsd)} · TX ${r.txns}</div>
       <div class="bsbar" title="${r.buys} buys / ${r.sells} sells"><i style="width:${bs}%"></i></div>
       <button class="qbtn" data-qbuy="${esc(r.mint)}" data-sym="${esc(r.symbol)}" title="Buy now">⚡ ${esc(quick[colOf(r)] || '0')}</button>
@@ -302,17 +375,25 @@ function card(r) {
     ${r.progress != null && !r.migrated ? `<div class="prog" style="width:${r.progress}%" title="Bonding curve ${pctf(r.progress)}"></div>` : ''}
   </div>`;
 }
+// flash a card's market cap green or red when it moves
+const lastMc = new Map();
+function tick(r) {
+  const prev = lastMc.get(r.mint); lastMc.set(r.mint, r.mcUsd);
+  if (prev == null || r.mcUsd == null || Math.abs(r.mcUsd - prev) / prev < 0.002) return '';
+  return r.mcUsd > prev ? 'tick-up' : 'tick-down';
+}
+const SKELETON = '<div class="skel"><i class="a"></i><div><i class="b"></i><i class="b s"></i><i class="b"></i></div><div><i class="c"></i><i class="c"></i></div></div>'.repeat(4);
 const colOf = (r) => r.migrated ? 'migrated' : BOARD.stretch.some((x) => x.mint === r.mint) ? 'stretch' : 'new';
 function renderCol(c, force = false) {
   if (paused[c] && !force) return;
   const rows = BOARD[c].filter((r) => !search[c] || `${r.symbol} ${r.name} ${r.mint}`.toLowerCase().includes(search[c]));
   $(`cnt-${c}`).textContent = rows.length;
-  $(`list-${c}`).innerHTML = rows.length ? rows.map(card).join('') : `<div class="empty">${STATUS.feed === 'live' ? (c === 'migrated' ? 'Coins appear here when they finish their bonding curve.' : 'Waiting for coins that match your filters…') : 'Connecting to the live feed…'}</div>`;
+  $(`list-${c}`).innerHTML = rows.length ? rows.map(card).join('') : (STATUS.feed === 'live' ? `<div class="empty"><span class="big">${c === 'migrated' ? '🎓' : c === 'stretch' ? '🏁' : '🌱'}</span>${c === 'migrated' ? 'Coins appear here when they finish their bonding curve.' : 'Waiting for coins that match your filters…'}</div>` : SKELETON);
   for (const r of rows) seen.add(r.mint);
 }
 document.addEventListener('click', async (e) => {
   const cp = e.target.closest('[data-copy]');
-  if (cp) { e.stopPropagation(); try { await navigator.clipboard.writeText(cp.dataset.copy); toast('', 'Address copied'); } catch {} return; }
+  if (cp) { e.stopPropagation(); try { await navigator.clipboard.writeText(cp.dataset.copy); const was = cp.innerHTML; cp.classList.add('done'); cp.textContent = '✓'; setTimeout(() => { cp.classList.remove('done'); cp.innerHTML = was; }, 1200); toast('', 'Address copied'); } catch {} return; }
   if (e.target.closest('.soc a')) { e.stopPropagation(); return; }
   const qb = e.target.closest('[data-qbuy]');
   if (qb) {
@@ -458,6 +539,7 @@ function openCoin(mint) {
 function closeCoin() {
   clearInterval(coinTimer); COIN = null; chart?.remove(); chart = null;
   $('coin').hidden = true; $('board').hidden = false; stream(null);
+  document.title = 'SolBoy Pulse';
 }
 async function loadCoin(mint, first = false) {
   try {
@@ -476,12 +558,13 @@ async function loadCoin(mint, first = false) {
 }
 function renderCoinHead() {
   const c = COIN;
+  document.title = `${c.symbol ? '$' + c.symbol : short(c.mint)} ${money(c.mcUsd)} · SolBoy Pulse`;
   $('coinHead').innerHTML = `<button class="icon-btn" id="back">← Pulse</button>
     <div class="pic" ${c.image ? `style="background-image:url('${esc(c.image)}')"` : ''}>${c.image ? '' : esc((c.symbol || '?').slice(0, 2))}</div>
     <div class="title"><div><b>${esc(c.symbol || short(c.mint))}</b> <span class="dim">${esc(c.name)}</span> <button class="copy" data-copy="${esc(c.mint)}">⧉ ${short(c.mint)}</button></div>
       <div class="meta"><span class="age">${ageOf(c.ageSec)}</span>${c.twitter ? `<a href="${esc(c.twitter)}" target="_blank" rel="noopener">𝕏</a>` : ''}${c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener">🌐</a>` : ''}${c.telegram ? `<a href="${esc(c.telegram)}" target="_blank" rel="noopener">✈</a>` : ''}
         <a href="https://dexscreener.com/solana/${esc(c.mint)}" target="_blank" rel="noopener" class="dim">DexScreener</a><a href="https://solscan.io/token/${esc(c.mint)}" target="_blank" rel="noopener" class="dim">Solscan</a>${c.launchpad === 'pump' ? `<a href="https://pump.fun/coin/${esc(c.mint)}" target="_blank" rel="noopener" class="dim">Pump.fun</a>` : ''}</div></div>
-    <div class="stat big"><small>Market cap</small><b>${money(c.mcUsd)}</b></div>
+    <div class="stat big"><small>Market cap ${srcBadge(c.priceSource)}</small><b>${money(c.mcUsd)}</b></div>
     <div class="stat"><small>Price</small><b>${c.priceSol != null && c.solUsd ? '$' + (c.priceSol * c.solUsd).toPrecision(4) : '-'}</b></div>
     <div class="stat"><small>Liquidity</small><b>${money(c.liqUsd)}</b></div>
     <div class="stat"><small>Volume</small><b>${money(c.volUsd)}</b></div>
@@ -491,8 +574,9 @@ function renderCoinHead() {
     <div class="stat"><small>${c.migrated ? 'Migrated' : 'Bonding curve'}</small><b>${c.migrated ? '✓ ' + esc(PROTO_SHORT[c.protocol] ?? c.protocol) : pctf(c.progress)}</b></div>
     <div class="stat"><small>Buys / Sells</small><b><span class="up">${c.buys}</span> / <span class="down">${c.sells}</span></b></div>`;
 }
+const srcBadge = (s) => ({ feed: '<span class="up" title="Every trade from the live feed">● live</span>', pool: '<span class="up" title="Read straight from the pool on the chain, every trade">● live (pool)</span>', dexscreener: '<span class="warn" title="Live pool not available for this coin: DexScreener updates about every 20 seconds">● ~20s delay</span>', waiting: '<span class="dim">waiting for trades</span>' })[s] ?? '';
 const tagsHtml = (r) => [...(r.tags ?? [])].map((t) => `<span class="tag ${t}">${{ dev: 'DEV', sniper: 'SNIPER', bundler: 'BUNDLE', cluster: 'CLUSTER' }[t] ?? t.toUpperCase()}</span>`).join('') + (r.kol ? '<span class="tag kol">KOL</span>' : '') + (r.insider ? '<span class="tag insider">INSIDER</span>' : '') + (r.pool ? '<span class="tag pool">POOL</span>' : '');
-const walletCell = (r) => `<a href="https://solscan.io/account/${esc(r.wallet)}" target="_blank" rel="noopener">${esc(r.label ?? short(r.wallet))}</a>${tagsHtml(r)}`;
+const walletCell = (r) => r.wallet ? `<a href="https://solscan.io/account/${esc(r.wallet)}" target="_blank" rel="noopener">${esc(r.label ?? short(r.wallet))}</a>${tagsHtml(r)}` : '<span class="dim" title="Seen live in the pool; the wallet shows on Solscan">pool trade</span>';
 function renderCoinTable() {
   const c = COIN; if (!c) return;
   const tabs = [['trades', 'Trades'], ['holders', `Holders (${c.holders ?? c.holdersList.length})`], ['top', 'Top Traders'], ['early', `Snipers & Bundles (${c.early.length})`], ['dev', `Dev Tokens (${c.devCreated ?? 0})`]];
@@ -519,7 +603,7 @@ function tradeOk(t) {
   if (tradeFilter === 'big') return t.sol >= 1;
   return (t.tags ?? []).includes(tradeFilter);
 }
-const tradeRow = (t, fresh) => `<tr class="${fresh ? 'new' : ''}"><td class="dim">${ago(t.t)}</td><td class="${t.side === 'buy' ? 'up' : 'down'}">${t.side === 'buy' ? 'Buy' : 'Sell'}</td><td>${money(t.mcUsd)}</td><td class="${t.side === 'buy' ? 'up' : 'down'}">${t.usd != null ? money(t.usd) : '-'}</td><td>${sol(t.sol)}</td><td>${walletCell(t)}</td><td>${t.sig ? `<a class="dim" href="https://solscan.io/tx/${esc(t.sig)}" target="_blank" rel="noopener">tx</a>` : ''}</td></tr>`;
+const tradeRow = (t, fresh) => `<tr class="${fresh ? 'new ' + t.side : ''}"><td class="dim">${ago(t.t)}</td><td class="${t.side === 'buy' ? 'up' : 'down'}">${t.side === 'buy' ? 'Buy' : 'Sell'}</td><td>${money(t.mcUsd)}</td><td class="${t.side === 'buy' ? 'up' : 'down'}">${t.usd != null ? money(t.usd) : '-'}</td><td>${sol(t.sol)}</td><td>${walletCell(t)}</td><td>${t.sig ? `<a class="dim" href="https://solscan.io/tx/${esc(t.sig)}" target="_blank" rel="noopener">tx</a>` : ''}</td></tr>`;
 function onLiveTrade(t) {
   if (!COIN) return;
   COIN.trades.unshift(t); COIN.trades.length = Math.min(COIN.trades.length, 300);
@@ -558,7 +642,7 @@ function makeChart() {
   if (typeof LightweightCharts === 'undefined') { $('chartMsg').textContent = 'Chart unavailable'; return; }
   chart = LightweightCharts.createChart($('chart'), { autoSize: true, layout: { background: { color: '#050505' }, textColor: '#9a9aa2', fontFamily: 'ui-monospace, Menlo, monospace' }, grid: { vertLines: { color: '#111114' }, horzLines: { color: '#111114' } }, timeScale: { timeVisible: true, secondsVisible: true, borderColor: '#1f1f23' }, rightPriceScale: { borderColor: '#1f1f23' }, crosshair: { mode: 0 } });
   series = chart.addCandlestickSeries({ upColor: '#16c784', downColor: '#ff4d5e', borderVisible: false, wickUpColor: '#16c784', wickDownColor: '#ff4d5e', priceFormat: { type: 'custom', formatter: (v) => chartMode === 'mc' ? money(v) : v.toPrecision(4) } });
-  volSeries = chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, color: '#2a2a33' });
+  volSeries = chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, color: '#2a2a33', lastValueVisible: false, priceLineVisible: false });
   chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
 }
 let candles = [];
@@ -690,6 +774,12 @@ function route() {
 }
 addEventListener('hashchange', route);
 addEventListener('keydown', (e) => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
+  if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    if (e.key === '/' && !$('board').hidden) { e.preventDefault(); document.querySelector('[data-search="new"]')?.focus(); return; }
+    if (e.key === 'q' || e.key === 'Q') { e.preventDefault(); $('quickBtn').click(); return; }
+  }
+  if (e.key === 'Escape' && typing) { document.activeElement.blur(); }
   if (e.key === 'Escape') { if (!$('filterModal').hidden) $('filterModal').hidden = true; else if (!$('prefsModal').hidden) $('prefsModal').hidden = true; else if (location.hash) location.hash = ''; }
 });
 (async function init() {

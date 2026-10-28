@@ -313,6 +313,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
             res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
             const push = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
             let off = null;
+            pulse.viewing(1);
             if (focusMint) {
               pulse.open(focusMint);
               off = pulse.onTrade((ev) => ev.mint === focusMint && push({ trade: ev.trade }));
@@ -327,9 +328,10 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
               busy = false;
             };
             tick();
-            const timer = setInterval(tick, 1000);
+            const timer = setInterval(tick, wantBoard ? 500 : 1000);
             req.on('close', () => {
               clearInterval(timer);
+              pulse.viewing(-1);
               off?.();
               if (focusMint) pulse.close(focusMint);
             });
