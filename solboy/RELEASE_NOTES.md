@@ -1,3 +1,10 @@
+**New in 1.7.0: Axiom-style trading box and coin details**
+- **New quick trade box (side panel, floating box and pop-out):** presets **P1 / P2 / P3**, four one-click **Buy** buttons (in SOL, or flip to **USD**), one-click **Sell** by SOL amount or by %, **Sell Init.** (sells just enough to get your money back), slippage and priority fee per preset (⚙), ✎ to change any button, your wallet balance, and **Bought / Sold / Holding / PnL** at the bottom.
+- **Holders, Top Traders and Snipers & Bundles in full detail:** each wallet's SOL balance, what it bought and sold (in $, tokens, number of trades and the average market cap it bought / sold at), unrealized PnL, what it still holds ($, % and a bar), **fees paid**, who funded it, and how long it has held.
+- **Fees on every trade** in the Trades tab, and dev tokens now show market cap, ATH, curve progress and age.
+- **Chart markers:** dev buys and sells (DB/DS), snipers and bundlers (SB/SS), your KOL wallets (KB/KS) and whale trades 🐳, with a Markers switch.
+- Fees are estimates: the exchange fee on what was traded plus network fees (priority tips aren't in the live feed).
+
 **New in 1.6.0: a fuller, more finished Pulse**
 - **Pictures and X posts for far more coins:** coins SolBoy didn't see launch (and every migrated coin) now get their picture, name and X post too. When the IPFS picture servers fail, SolBoy asks your Helius key for its fast copy of the picture, and your browser also tries the picture directly.
 - **Charts and trades for older coins:** when GeckoTerminal has nothing, SolBoy reads the coin's latest trades straight from the chain with your Helius key and draws the chart from them.

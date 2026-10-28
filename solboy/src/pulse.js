@@ -319,6 +319,7 @@ export function createPulse({ cfg, connection }) {
     buy ? tok.buys++ : tok.sells++;
     if (who) {
       const w = wallet(tok, who);
+      w.lastAt = now;
       if (buy) {
         w.buys++;
         w.buySol += sol;
@@ -782,7 +783,42 @@ export function createPulse({ cfg, connection }) {
   function decorateTrade(tok, tr) {
     const w = tr.wallet ? tok.wallets.get(tr.wallet) : null;
     const l = labels().get(tr.wallet);
-    return { ...tr, mcUsd: tr.mcSol != null && solUsd ? tr.mcSol * solUsd : null, usd: solUsd ? tr.sol * solUsd : null, tags: w ? [...w.tags] : [], label: l?.label ?? null, kol: Boolean(l?.kol) };
+    return { ...tr, mcUsd: tr.mcSol != null && solUsd ? tr.mcSol * solUsd : null, usd: solUsd ? tr.sol * solUsd : null, feeSol: tr.sol * feeRate(tok) + 0.000005, tags: w ? [...w.tags] : [], label: l?.label ?? null, kol: Boolean(l?.kol) };
+  }
+
+  // Trading fees a wallet paid on this coin, estimated: the exchange fee on what it traded plus the network fee
+  // per transaction (priority tips aren't in the live feed). Pump.fun curve: 1.25%; PumpSwap and others: about 0.3%.
+  const feeRate = (tok) => (tok.migrated ? 0.003 : 0.0125);
+  function walletDetail(tok, w, pct) {
+    if (!w) return { tags: [], pct, buySol: null, sellSol: null, buys: null, sells: null, pnlSol: null, feesSol: null };
+    const price = tok.mcSol != null ? tok.mcSol / SUPPLY : null; // SOL per token
+    const usd = solUsd;
+    const remainingSol = price != null ? w.bal * price : null;
+    const avg = (sol, tok2) => (tok2 > 0 && usd ? (sol / tok2) * SUPPLY * usd : null); // the market cap they bought / sold at, on average
+    return {
+      tags: [...w.tags], pct,
+      buySol: w.buySol, sellSol: w.sellSol, buys: w.buys, sells: w.sells, boughtTok: w.boughtTok, soldTok: w.soldTok,
+      avgBuyMcUsd: avg(w.buySol, w.boughtTok), avgSellMcUsd: avg(w.sellSol, w.soldTok),
+      remainingSol, remainingUsd: remainingSol != null && usd ? remainingSol * usd : null, holdingPct: (w.bal / SUPPLY) * 100,
+      pnlSol: w.sellSol + (remainingSol ?? 0) - w.buySol,
+      feesSol: (w.buySol + w.sellSol) * feeRate(tok) + (w.buys + w.sells) * 0.000005,
+      firstAt: w.firstAt ?? null, lastAt: w.lastAt ?? null,
+    };
+  }
+  // SOL in each top holder's wallet (one request for all of them, refreshed every 30 seconds)
+  const solBalCache = new Map();
+  function solBalances(tok, owners) {
+    const hit = solBalCache.get(tok.mint);
+    if ((!hit || Date.now() - hit.at > 30_000) && owners.length && !hit?.loading) {
+      const next = { at: Date.now(), map: hit?.map ?? new Map(), loading: true };
+      solBalCache.set(tok.mint, next);
+      connection.getMultipleAccountsInfo(owners.map((o) => new PublicKey(o)))
+        .then((infos) => { infos.forEach((a, i) => next.map.set(owners[i], a ? a.lamports / 1e9 : 0)); })
+        .catch(() => {})
+        .finally(() => { next.loading = false; });
+      if (solBalCache.size > 200) solBalCache.delete(solBalCache.keys().next().value);
+    }
+    return solBalCache.get(tok.mint)?.map ?? new Map();
   }
 
   // 5m / 1h / 6h / 24h: price change, volume and buys vs sells, from SolBoy's own trades when they cover the
@@ -865,15 +901,15 @@ export function createPulse({ cfg, connection }) {
     const known = new Map(tok.wallets);
     const holderRows = [];
     const seen = new Set();
+    const solBal = solBalances(tok, chain.slice(0, 20).map((h) => h.owner));
     const describe = (owner, pct) => {
       const w = known.get(owner);
       const l = names.get(owner);
       const pool = owner === tok.bondingCurveKey || (!w && pct > 15) ? (tok.migrated ? 'Liquidity pool' : 'Bonding curve') : null;
       return {
         wallet: owner, pct, label: pool ?? l?.label ?? null, pool: Boolean(pool), kol: Boolean(l?.kol), copied: Boolean(l?.copied),
-        tags: w ? [...w.tags] : [], buySol: w?.buySol ?? null, sellSol: w?.sellSol ?? null, buys: w?.buys ?? null, sells: w?.sells ?? null,
-        insider: Boolean(tok.analysis?.insiders.includes(owner)), funder: tok.analysis?.funders?.[owner] ?? null,
-        pnlSol: w && solUsd != null && tok.mcSol != null ? w.sellSol + (w.bal * tok.mcSol) / SUPPLY - w.buySol : null,
+        insider: Boolean(tok.analysis?.insiders.includes(owner)), funder: tok.analysis?.funders?.[owner] ?? null, solBalance: solBal.get(owner) ?? null,
+        ...walletDetail(tok, w, pct),
       };
     };
     for (const h of chain) {
@@ -886,12 +922,12 @@ export function createPulse({ cfg, connection }) {
     }
     holderRows.sort((a, b) => b.pct - a.pct);
     const traders = [...tok.wallets]
-      .map(([addr, w]) => ({ wallet: addr, label: names.get(addr)?.label ?? null, kol: Boolean(names.get(addr)?.kol), tags: [...w.tags], buySol: w.buySol, sellSol: w.sellSol, buys: w.buys, sells: w.sells, holdingPct: (w.bal / SUPPLY) * 100, pnlSol: w.sellSol + (w.bal * (tok.mcSol ?? 0)) / SUPPLY - w.buySol }))
+      .map(([addr, w]) => ({ wallet: addr, label: names.get(addr)?.label ?? null, kol: Boolean(names.get(addr)?.kol), funder: tok.analysis?.funders?.[addr] ?? null, ...walletDetail(tok, w, (w.bal / SUPPLY) * 100) }))
       .sort((a, b) => b.pnlSol - a.pnlSol)
       .slice(0, 50);
     const early = [...tok.wallets]
       .filter(([, w]) => w.tags.has('sniper') || w.tags.has('bundler'))
-      .map(([addr, w]) => ({ wallet: addr, tags: [...w.tags], boughtPct: (w.boughtTok / SUPPLY) * 100, holdingPct: (w.bal / SUPPLY) * 100, buySol: w.buySol, sellSol: w.sellSol, status: w.bal <= 1 ? 'sold all' : w.soldTok > 0 ? 'sold some' : 'holding' }))
+      .map(([addr, w]) => ({ wallet: addr, label: names.get(addr)?.label ?? null, boughtPct: (w.boughtTok / SUPPLY) * 100, status: w.bal <= 1 ? 'sold all' : w.soldTok > 0 ? 'sold some' : 'holding', ...walletDetail(tok, w, (w.bal / SUPPLY) * 100) }))
       .sort((a, b) => b.boughtPct - a.boughtPct);
     const devHist = tok.creator ? history.devs[tok.creator] : null;
     return {
@@ -904,7 +940,11 @@ export function createPulse({ cfg, connection }) {
       holdersList: holderRows,
       topTraders: traders,
       early,
-      devTokens: (devHist?.mints ?? []).filter((m) => m !== mint).map((m) => ({ mint: m, name: tokens.get(m)?.name ?? null, symbol: tokens.get(m)?.symbol ?? null, migrated: tokens.get(m)?.migrated ?? null })),
+      devTokens: (devHist?.mints ?? []).filter((m) => m !== mint).map((m) => {
+        const d = tokens.get(m);
+        return { mint: m, name: d?.name ?? null, symbol: d?.symbol ?? null, migrated: d?.migrated ?? null, mcUsd: d?.mcSol != null && solUsd ? d.mcSol * solUsd : d?.dex?.mcUsd ?? null, athUsd: d?.athMcSol && solUsd ? d.athMcSol * solUsd : null, createdAt: d?.createdAt ?? null, progress: d ? progressOf(d) : null };
+      }),
+      feeRate: feeRate(tok),
       devCreated: devHist?.created ?? null,
       analysis: tok.analysis ? { at: tok.analysis.at, insiders: tok.analysis.insiders.length, clusters: tok.analysis.clusters } : null,
       pair: tok.dex?.pair ?? null,

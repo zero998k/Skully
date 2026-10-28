@@ -101,10 +101,13 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.tradesRows = await p.locator('#coinTable tbody tr').count();
   R.devTagInTrades = await p.locator('#coinTable .tag.dev').count();
   R.chartCanvas = await p.locator('#chart canvas').count();
+  R.chartMarkers = await p.evaluate(() => markers.map((m) => m.text).join());
   await F(`/pp/trade?mint=${a.mint}&side=buy&sol=0.3&wallet=w4`); await sleep(1200);
   R.liveTradeArrived = (await p.locator('#coinTable tbody tr').count()) > R.tradesRows;
   await p.click('[data-ctab="holders"]'); await sleep(300);
   R.holderRows = await p.locator('#coinTable tbody tr').count();
+  R.holderCols = (await p.locator('#coinTable thead th').allInnerTexts()).join('|');
+  R.holderFees = /≡ 0\.\d+/.test(await p.locator('#coinTable').innerText());
   R.curveLabelled = (await p.locator('#coinTable').innerText()).includes('Bonding curve');
   await p.click('[data-ctab="early"]'); await sleep(300);
   R.earlyTab = (await p.locator('#coinTable').innerText()).replace(/\s+/g, ' ').slice(0, 200);
@@ -118,8 +121,23 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.securityShown = await until(async () => (await p.locator('#coinSide').innerText()).includes('Revoked ✓'), 6000);
   await p.click('[data-ctab="trades"]'); await sleep(300); R.sizeIcons = await p.locator('#coinTable .sz').count() > 0; await p.click('[data-ctab="holders"]'); await sleep(300);
   R.positionShown = (await p.locator('#sideTrade [data-pos]').innerText()).replace(/\s+/g, ' ');
-  await p.click('#sideTrade [data-tside="sell"]'); await p.click('#sideTrade [data-tamt="50"]'); await p.click('#sideTrade [data-tgo]'); await sleep(1500);
+  await p.click('#sideTrade [data-qsellpct="2"]'); await sleep(1500); // one click: sell 50%
   R.sellToast = (await toasts()).match(/Sold[^\n]*|Sell failed[^\n]*/)?.[0];
+  // the Axiom-style box: one-click buy, sell a SOL amount, sell the initial, presets, edit, USD
+  await p.click('#sideTrade [data-qbuy="0"]'); await sleep(1500);
+  R.qtBuy = (await toasts()).match(/Bought 0\.05[^\n]*/)?.[0] ?? null;
+  await p.click('#sideTrade [data-qsellsol="0"]'); await sleep(1500);
+  R.qtSellSol = /Sold for/.test(await toasts());
+  R.qtFoot = (await p.locator('#sideTrade .qt-foot').innerText()).replace(/\s+/g, ' ');
+  await p.click('#sideTrade [data-qinit]'); await sleep(1500);
+  R.qtInit = /Sold for/.test(await toasts());
+  await p.click('#sideTrade [data-qp="2"]'); await sleep(200);
+  R.qtP2 = (await p.locator('#sideTrade [data-qbuy]').allInnerTexts()).join();
+  await p.click('#sideTrade [data-qedit]'); await p.fill('#sideTrade [data-qedit-buy="0"]', '0.07'); await p.click('#sideTrade [data-qedit]'); await sleep(200);
+  R.qtEdited = (await p.locator('#sideTrade [data-qbuy="0"]').innerText()).trim();
+  await p.click('#sideTrade [data-qcur="usd"]'); await sleep(200);
+  R.qtUsd = (await p.locator('#sideTrade [data-qbuyusd]').allInnerTexts()).join();
+  await p.click('#sideTrade [data-qcur="sol"]'); await p.click('#sideTrade [data-qp="1"]'); await sleep(200);
   await p.screenshot({ path: `${E}/p3-coin.png` });
 
   // floating quick trade box: open, drag, pop out
@@ -134,7 +152,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await popup.waitForLoadState(); await sleep(1500);
   R.popupQuickMode = await popup.evaluate(() => document.body.classList.contains('quick-mode'));
   R.popupCoin = await popup.locator('.drag b').innerText();
-  R.popupHasBuy = await popup.locator('[data-tgo]').count() === 1;
+  R.popupHasBuy = await popup.locator('[data-qbuy]').count() === 4 && await popup.locator('[data-qsellpct]').count() === 4;
   await popup.screenshot({ path: `${E}/p4-popout.png` });
   await popup.close();
 

@@ -104,7 +104,21 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
       hit = { at: Date.now(), tokens: pos.tokens, worth: await worthFallback(mint, pos) };
       posCache.set(mint, hit);
     }
-    return { solSpent: pos.solSpent, tokens: pos.tokens, worth: hit.worth, pnl: hit.worth == null ? null : hit.worth - pos.solSpent, from: pos.sourceLabel, mode: book.mode };
+    const bought = pos.boughtTotal ?? pos.solSpent, sold = pos.soldTotal ?? 0;
+    return { solSpent: pos.solSpent, tokens: pos.tokens, worth: hit.worth, pnl: hit.worth == null ? null : hit.worth - pos.solSpent, from: pos.sourceLabel, mode: book.mode,
+      bought, sold, totalPnl: hit.worth == null ? null : sold + hit.worth - bought };
+  }
+
+  let balCache = { at: 0, sol: null };
+  async function walletBalance() {
+    if (book.mode !== 'live') return null;
+    if (Date.now() - balCache.at > 10_000) {
+      balCache.at = Date.now();
+      try {
+        balCache.sol = await account.balance();
+      } catch {}
+    }
+    return balCache.sol;
   }
 
   async function accountState() {
@@ -337,7 +351,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
               if (busy) return;
               busy = true;
               try {
-                push({ status: pulse.status(), mode: book.mode, ...(wantBoard ? { board: pulse.board() } : {}), ...(focusMint ? { position: await positionFor(focusMint) } : {}) });
+                push({ status: pulse.status(), mode: book.mode, balance: await walletBalance(), ...(wantBoard ? { board: pulse.board() } : {}), ...(focusMint ? { position: await positionFor(focusMint) } : {}) });
               } catch {}
               busy = false;
             };
@@ -397,7 +411,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
             if (url.pathname === '/api/pulse/filters') return send(res, 200, { filters: pulse.setFilters(body.filters) });
             if (url.pathname === '/api/pulse/analyze') return send(res, 200, await pulse.analyze(checkMint(body.mint)));
             if (url.pathname === '/api/pulse/trade') {
-              const out = await bot.manualTrade({ mint: checkMint(body.mint), side: body.side === 'sell' ? 'sell' : 'buy', sol: body.sol, percent: body.percent, slippagePct: body.slippagePct });
+              const out = await bot.manualTrade({ mint: checkMint(body.mint), side: body.side === 'sell' ? 'sell' : 'buy', sol: body.sol, percent: body.percent, solAmount: body.solAmount, initial: Boolean(body.initial), slippagePct: body.slippagePct, prioritySol: body.prioritySol });
               posCache.delete(body.mint);
               return send(res, 200, out ?? { ok: true });
             }

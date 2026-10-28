@@ -135,11 +135,11 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     }
   }
 
-  async function executeSwap(quote) {
+  async function executeSwap(quote, prioLamports = null) {
     const { swapTransaction, lastValidBlockHeight } = await buildSwap(
       quote,
       book.keypair.publicKey.toBase58(),
-      cfg.priorityFeeMaxLamports,
+      prioLamports ?? cfg.priorityFeeMaxLamports,
     );
     const tx = VersionedTransaction.deserialize(Buffer.from(swapTransaction, 'base64'));
     tx.sign([book.keypair]);
@@ -158,7 +158,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
    * when Jupiter can't quote: paper mode prices from the coin's live bonding curve, and real-money mode has
    * PumpPortal build the transaction. A trade that was sent is never retried another way.
    */
-  async function swap(side, mint, amountRaw, slippageBps, prefetched = null) {
+  async function swap(side, mint, amountRaw, slippageBps, prefetched = null, prioLamports = null) {
     const [inputMint, outputMint] = side === 'buy' ? [WSOL, mint] : [mint, WSOL];
     let quote;
     try {
@@ -168,10 +168,10 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
       const c = pulse?.curveOf(mint);
       if (!c) throw e;
       if (cfg.dryRun) return { outRaw: curveOut(side, c, amountRaw), sig: null, via: 'curve', sentAt: Date.now() };
-      return pumpPortalSwap(side, mint, amountRaw, slippageBps);
+      return pumpPortalSwap(side, mint, amountRaw, slippageBps, prioLamports);
     }
     if (cfg.dryRun) return { outRaw: BigInt(quote.outAmount), sig: null, via: 'jupiter', sentAt: Date.now() };
-    const { signature, sentAt } = await executeSwap(quote);
+    const { signature, sentAt } = await executeSwap(quote, prioLamports);
     return { outRaw: BigInt(quote.outAmount), sig: signature, via: 'jupiter', sentAt };
   }
 
@@ -188,7 +188,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     return BigInt(Math.floor((vSol - k / (vTokens + Number(amountRaw) / 1e6)) * 0.99 * LAMPORTS));
   }
 
-  async function pumpPortalSwap(side, mint, amountRaw, slippageBps) {
+  async function pumpPortalSwap(side, mint, amountRaw, slippageBps, prioLamports = null) {
     const owner = book.keypair.publicKey;
     const beforeP = (side === 'buy' ? tokenBalance(mint) : connection.getBalance(owner).then(BigInt)).catch(() => null);
     const res = await fetch(`${process.env.PUMPPORTAL_API_URL || 'https://pumpportal.fun/api'}/trade-local`, {
@@ -198,17 +198,17 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
         publicKey: owner.toBase58(), action: side, mint, pool: 'auto',
         amount: side === 'buy' ? Number(amountRaw) / LAMPORTS : Number(amountRaw) / 1e6,
         denominatedInSol: side === 'buy' ? 'true' : 'false',
-        slippage: Math.max(1, Math.round(slippageBps / 100)), priorityFee: Math.min(cfg.priorityFeeMaxLamports, 2_000_000) / LAMPORTS,
+        slippage: Math.max(1, Math.round(slippageBps / 100)), priorityFee: (prioLamports ?? Math.min(cfg.priorityFeeMaxLamports, 2_000_000)) / LAMPORTS,
       }),
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) throw new Error(`PumpPortal couldn't build the trade (${res.status}): ${(await res.text()).slice(0, 200)}`);
     const tx = VersionedTransaction.deserialize(new Uint8Array(await res.arrayBuffer()));
     tx.sign([book.keypair]);
+    const before = (await beforeP) ?? 0n; // read while PumpPortal built the trade, so this costs no time
     const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true, maxRetries: 2 });
     const sentAt = Date.now();
     const { lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed'); // only needed to wait for the result
-    const before = (await beforeP) ?? 0n;
     const { value } = await connection.confirmTransaction({ signature: sig, blockhash: tx.message.recentBlockhash, lastValidBlockHeight }, 'confirmed');
     if (value.err) throw new Error(`transaction ${sig} failed on-chain (often slippage): ${JSON.stringify(value.err)}`);
     // the RPC can take a moment to show the new balance after the trade confirms
@@ -234,23 +234,33 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
   }
 
   /** A buy or sell you made yourself (Pulse quick trade). Sells reuse the normal sell path. */
-  async function manualTrade({ mint, side, sol, percent, slippagePct }) {
+  async function manualTrade({ mint, side, sol, percent, solAmount, initial, slippagePct, prioritySol }) {
     new PublicKey(mint);
     const slip = slippagePct ? Math.round(Number(slippagePct) * 100) : null;
+    const prio = Number(prioritySol) > 0 ? Math.min(Math.round(Number(prioritySol) * LAMPORTS), 50_000_000) : null; // capped at 0.05 SOL
     if (side === 'sell') {
-      if (!positions.get(mint)) throw new Error("You don't hold this coin.");
-      const fraction = Math.min(1, Math.max(0.01, Number(percent ?? 100) / 100));
-      return withLock(mint, () => sellPosition(mint, fraction, 'sold by you (Pulse)', slip, true));
+      const pos = positions.get(mint);
+      if (!pos) throw new Error("You don't hold this coin.");
+      let fraction = Math.min(1, Math.max(0.01, Number(percent ?? 100) / 100));
+      if (solAmount != null || initial) {
+        // sell a SOL amount's worth (or your initial investment): work out what share of the position that is
+        const value = await valueOf(mint, pos.tokens);
+        if (!value) throw new Error("Can't price this coin right now, so a SOL amount can't be worked out. Sell by % instead.");
+        const want = initial ? pos.solSpent : Number(solAmount);
+        if (!(want > 0)) throw new Error('Pick an amount to sell.');
+        fraction = Math.min(1, (want * LAMPORTS) / Number(value));
+      }
+      return withLock(mint, () => sellPosition(mint, fraction, initial ? 'sold initial investment (Pulse)' : 'sold by you (Pulse)', slip, true, prio));
     }
     const amount = Number(sol);
     if (!(amount > 0) || amount > 1000) throw new Error('Enter how much SOL to buy with, like 0.1.');
     if (cfg.blocklist?.includes(mint)) throw new Error("That coin is on your blocklist.");
     return withLock(mint, async () => {
       const lamports = BigInt(Math.round(amount * LAMPORTS));
-      const { outRaw, sig } = await swap('buy', mint, lamports, slip ?? cfg.buySlippageBps);
+      const { outRaw, sig } = await swap('buy', mint, lamports, slip ?? cfg.buySlippageBps, null, prio);
       const pos = positions.get(mint);
-      if (pos) positions.update(mint, { solSpent: pos.solSpent + amount, tokens: (BigInt(pos.tokens) + outRaw).toString() });
-      else positions.open(mint, { source: 'manual', sourceLabel: 'You (Pulse)', solSpent: amount, tokens: outRaw.toString(), openedAt: new Date().toISOString() });
+      if (pos) positions.update(mint, { solSpent: pos.solSpent + amount, boughtTotal: (pos.boughtTotal ?? pos.solSpent) + amount, tokens: (BigInt(pos.tokens) + outRaw).toString() });
+      else positions.open(mint, { source: 'manual', sourceLabel: 'You (Pulse)', solSpent: amount, boughtTotal: amount, soldTotal: 0, tokens: outRaw.toString(), openedAt: new Date().toISOString() });
       log(c.green(`  ${tag()}BOUGHT ${amount} SOL of ${short(mint)}`) + ' (you, from Pulse)' + (sig ? `  tx: ${sig}` : ''));
       recordTrade(book.tradeLogFile, { action: `${tag()}buy`, mint, wallet: 'You (Pulse)', sol: amount, reason: 'bought by you (Pulse)', tx: sig });
       return { ok: true, side: 'buy', sol: amount, tokens: outRaw.toString(), sig };
@@ -305,6 +315,8 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
         source: w.address,
         sourceLabel: w.label,
         solSpent: sol,
+        boughtTotal: sol,
+        soldTotal: 0,
         tokens: outRaw.toString(),
         openedAt: new Date().toISOString(),
       });
@@ -340,7 +352,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     return res.value.reduce((sum, a) => sum + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
   }
 
-  async function sellPosition(mint, fraction, reason, slippageBps = null, throwErrors = false) {
+  async function sellPosition(mint, fraction, reason, slippageBps = null, throwErrors = false, prioLamports = null) {
     const pos = positions.get(mint);
     if (!pos) return;
     try {
@@ -354,7 +366,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
       const amount = full ? held : (held * BigInt(Math.round(fraction * 10_000))) / 10_000n;
       if (amount === 0n) return;
 
-      const { outRaw, sig } = await swap('sell', mint, amount, slippageBps ?? cfg.sellSlippageBps);
+      const { outRaw, sig } = await swap('sell', mint, amount, slippageBps ?? cfg.sellSlippageBps, null, prioLamports);
       const solOut = Number(outRaw) / LAMPORTS;
       const cost = pos.solSpent * (full ? 1 : Number(amount) / Number(held));
       const pnl = solOut - cost;
@@ -363,7 +375,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
         positions.close(mint);
         finishRetiring(pos.source);
       }
-      else positions.update(mint, { solSpent: pos.solSpent - cost, tokens: (held - amount).toString() });
+      else positions.update(mint, { solSpent: pos.solSpent - cost, tokens: (held - amount).toString(), boughtTotal: pos.boughtTotal ?? pos.solSpent, soldTotal: (pos.soldTotal ?? 0) + solOut });
 
       const pnlText = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL`;
       log(c.yellow(`  ${tag()}SOLD ${full ? 'all' : `${Math.round(fraction * 100)}%`} of ${short(mint)} for ${solOut.toFixed(4)} SOL`) + ` (${(pnl >= 0 ? c.green : c.red)(pnlText)}) - ${reason}${sig ? `  tx: ${sig}` : ''}`);

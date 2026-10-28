@@ -114,7 +114,7 @@ PP('migrated coin: live price from the pool on the chain', pp.poolSource === 'po
 PP('migrated coin: pool trades move the chart instantly', pp.poolTradeShown === true && pp.poolMcMoved === true && Math.abs(pp.poolMcUsd - 430.5625 * 150) < 700, 'poolTradeShown');
 PP('measured feed delay is shown', /behind chain/.test(pp.delayChip ?? ''), 'delayChip');
 PP('sell from the trade panel', /^Sold for/.test(pp.sellToast ?? ''), 'sellToast');
-PP('real money: buy and sell through PumpPortal when Jupiter has no route', pp.liveBuy?.mode === 200 && pp.liveBuy?.buy?.ok === true && pp.liveBuy?.sell?.ok === true && pp.tradeLocal?.join() === 'buy:true:auto,sell:false:auto', 'liveBuy');
+PP('real money: buy and sell through PumpPortal when Jupiter has no route', pp.liveBuy?.mode === 200 && pp.liveBuy?.buy?.ok === true && Number(pp.liveBuy?.buy?.tokens) > 0 && pp.liveBuy?.sell?.ok === true && pp.liveBuy?.sell?.sol > 0 && pp.tradeLocal?.join() === 'buy:true:auto,sell:false:auto', 'liveBuy');
 PP('quick trade box opens and drags', pp.floatVisible === true && pp.dragged === true && /MCAT/.test(pp.floatCoin ?? ''), 'dragged');
 PP('quick trade box pops out into its own window', pp.popupQuickMode === true && /MCAT/.test(pp.popupCoin ?? '') && pp.popupHasBuy === true, 'popupQuickMode');
 PP('cards show the X post a coin came from, and a bigger look on hover', pp.cardStory === true && pp.peek === true, 'cardStory');
@@ -123,6 +123,9 @@ PP('live data check tests every source', pp.health?.length === 10 && pp.health.e
 PP('a coin the feed never showed: details from Helius, trades and chart from the chain', pp.ghostTrades >= 4 && pp.ghostNamed === true && pp.ghostChart === true, 'ghostTrades');
 PP('✨ Quality hides junk coins and turns off again', pp.qualityOn?.join() === 'MCAT' && pp.qualityOff?.length === 4, 'qualityOn');
 PP('coin page: 5m/1h/6h/24h stats, mint/freeze check, trade size icons', pp.windowsShown === true && pp.windowSwitch === true && pp.securityShown === true && pp.sizeIcons === true, 'windowsShown');
+PP('quick trade box: one-click buy, sell SOL amount, Sell Init., presets, edit, USD', /Bought 0\.05/.test(pp.qtBuy ?? '') && pp.qtSellSol === true && pp.qtInit === true && /Bought .*Sold .*Holding .*PnL/.test(pp.qtFoot ?? '') && pp.qtP2 === '0.25,0.5,1,2' && pp.qtEdited === '0.07' && /^\$25/.test(pp.qtUsd ?? ''), 'qtFoot');
+PP('chart shows dev / sniper / KOL / whale markers', /DB/.test(pp.chartMarkers ?? ''), 'chartMarkers');
+PP('holders: SOL balance, bought/sold with avg MC, PnL, remaining, fees, funding, held', ['SOL balance', 'Bought (avg MC)', 'Sold (avg MC)', 'U. PnL', 'Remaining', 'Fees (est.)', 'Funding', 'Held'].every((x) => (pp.holderCols ?? '').toUpperCase().includes(x.toUpperCase())) && pp.holderFees === true, 'holderCols');
 PP('back to the board', pp.backOnBoard === true, 'backOnBoard');
 PP('no page errors', Array.isArray(pp.errors) && pp.errors.length === 0, 'errors');
 
