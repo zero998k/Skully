@@ -1,4 +1,6 @@
 **New in 1.8.0**
+- **Same coins as Axiom with "Pump" ticked:** a Pump.fun coin that graduated now stays in Migrated when you filter to Pump only (before, it was hidden because it trades on PumpSwap after graduating).
+- **Set where Final Stretch starts:** Pulse → ⚙ → "Final Stretch starts at this bonding curve %" (45% by default).
 - **Scrolling fixed everywhere:** the Pulse columns, the filter window (every section reachable now) and the coin page scroll properly on laptop screens.
 - **Animated risk gauges:** top 10, dev, snipers, insiders and bundlers are rings that fill to the percentage around their own icon, glide when the number moves, turn yellow then red as it gets risky, and pulse red when it's dangerous.
 - **Pictures and stories load faster:** a coin's picture and socials start loading the moment it launches, the fastest picture servers are remembered and asked first, the coin's own description or X post shows instantly on its page while the AI writes, the AI uses Groq's fastest model, and hovering a coin preloads its page and story.

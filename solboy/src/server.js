@@ -405,7 +405,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
             return res.end(img.buf);
           }
           if (req.method === 'GET' && url.pathname === '/api/pulse/candles') return send(res, 200, { candles: await pulse.history(checkMint(mintParam)) });
-          if (req.method === 'GET' && url.pathname === '/api/pulse/filters') return send(res, 200, { filters: pulse.filters(), protocols: pulse.protocols, quickBuy: cfg.pulse.quickBuy, quickSell: cfg.pulse.quickSell, kols: cfg.pulse.kols });
+          if (req.method === 'GET' && url.pathname === '/api/pulse/filters') return send(res, 200, { filters: pulse.filters(), protocols: pulse.protocols, quickBuy: cfg.pulse.quickBuy, quickSell: cfg.pulse.quickSell, kols: cfg.pulse.kols, stretchPct: cfg.pulse.stretchPct ?? 45 });
           if (req.method === 'POST') {
             const body = await readBody(req);
             if (url.pathname === '/api/pulse/filters') return send(res, 200, { filters: pulse.setFilters(body.filters) });
@@ -420,12 +420,13 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
               const nums = (list, max) => (Array.isArray(list) ? list.map(Number).filter((n) => n > 0 && n <= max).slice(0, 6) : null);
               if (body.quickBuy) next.quickBuy = nums(body.quickBuy, 1000) ?? next.quickBuy;
               if (body.quickSell) next.quickSell = nums(body.quickSell, 100) ?? next.quickSell;
+              if (body.stretchPct != null && Number(body.stretchPct) >= 5 && Number(body.stretchPct) <= 99) next.stretchPct = Math.round(Number(body.stretchPct));
               if (Array.isArray(body.kols)) {
                 next.kols = body.kols.slice(0, 500).map((k) => ({ address: checkMint(k.address), label: String(k.label ?? '').trim().slice(0, 30) || 'KOL' }));
               }
               cfg.pulse = next;
               saveConfigValue('pulse', next);
-              return send(res, 200, { ok: true, quickBuy: next.quickBuy, quickSell: next.quickSell, kols: next.kols });
+              return send(res, 200, { ok: true, quickBuy: next.quickBuy, quickSell: next.quickSell, kols: next.kols, stretchPct: next.stretchPct ?? 45 });
             }
           }
           return send(res, 404, { error: 'not found' });

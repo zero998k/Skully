@@ -123,7 +123,9 @@ export function passes(row, f) {
   const text = `${row.name} ${row.symbol} ${row.mint}`.toLowerCase();
   if (f.include?.length && !f.include.some((k) => text.includes(String(k).toLowerCase()))) return false;
   if (f.exclude?.some((k) => text.includes(String(k).toLowerCase()))) return false;
-  if (f.protocols && f.protocols[row.protocol] === false) return false;
+  // A Pump.fun coin that graduated trades on PumpSwap: like Axiom, ticking "Pump" keeps it (its launchpad counts),
+  // and ticking only "Pump AMM" keeps it too (where it trades now).
+  if (f.protocols && f.protocols[row.protocol] === false && f.protocols[row.launchpad ?? row.protocol] === false) return false;
   const a = f.audit ?? {};
   if (a.dexPaid && !row.dexPaid) return false;
   if (a.caEndsPump && !row.mint.endsWith('pump')) return false;

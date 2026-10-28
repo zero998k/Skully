@@ -99,6 +99,16 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await p.click('[data-quality="new"]'); await sleep(1800);
   R.qualityOff = await col('new');
 
+  // "Pump only" (like Axiom's Pump filter) keeps graduated Pump.fun coins in Migrated
+  await p.evaluate(async () => { const f = JSON.parse(JSON.stringify(FILTERS)); for (const k of Object.keys(f.presets[f.active].migrated.protocols)) f.presets[f.active].migrated.protocols[k] = k === 'pump'; FILTERS = (await api('/api/pulse/filters', { filters: f })).filters; });
+  await sleep(1500);
+  R.pumpOnlyMigrated = await col('migrated');
+  await p.evaluate(async () => { const f = JSON.parse(JSON.stringify(FILTERS)); for (const k of Object.keys(f.presets[f.active].migrated.protocols)) f.presets[f.active].migrated.protocols[k] = true; FILTERS = (await api('/api/pulse/filters', { filters: f })).filters; });
+  // where Final Stretch starts can be set: at 99% the coin drops back to New Pairs
+  await p.evaluate(() => api('/api/pulse/prefs', { stretchPct: 99 })); await sleep(1500);
+  R.stretchAt99 = { stretch: await col('stretch'), inNew: (await col('new')).includes('FROG') };
+  await p.evaluate(() => api('/api/pulse/prefs', { stretchPct: 45 })); await sleep(1500);
+
   // quick buy from the card (Jupiter has no route yet: paper prices from the curve)
   await F(`/pp/noroute?mint=${a.mint}`);
   await p.locator(`.card[data-mint="${a.mint}"] [data-qbuy]`).click(); await sleep(1500);

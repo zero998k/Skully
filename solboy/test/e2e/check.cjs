@@ -128,6 +128,8 @@ PP('chart shows dev / sniper / KOL / whale markers', /DB/.test(pp.chartMarkers ?
 PP('holders: SOL balance, bought/sold with avg MC, PnL, remaining, fees, funding, held', ['SOL balance', 'Bought (avg MC)', 'Sold (avg MC)', 'U. PnL', 'Remaining', 'Fees (est.)', 'Funding', 'Held'].every((x) => (pp.holderCols ?? '').toUpperCase().includes(x.toUpperCase())) && pp.holderFees === true, 'holderCols');
 PP('everything scrolls on a short screen (columns, filters, coin page)', pp.scrollColumn === true && pp.scrollFilters === true && pp.scrollCoinSide === true && pp.scrollCoinTable === true, 'scrollColumn');
 PP('risk numbers are animated gauges', pp.gauges >= 5, 'gauges');
+PP('"Pump only" keeps graduated Pump.fun coins in Migrated (like Axiom)', pp.pumpOnlyMigrated?.includes('BIRD'), 'pumpOnlyMigrated');
+PP('Final Stretch % can be set', pp.stretchAt99?.inNew === true && !pp.stretchAt99?.stretch?.includes('FROG'), 'stretchAt99');
 PP('back to the board', pp.backOnBoard === true, 'backOnBoard');
 PP('no page errors', Array.isArray(pp.errors) && pp.errors.length === 0, 'errors');
 

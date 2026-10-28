@@ -1108,6 +1108,7 @@ $('prefsBtn').onclick = () => {
   $('prefsModal').hidden = false;
   $('prefsModal').innerHTML = `<div class="modal"><header><h3>Pulse settings</h3><button class="icon-btn" id="pClose">✕</button></header>
     <div class="body">
+      <label class="f box">Final Stretch starts at this bonding curve % (coins below it stay in New Pairs)<input id="pStretch" value="${esc(CFG.stretchPct ?? 45)}" inputmode="numeric"></label>
       <label class="f box">Quick buy amounts (SOL, comma separated)<input id="pBuy" value="${esc(CFG.quickBuy.join(', '))}"></label>
       <label class="f box">Quick sell amounts (% of your coins)<input id="pSell" value="${esc(CFG.quickSell.join(', '))}"></label>
       <label class="f box">KOL / tracked wallets: one per line, address then a name. They get a KOL tag in trades and holders.<textarea id="pKols" rows="7" style="font:12px var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--edge-2);border-radius:8px;padding:8px">${esc(CFG.kols.map((k) => `${k.address} ${k.label}`).join('\n'))}</textarea></label>
@@ -1131,7 +1132,7 @@ $('prefsModal').addEventListener('click', async (e) => {
   if (e.target.id === 'pSave') {
     const nums = (s) => s.split(/[,\s]+/).map(Number).filter((n) => n > 0);
     const kols = $('pKols').value.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [address, ...name] = l.split(/\s+/); return { address, label: name.join(' ') }; });
-    try { const r = await api('/api/pulse/prefs', { quickBuy: nums($('pBuy').value), quickSell: nums($('pSell').value), kols }); Object.assign(CFG, r); $('prefsModal').hidden = true; toast('win', 'Saved'); rerenderTradeBoxes(); }
+    try { const r = await api('/api/pulse/prefs', { quickBuy: nums($('pBuy').value), quickSell: nums($('pSell').value), kols, stretchPct: Number($('pStretch').value) }); Object.assign(CFG, r); $('prefsModal').hidden = true; toast('win', 'Saved'); rerenderTradeBoxes(); }
     catch (err) { toast('loss', err.message); }
   }
 });
@@ -1156,7 +1157,7 @@ addEventListener('keydown', (e) => {
   const quickMint = new URLSearchParams(location.search).get('quick');
   try {
     const d = await api('/api/pulse/filters');
-    FILTERS = d.filters; PROTOCOLS = d.protocols; CFG = { quickBuy: d.quickBuy, quickSell: d.quickSell, kols: d.kols };
+    FILTERS = d.filters; PROTOCOLS = d.protocols; CFG = { quickBuy: d.quickBuy, quickSell: d.quickSell, kols: d.kols, stretchPct: d.stretchPct ?? 45 };
     BLANK = clone(d.filters.presets[1].new); BLANK = blankLike(BLANK);
   } catch (err) { toast('loss', err.message); }
   markFilterButtons();
