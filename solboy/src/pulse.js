@@ -4,6 +4,7 @@ import { PublicKey } from '@solana/web3.js';
 import { file } from './paths.js';
 import { log } from './log.js';
 import { dexApi } from './endpoints.js';
+import { parseTrades } from './detect.js';
 
 // Pulse: a live board of new Pump.fun / Bonk coins (New Pairs, Final Stretch, Migrated) with Axiom-style filters.
 // Data comes free from PumpPortal's public websocket (every launch, trade and migration), DexScreener for
@@ -30,8 +31,8 @@ const PUMP_CURVE_TOKENS = 793_100_191; // tokens sold before the curve completes
 const GRADUATION_MC_SOL = 410; // rough market cap (SOL) where a curve completes, for launchpads without curve maths
 const BUNDLE_MS = 1200; // bought within ~1-3 blocks of the launch: bundled with it
 const SNIPE_MS = 5000; // bought within the first few seconds
-const MAX_TOKENS = 1500;
-const MAX_SUBSCRIBED = 600;
+const MAX_TOKENS = 4000;
+const MAX_SUBSCRIBED = 2500; // live trade feeds kept open: every recent coin, so their stats are complete when they get hot
 const TRADES_KEPT = 500;
 
 // Every launchpad Axiom lists. SolBoy has live data for the ones marked live; the rest are shown but can't match yet.
@@ -73,6 +74,7 @@ const handleOf = (url) => /(?:x|twitter)\.com\/(?!i\/|search|home|intent)([A-Za-
 export function blankFilters() {
   const range = () => ({ min: '', max: '' });
   return {
+    quality: false,
     include: [],
     exclude: [],
     protocols: Object.fromEntries(PROTOCOLS.map(([id]) => [id, true])),
@@ -100,8 +102,20 @@ function inRange(value, r, scale = 1) {
 }
 
 /** Does a coin pass one column's filters? Unknown numbers pass, so brand-new coins aren't hidden by missing data. */
+// "Quality only": hides the junk most launches are: no socials at all, a dev who already dumped, or a coin a few
+// wallets (bundles, top 10) already own most of. Unknown numbers don't hide a coin.
+export function quality(row) {
+  if (!(row.twitter || row.website || row.telegram)) return false;
+  if (row.devSold) return false;
+  if (row.bundle != null && row.bundle >= 30) return false;
+  if (row.top10 != null && row.top10 >= 60) return false;
+  if (row.snipers != null && row.snipers >= 30) return false;
+  return true;
+}
+
 export function passes(row, f) {
   if (!f) return true;
+  if (f.quality && !quality(row)) return false;
   const text = `${row.name} ${row.symbol} ${row.mint}`.toLowerCase();
   if (f.include?.length && !f.include.some((k) => text.includes(String(k).toLowerCase()))) return false;
   if (f.exclude?.some((k) => text.includes(String(k).toLowerCase()))) return false;
@@ -282,7 +296,11 @@ export function createPulse({ cfg, connection }) {
     }
   }
 
+  const tradeTicks = []; // when trades arrived (last minute), to show the feed is really flowing
   function onTrade(d) {
+    const nowT = Date.now();
+    tradeTicks.push(nowT);
+    while (tradeTicks.length && nowT - tradeTicks[0] > 60_000) tradeTicks.shift();
     let tok = tokens.get(d.mint);
     if (!tok) tokens.set(d.mint, (tok = blankToken(d.mint)));
     const now = Date.now();
@@ -532,7 +550,7 @@ export function createPulse({ cfg, connection }) {
   const metaQueue = [];
   let metaBusy = 0;
   function wantMeta(tok) {
-    if (tok.metaState !== 'none' || !tok.uri) return;
+    if (tok.metaState !== 'none' || (!tok.uri && !dasLeft())) return;
     tok.metaState = 'queued';
     metaQueue.push(tok);
     pumpMeta();
@@ -547,17 +565,49 @@ export function createPulse({ cfg, connection }) {
       });
     }
   }
+  // Helius's coin lookup (your own key): any coin's metadata link, name and a fast copy of its picture.
+  // 10 credits each, so it is a backup with a daily cap (the free plan has about 1 million credits a month).
+  const DAS_DAILY = 2500;
+  let dasDay = '', dasUsed = 0;
+  const dasLeft = () => { const d = new Date().toDateString(); if (d !== dasDay) { dasDay = d; dasUsed = 0; } return dasUsed < DAS_DAILY; };
+  async function dasAsset(mint) {
+    if (!dasLeft()) throw new Error('daily Helius lookups used up');
+    dasUsed++;
+    const res = await fetch(connection.rpcEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAsset', params: { id: mint } }), signal: AbortSignal.timeout(6000) });
+    const r = (await res.json()).result;
+    if (!r?.content) throw new Error('no asset');
+    const f = r.content.files?.[0] ?? {};
+    const img = [f.cdn_uri, r.content.links?.image, f.uri].find((u) => typeof u === 'string' && (publicUrl(u) || allowLocal()));
+    stats.dasOk = (stats.dasOk ?? 0) + 1;
+    return { jsonUri: r.content.json_uri || null, image: img ?? null, name: r.content.metadata?.name, symbol: r.content.metadata?.symbol, description: r.content.metadata?.description };
+  }
   async function loadMeta(tok) {
+    let das = null;
+    if (!tok.uri) {
+      // a coin SolBoy didn't see launch: ask Helius where its details live
+      try {
+        das = await dasAsset(tok.mint);
+        tok.uri = das.jsonUri;
+        tok.name ||= String(das.name ?? '').slice(0, 60);
+        tok.symbol ||= String(das.symbol ?? '').slice(0, 20);
+      } catch {
+        tok.metaState = 'failed';
+        stats.metaFail++;
+        return;
+      }
+    }
     const cid = ipfsCid(tok.uri);
     const urls = [...new Set([tok.uri, ...(cid ? GATEWAYS.map((g) => g + cid) : [])])].filter((u) => publicUrl(u) || (allowLocal() && /^http:\/\/127\.0\.0\.1/.test(u)));
     try {
       // IPFS gateways and Pump.fun's own record for the coin, whichever answers first
       const sources = urls.map((u) => getJson(u, 5000));
       if (tok.protocol === 'pump') sources.push(getJson(`${PUMP_API()}/coins/${tok.mint}`, 5000).then((c) => (c?.image_uri ? { ...c, image: c.image_uri } : Promise.reject(new Error('no coin')))));
+      if (!sources.length) throw new Error('no metadata link');
       const m = await Promise.any(sources);
       const image = typeof m.image === 'string' ? m.image.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/') : null;
       tok.meta = {
-        image: image && (publicUrl(image) || allowLocal()) ? image : null,
+        image: image && (publicUrl(image) || allowLocal()) ? image : das?.image ?? null,
+        cdnImage: das?.image ?? null,
         description: String(m.description ?? '').slice(0, 400),
         twitter: typeof m.twitter === 'string' ? m.twitter.slice(0, 200) : null,
         telegram: typeof m.telegram === 'string' ? m.telegram.slice(0, 200) : null,
@@ -571,6 +621,11 @@ export function createPulse({ cfg, connection }) {
       tok.metaState = 'done';
       stats.metaOk++;
     } catch {
+      // the details file didn't load: Helius still has the picture (and the name), even without the socials
+      if (!das && dasLeft()) das = await dasAsset(tok.mint).catch(() => null);
+      if (das?.image && !tok.meta) {
+        tok.meta = { image: das.image, cdnImage: das.image, description: String(das.description ?? '').slice(0, 400), twitter: null, telegram: null, website: null };
+      }
       if (tok.metaTries) stats.metaFail++;
       // IPFS gateways are often slow for brand-new files: try once more a little later
       tok.metaState = tok.metaTries ? 'failed' : 'none';
@@ -600,6 +655,7 @@ export function createPulse({ cfg, connection }) {
               buys: num(p.txns?.h24?.buys), sells: num(p.txns?.h24?.sells), priceUsd: num(p.priceUsd), pair: p.pairAddress, dexId: p.dexId,
               paid: Boolean(p.info?.imageUrl || p.info?.websites?.length || p.info?.socials?.length), pairCreatedAt: p.pairCreatedAt ?? null,
               image: p.info?.imageUrl ?? null, socials: p.info?.socials ?? [], websites: p.info?.websites ?? [],
+              windows: Object.fromEntries(['m5', 'h1', 'h6', 'h24'].map((k) => [k, { change: num(p.priceChange?.[k]), volUsd: num(p.volume?.[k]), buys: num(p.txns?.[k]?.buys), sells: num(p.txns?.[k]?.sells) }])),
             }
           : { at: Date.now() };
         if (p && !tok.name) {
@@ -729,6 +785,39 @@ export function createPulse({ cfg, connection }) {
     return { ...tr, mcUsd: tr.mcSol != null && solUsd ? tr.mcSol * solUsd : null, usd: solUsd ? tr.sol * solUsd : null, tags: w ? [...w.tags] : [], label: l?.label ?? null, kol: Boolean(l?.kol) };
   }
 
+  // 5m / 1h / 6h / 24h: price change, volume and buys vs sells, from SolBoy's own trades when they cover the
+  // window, otherwise DexScreener's numbers
+  function windowStats(tok) {
+    const now = Date.now();
+    const out = {};
+    const oldest = tok.trades[0]?.t ?? now;
+    for (const [k, ms] of [['m5', 300e3], ['h1', 3600e3], ['h6', 21600e3], ['h24', 86400e3]]) {
+      const covered = tok.fromBirth || oldest <= now - ms;
+      if (!covered && tok.dex?.windows?.[k]) { out[k] = { ...tok.dex.windows[k], source: 'dex' }; continue; }
+      const inWin = tok.trades.filter((t) => t.t >= now - ms);
+      if (!inWin.length) { out[k] = covered ? { change: 0, volUsd: 0, buys: 0, sells: 0, buyUsd: 0, sellUsd: 0 } : null; continue; }
+      const before = [...tok.trades].reverse().find((t) => t.t < now - ms && t.mcSol != null);
+      const start = before?.mcSol ?? inWin.find((t) => t.mcSol != null)?.mcSol;
+      const end = tok.mcSol ?? inWin.at(-1).mcSol;
+      const usd = solUsd ?? 0;
+      const buys = inWin.filter((t) => t.side === 'buy'), sells = inWin.filter((t) => t.side === 'sell');
+      const sum = (l) => l.reduce((a, t) => a + (t.sol ?? 0), 0) * usd;
+      out[k] = { change: start && end ? ((end - start) / start) * 100 : null, volUsd: sum(inWin), buys: buys.length, sells: sells.length, buyUsd: sum(buys), sellUsd: sum(sells), source: covered ? 'live' : 'partial' };
+    }
+    return out;
+  }
+  // Can the creator still mint more coins or freeze yours? Read once from the chain.
+  function securityOf(tok) {
+    if (tok.security) return tok.security;
+    if (!tok.securityLoading) {
+      tok.securityLoading = true;
+      connection.getParsedAccountInfo(new PublicKey(tok.mint)).then((r) => {
+        const info = r.value?.data?.parsed?.info;
+        if (info) tok.security = { mintAuthority: Boolean(info.mintAuthority), freezeAuthority: Boolean(info.freezeAuthority), token2022: r.value.owner?.toString?.() === 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCCEpPxuEb' };
+      }).catch(() => {}).finally(() => { tok.securityLoading = false; });
+    }
+    return null;
+  }
   const holderCache = new Map();
   const holdersLoading = new Set();
   function refreshHolders(tok) {
@@ -807,6 +896,8 @@ export function createPulse({ cfg, connection }) {
     const devHist = tok.creator ? history.devs[tok.creator] : null;
     return {
       ...r,
+      windows: windowStats(tok),
+      security: securityOf(tok),
       story: { tweet: tok.tweet ?? null, site: tok.site ?? null, loading: (tok.uri && !['done', 'failed'].includes(tok.metaState)) || tok.storyState === 'queued' || tok.siteState === 'loading' || (Boolean(tok.meta?.website) && !tok.siteState) || (/\/status(?:es)?\/\d+/.test(tok.meta?.twitter ?? '') && !tok.storyState) },
       solUsd,
       trades: tok.trades.slice(-200).reverse().map((tr) => decorateTrade(tok, tr)),
@@ -952,7 +1043,7 @@ export function createPulse({ cfg, connection }) {
     tok.geckoTradesAt = Date.now();
     try {
       const pool = await geckoPool(tok.mint);
-      if (!pool) return;
+      if (!pool) return void chainTrades(tok);
       const d = await getJson(`${GECKO_API()}/networks/solana/pools/${pool}/trades`, 6000);
       const have = new Set(tok.trades.map((t) => t.sig));
       const usd = solUsd;
@@ -968,11 +1059,42 @@ export function createPulse({ cfg, connection }) {
         if (sol == null || !Number.isFinite(t)) continue;
         got.push({ sig: a.tx_hash, t, side: a.kind, wallet: a.tx_from_address ?? null, sol, tokens: tokens ?? 0, mcSol: priceUsd && usd ? (priceUsd * SUPPLY) / usd : null, source: 'history' });
       }
-      if (!got.length) return;
+      if (!got.length) return void chainTrades(tok);
       tok.trades = [...got, ...tok.trades].sort((a, b) => a.t - b.t).slice(-TRADES_KEPT);
       stats.geckoOk++;
     } catch {
       stats.geckoFail++;
+      chainTrades(tok);
+    }
+  }
+  /** The coin's latest trades read straight from the chain (your Helius key), when GeckoTerminal has none. */
+  async function chainTrades(tok) {
+    if (tok.chainTradesAt && Date.now() - tok.chainTradesAt < 120_000) return;
+    tok.chainTradesAt = Date.now();
+    try {
+      const addr = !tok.migrated && tok.bondingCurveKey ? tok.bondingCurveKey : tok.dex?.pair ?? tok.mint;
+      const sigs = await connection.getSignaturesForAddress(new PublicKey(addr), { limit: 80 });
+      const have = new Set(tok.trades.map((t) => t.sig));
+      const todo = sigs.filter((x) => !x.err && !have.has(x.signature)).map((x) => x.signature);
+      const got = [];
+      for (let i = 0; i < todo.length; i += 20) {
+        const txs = await connection.getParsedTransactions(todo.slice(i, i + 20), { maxSupportedTransactionVersion: 0, commitment: 'confirmed' });
+        for (const tx of txs) {
+          const keys = tx?.transaction?.message?.accountKeys ?? [];
+          const trader = (keys[0]?.pubkey ?? keys[0])?.toString();
+          if (!trader) continue;
+          for (const t of parseTrades(tx, trader)) {
+            if (t.mint !== tok.mint) continue;
+            const tokens = Number(t.tokenAmount) / 1e6;
+            got.push({ sig: tx.transaction.signatures[0], t: (tx.blockTime ?? 0) * 1000, side: t.side, wallet: trader, sol: t.solAmount, tokens, mcSol: tokens ? (t.solAmount / tokens) * SUPPLY : null, source: 'chain' });
+          }
+        }
+      }
+      if (!got.length) return;
+      tok.trades = [...got, ...tok.trades].sort((a, b) => a.t - b.t).slice(-TRADES_KEPT);
+      stats.chainOk = (stats.chainOk ?? 0) + 1;
+    } catch {
+      stats.chainFail = (stats.chainFail ?? 0) + 1;
     }
   }
   async function history5m(mint) {
@@ -1091,11 +1213,14 @@ export function createPulse({ cfg, connection }) {
     if (n) log(`Pulse loaded ${n} coins from GeckoTerminal to fill the columns.`);
   }
   function saveCache() {
-    const keep = [...tokens.values()].filter((t) => t.name && (t.mcSol != null || t.migrated)).sort((a, b) => (b.lastTradeAt ?? b.seenAt) - (a.lastTradeAt ?? a.seenAt)).slice(0, 400);
+    const keep = [...tokens.values()].filter((t) => t.name && (t.mcSol != null || t.migrated)).sort((a, b) => (b.lastTradeAt ?? b.seenAt) - (a.lastTradeAt ?? a.seenAt)).slice(0, 500);
     const pick = (t) => ({
       mint: t.mint, name: t.name, symbol: t.symbol, uri: t.uri, protocol: t.protocol, creator: t.creator, createdAt: t.createdAt, bondingCurveKey: t.bondingCurveKey,
       vSol: t.vSol, vTokens: t.vTokens, mcSol: t.mcSol, athMcSol: t.athMcSol, migrated: t.migrated, migratedAt: t.migratedAt, pool: t.pool,
-      buys: t.buys, sells: t.sells, volSol: t.volSol, lastTradeAt: t.lastTradeAt, meta: t.meta, trades: t.trades.slice(-60),
+      buys: t.buys, sells: t.sells, volSol: t.volSol, lastTradeAt: t.lastTradeAt, meta: t.meta, trades: t.trades.slice(-80), tweet: t.tweet ?? null,
+      fromBirth: t.fromBirth, backfill: t.backfill === 'exact' ? 'exact' : undefined,
+      // the biggest wallets with their dev/sniper/bundler tags, so those numbers survive a restart
+      wallets: [...t.wallets].sort((a, b) => b[1].bal - a[1].bal).slice(0, 40).map(([a, w]) => [a, { ...w, tags: [...w.tags] }]),
     });
     try { saveJson(cacheFile, { at: Date.now(), tokens: keep.map(pick) }); } catch {}
   }
@@ -1104,10 +1229,12 @@ export function createPulse({ cfg, connection }) {
     if (Date.now() - saved.at < 6 * 3600_000) {
       for (const c of saved.tokens ?? []) {
         if (!c?.mint || tokens.has(c.mint)) continue;
-        const tok = Object.assign(blankToken(c.mint), c, { trades: Array.isArray(c.trades) ? c.trades : [], fromBirth: false, restored: true });
+        const wallets = new Map((Array.isArray(c.wallets) ? c.wallets : []).map(([a, w]) => [a, { ...w, tags: new Set(w.tags ?? []) }]));
+        const tok = Object.assign(blankToken(c.mint), c, { trades: Array.isArray(c.trades) ? c.trades : [], wallets, fromBirth: Boolean(c.fromBirth), restored: true });
+        if (tok.tweet) tok.storyState = 'done';
         tok.metaState = tok.meta ? 'done' : 'none';
         tokens.set(c.mint, tok);
-        if (Date.now() - (tok.lastTradeAt ?? 0) < 3600_000) follow(c.mint);
+        if (Date.now() - (tok.lastTradeAt ?? 0) < 6 * 3600_000) follow(c.mint);
       }
     }
   } catch {}
@@ -1122,7 +1249,7 @@ export function createPulse({ cfg, connection }) {
   let imgBytes = 0;
   function image(mint) {
     const tok = tokens.get(mint);
-    const src = tok?.meta?.image || tok?.dex?.image;
+    const src = tok?.meta?.cdnImage || tok?.meta?.image || tok?.dex?.image;
     if (!src) return null;
     const hit = imgCache.get(mint);
     if (hit) {
@@ -1160,6 +1287,8 @@ export function createPulse({ cfg, connection }) {
       })
       .catch(() => {
         stats.imgFail++;
+        // no gateway answered: get Helius's copy of the picture for next time
+        if (tok && !tok.meta?.cdnImage && dasLeft()) dasAsset(mint).then((d) => { if (d.image) { tok.meta = { ...(tok.meta ?? {}), cdnImage: d.image, image: tok.meta?.image ?? d.image }; imgFail.delete(mint); } }).catch(() => {});
         imgFail.set(mint, Date.now());
         if (imgFail.size > 2000) imgFail.delete(imgFail.keys().next().value);
         return null;
@@ -1192,12 +1321,19 @@ export function createPulse({ cfg, connection }) {
         check('Live coin feed (PumpPortal)', async () => {
           if (wsState !== 'live') throw new Error(`feed is ${wsState}`);
           if (Date.now() - lastMessageAt > 60_000) throw new Error('connected, but no coins in the last minute');
-          return `live, ${tokens.size} coins tracked, last message ${Math.round((Date.now() - lastMessageAt) / 1000)}s ago`;
+          const tpm = tradeTicks.filter((x) => Date.now() - x < 60_000).length;
+          if (subscribed.size > 20 && tpm === 0) throw new Error(`new coins arrive, but no trades in the last minute (following ${subscribed.size} coins): holders, snipers and bundles can't fill in`);
+          return `live, ${tokens.size} coins tracked, ${tpm} trades in the last minute, last message ${Math.round((Date.now() - lastMessageAt) / 1000)}s ago`;
         }),
         check('Pump.fun coin lists', async () => {
           const list = await getJson(`${PUMP_API()}/coins?offset=0&limit=5&sort=market_cap&order=DESC&includeNsfw=false&complete=false`, 8000);
           if (!Array.isArray(list) || !list.length) throw new Error('answered, but with no coins');
           return `${list.length} coins, e.g. $${clip(list[0].symbol, 12)}`;
+        }),
+        check('Coin details from Helius (backup for pictures)', async () => {
+          const d = await dasAsset('EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm');
+          if (!d.jsonUri && !d.image) throw new Error('answered, but with no details');
+          return `ok (${dasUsed} of ${DAS_DAILY} daily lookups used)`;
         }),
         check('Coin pictures (IPFS)', async () => {
           if (!recent.length) throw new Error('no coin pictures known yet; wait a minute and check again');
@@ -1240,7 +1376,7 @@ export function createPulse({ cfg, connection }) {
     image,
     priceSol,
     curveOf,
-    status: () => ({ feed: wsState === 'live' && Date.now() - lastMessageAt > 120_000 ? 'quiet' : wsState, solUsd, tracking: tokens.size, live: subscribed.size, delaySec: feedDelay() }),
+    status: () => ({ feed: wsState === 'live' && Date.now() - lastMessageAt > 120_000 ? 'quiet' : wsState, solUsd, tracking: tokens.size, live: subscribed.size, delaySec: feedDelay(), tpm: tradeTicks.filter((x) => Date.now() - x < 60_000).length }),
     viewing(delta) {
       viewers = Math.max(0, viewers + delta);
     },

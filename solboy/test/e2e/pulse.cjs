@@ -84,6 +84,12 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await p.click('[data-filter="new"]'); await p.click('[data-preset="1"]'); await p.click('#fReset'); await p.click('#fApply'); await sleep(1800);
   R.afterReset = await col('new');
 
+  // ✨ Quality: only coins with socials and no red flags (MCAT has X, website and Telegram; RUG and BPUP have none)
+  await p.click('[data-quality="new"]'); await sleep(1800);
+  R.qualityOn = await col('new');
+  await p.click('[data-quality="new"]'); await sleep(1800);
+  R.qualityOff = await col('new');
+
   // quick buy from the card (Jupiter has no route yet: paper prices from the curve)
   await F(`/pp/noroute?mint=${a.mint}`);
   await p.locator(`.card[data-mint="${a.mint}"] [data-qbuy]`).click(); await sleep(1500);
@@ -106,6 +112,11 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.analyzeToast = (await toasts()).match(/Checked[^\n]*/)?.[0];
   await p.click('[data-ctab="holders"]'); await sleep(300);
   R.insiderTagged = await p.locator('#coinTable .tag.insider').count();
+  R.windowsShown = (await p.locator('#coinSide .wtabs button').count()) === 4 && /Vol/.test(await p.locator('#coinSide .wins').innerText());
+  await p.click('#coinSide [data-win="h1"]'); await sleep(200);
+  R.windowSwitch = await p.locator('#coinSide [data-win="h1"].on').count() === 1;
+  R.securityShown = await until(async () => (await p.locator('#coinSide').innerText()).includes('Revoked ✓'), 6000);
+  await p.click('[data-ctab="trades"]'); await sleep(300); R.sizeIcons = await p.locator('#coinTable .sz').count() > 0; await p.click('[data-ctab="holders"]'); await sleep(300);
   R.positionShown = (await p.locator('#sideTrade [data-pos]').innerText()).replace(/\s+/g, ' ');
   await p.click('#sideTrade [data-tside="sell"]'); await p.click('#sideTrade [data-tamt="50"]'); await p.click('#sideTrade [data-tgo]'); await sleep(1500);
   R.sellToast = (await toasts()).match(/Sold[^\n]*|Sell failed[^\n]*/)?.[0];
@@ -142,6 +153,14 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await p.click('[data-ctab="trades"]').catch(() => {});
   R.seedTradesRows = await until(async () => (await p.locator('#coinTable tbody tr').count()) >= 20, 6000) ? await p.locator('#coinTable tbody tr').count() : await p.locator('#coinTable tbody tr').count();
   R.seedChart = await p.evaluate(() => !document.getElementById('chartMsg') || document.getElementById('chartMsg').hidden);
+
+  // a coin the feed never showed: details from Helius, trades and chart read from the chain
+  const ghost = await F('/pp/create?name=Ghost%20Coin&symbol=GHST&dev=dev8&initial=0.6&hidden=1');
+  for (const [i, w] of ['g1', 'g2', 'g3', 'g4'].entries()) await F(`/pp/trade?mint=${ghost.mint}&side=buy&sol=${0.3 + i * 0.2}&wallet=${w}&hidden=1`);
+  await p.goto(`http://localhost:7777/pulse#coin=${ghost.mint}`); await sleep(500); await p.click('[data-ctab="trades"]').catch(() => {});
+  R.ghostTrades = await until(async () => (await p.locator('#coinTable tbody tr').count()) >= 4, 10000) ? await p.locator('#coinTable tbody tr').count() : await p.locator('#coinTable tbody tr').count();
+  R.ghostNamed = /SolBoy Cat|BOYZ|GHST/.test(await p.locator('#coinHead').innerText());
+  R.ghostChart = await p.evaluate(() => !document.getElementById('chartMsg') || document.getElementById('chartMsg').hidden);
 
   // a migrated coin: its price comes straight from the pool's vaults on the chain, trade by trade
   await p.goto(`http://localhost:7777/pulse#coin=${mig.mint}`); await sleep(4000); await p.click('[data-ctab="trades"]'); await sleep(300);

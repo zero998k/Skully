@@ -119,7 +119,10 @@ PP('quick trade box opens and drags', pp.floatVisible === true && pp.dragged ===
 PP('quick trade box pops out into its own window', pp.popupQuickMode === true && /MCAT/.test(pp.popupCoin ?? '') && pp.popupHasBuy === true, 'popupQuickMode');
 PP('cards show the X post a coin came from, and a bigger look on hover', pp.cardStory === true && pp.peek === true, 'cardStory');
 PP('coin page story: one slim line (AI story, X post, website) with details on demand', pp.storyBar === true && pp.storyHeight <= 36 && pp.storyMore === true, 'storyText');
-PP('live data check tests every source', pp.health?.length === 9 && pp.health.every((x) => x.startsWith('OK')), 'health');
+PP('live data check tests every source', pp.health?.length === 10 && pp.health.every((x) => x.startsWith('OK')), 'health');
+PP('a coin the feed never showed: details from Helius, trades and chart from the chain', pp.ghostTrades >= 4 && pp.ghostNamed === true && pp.ghostChart === true, 'ghostTrades');
+PP('✨ Quality hides junk coins and turns off again', pp.qualityOn?.join() === 'MCAT' && pp.qualityOff?.length === 4, 'qualityOn');
+PP('coin page: 5m/1h/6h/24h stats, mint/freeze check, trade size icons', pp.windowsShown === true && pp.windowSwitch === true && pp.securityShown === true && pp.sizeIcons === true, 'windowsShown');
 PP('back to the board', pp.backOnBoard === true, 'backOnBoard');
 PP('no page errors', Array.isArray(pp.errors) && pp.errors.length === 0, 'errors');
 

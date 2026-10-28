@@ -1,3 +1,11 @@
+**New in 1.6.0: a fuller, more finished Pulse**
+- **Pictures and X posts for far more coins:** coins SolBoy didn't see launch (and every migrated coin) now get their picture, name and X post too. When the IPFS picture servers fail, SolBoy asks your Helius key for its fast copy of the picture, and your browser also tries the picture directly.
+- **Charts and trades for older coins:** when GeckoTerminal has nothing, SolBoy reads the coin's latest trades straight from the chain with your Helius key and draws the chart from them.
+- **Always warm:** SolBoy now follows up to 2,500 coins' trades from their launch and saves the board (with dev, sniper and bundler tags) across restarts, so Final Stretch and Migrated fill with full numbers. Leave SolBoy running and it gets better and better.
+- **✨ Quality switch on every column:** hides coins with no socials, a dev who sold, or heavy bundling / top-10 ownership.
+- **Coin page:** 5m / 1h / 6h / 24h price change, volume and buys vs sells with a buy/sell bar; mint and freeze authority check; age; 15m and 1h chart; 🐳 / 🐬 / 🐟 size on every trade.
+- **See the feed working:** the top bar shows trades per minute, and the 📡 Live data check now also tests Helius coin details and warns if trades aren't arriving.
+
 **New in 1.5.0: faster copying, wallet switches, fuller Pulse**
 - **Copies Pump.fun trades much faster:** SolBoy now hears a wallet's trade at the earliest moment the network reports it, reads Pump.fun trades straight from the notification (no download), buys straight on the coin's curve, and runs its checks at the same time instead of one by one. The dashboard shows **⚡ how long each copy took**, from their trade to your order going out.
 - **Switch copying on or off per wallet:** Wallets tab → click **Copying / Off** next to any wallet. Switched-off wallets aren't copied, but their sells still follow for coins you already hold from them.
