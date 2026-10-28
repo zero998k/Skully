@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="__MASCOT__">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SolBoy Pulse</title>
 <style>
@@ -25,7 +26,11 @@ input:focus, select:focus { outline: 1px solid var(--accent); border-color: var(
 
 /* top bar */
 .top { height: 52px; display: flex; align-items: center; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--edge); background: #070708; }
-.logo { font-weight: 900; font-size: 18px; letter-spacing: -.5px; } .logo b { color: var(--accent); }
+@font-face { font-family: 'SolBoyLogo'; src: url(data:font/woff2;base64,__LOGO_FONT__) format('woff2'); font-weight: 800; font-display: block; }
+.logo { display: flex; align-items: center; gap: 8px; font-family: 'SolBoyLogo', var(--body); font-weight: 800; font-size: 21px; letter-spacing: .3px; text-shadow: 2px 2px 0 #000; }
+.logo b { color: var(--accent); font-weight: 800; text-shadow: 2px 2px 0 #000, 0 0 14px rgba(255,45,149,.8); }
+.logo img { width: 44px; height: 44px; object-fit: contain; margin: -6px 0; filter: drop-shadow(0 0 10px rgba(255,45,149,.45)); }
+.logo .sub { font-family: var(--body); font-size: 14px; color: var(--ink-3); text-shadow: none; font-weight: 600; }
 .nav a { color: var(--ink-2); font-weight: 600; padding: 6px 10px; border-radius: 8px; } .nav a:hover { color: var(--ink); background: var(--panel-2); } .nav a.on { color: #fff; background: var(--accent); }
 .spacer { flex: 1; }
 .chip { font: 600 12px var(--mono); padding: 4px 9px; border-radius: 999px; border: 1px solid var(--edge-2); color: var(--ink-2); white-space: nowrap; }
@@ -173,7 +178,7 @@ body.quick-mode .floating { position: static; width: auto; border-radius: 0; bor
 </head>
 <body>
 <header class="top">
-  <div class="logo">SOL<b>BOY</b> <span class="dim" style="font-weight:600">Pulse</span></div>
+  <a class="logo" href="/"><img src="__MASCOT__" alt="SolBoy"><span>SOL<b>BOY</b></span><span class="sub">Pulse</span></a>
   <nav class="nav"><a href="/" id="navDash">Dashboard</a><a href="/pulse" class="on">Pulse</a></nav>
   <span class="spacer"></span>
   <span class="chip" id="feedChip">connecting</span>

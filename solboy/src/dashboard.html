@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="__MASCOT__">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SolBoy HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -51,17 +52,16 @@ body { min-height: 100vh; overflow-x: hidden; }
 .hud { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 16px; position: sticky; top: 12px; z-index: 20;
   background: rgba(13, 13, 13, .92); backdrop-filter: blur(10px); border: 2px solid var(--edge); border-radius: 22px; box-shadow: 5px 5px 0 var(--accent); }
 .brand { display: flex; align-items: center; gap: 10px; }
-.mascot { width: 54px; height: 54px; animation: bob 2.4s ease-in-out infinite; transform-origin: 50% 90%; }
-.mascot .mouth-happy, .mascot .mouth-sad { opacity: 0; }
-.mascot.happy .mouth-idle, .mascot.sad .mouth-idle { opacity: 0; }
-.mascot.happy .mouth-happy, .mascot.sad .mouth-sad { opacity: 1; }
+.mascot { width: 76px; height: 76px; object-fit: contain; margin: -14px -4px -14px -8px; animation: bob 2.4s ease-in-out infinite; transform-origin: 50% 90%; filter: drop-shadow(0 0 14px rgba(255,45,149,.45)) drop-shadow(3px 4px 0 rgba(0,0,0,.6)); }
+.fab-face { width: 34px; height: 34px; object-fit: contain; }
 .mascot.happy { animation: hop .5s var(--pop) 2; }
 .mascot.sad { animation: droop 1.2s ease-in-out; }
 @keyframes bob { 50% { transform: translateY(-3px) rotate(-2deg); } }
 @keyframes hop { 40% { transform: translateY(-12px) rotate(8deg) scale(1.08); } }
 @keyframes droop { 30% { transform: translateY(3px) rotate(-8deg); } 60% { transform: translateY(3px) rotate(6deg); } }
-.logo { font-family: var(--display); font-weight: 800; font-size: 30px; letter-spacing: -1px; position: relative; line-height: 1; }
-.logo b { color: var(--accent); font-weight: 800; }
+@font-face { font-family: 'SolBoyLogo'; src: url(data:font/woff2;base64,__LOGO_FONT__) format('woff2'); font-weight: 800; font-display: block; }
+.logo { font-family: 'SolBoyLogo', var(--display); font-weight: 800; font-size: 34px; letter-spacing: .5px; position: relative; line-height: 1; color: #fff; text-shadow: 3px 3px 0 #000, 0 0 16px rgba(255,255,255,.18); }
+.logo b { color: var(--accent); font-weight: 800; text-shadow: 3px 3px 0 #000, 0 0 18px rgba(255,45,149,.85), 0 0 36px rgba(255,45,149,.45); }
 .logo::after { content: attr(data-text); position: absolute; inset: 0; color: var(--pink); opacity: 0; clip-path: inset(45% 0 30% 0); }
 .logo:hover::after, .logo.glitch::after { animation: glitch .3s steps(3) 2; }
 @keyframes glitch { 0% { opacity: 1; transform: translate(-3px, 0); } 50% { opacity: 1; transform: translate(3px, 1px); clip-path: inset(10% 0 65% 0); } 100% { opacity: 0; transform: none; } }
@@ -293,16 +293,7 @@ code { font-family: var(--mono); font-size: 12px; color: var(--sky); word-break:
 <div class="wrap">
   <header class="hud">
     <div class="brand">
-      <svg class="mascot" id="mascot" viewBox="0 0 64 64" aria-hidden="true">
-        <defs><linearGradient id="solg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff2d95"/><stop offset="1" stop-color="#ff8fd0"/></linearGradient></defs>
-        <circle cx="32" cy="36" r="22" fill="url(#solg)" stroke="#0a0a0a" stroke-width="3"/>
-        <path d="M11 27 Q12 15 19 12 L19 3 L27 10 L33 1 L38 10 L47 4 L45 13 Q53 17 53 27 Q43 18 32 19 Q20 19 11 27 Z" fill="#fafafa" stroke="#0a0a0a" stroke-width="2.5" stroke-linejoin="round"/>
-        <rect x="13" y="27" width="38" height="12" rx="6" fill="#0a0a0a"/>
-        <rect x="18" y="29" width="10" height="3" rx="1.5" fill="#fafafa" opacity=".85"/>
-        <path class="mouth-idle" d="M25 47 Q33 51 40 45" fill="none" stroke="#0a0a0a" stroke-width="3" stroke-linecap="round"/>
-        <path class="mouth-happy" d="M23 44 Q32 56 41 44 Z" fill="#0a0a0a"/>
-        <path class="mouth-sad" d="M25 50 Q32 44 39 50" fill="none" stroke="#0a0a0a" stroke-width="3" stroke-linecap="round"/>
-      </svg>
+      <img class="mascot" id="mascot" src="__MASCOT__" alt="SolBoy mascot">
       <div class="logo" id="logo" data-text="SOLBOY">SOL<b>BOY</b></div>
     </div>
     <span class="chip" id="mode">...</span>
@@ -363,7 +354,7 @@ code { font-family: var(--mono); font-size: 12px; color: var(--sky); word-break:
 <div class="modal" id="modal"><div class="box"><div id="modalBody"></div><div class="foot"><button class="btn" id="modalClose">Close <kbd>Esc</kbd></button></div></div></div>
 <div class="toasts" id="toasts"></div>
 
-<button class="ask-fab" id="askFab"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="36" r="22" fill="url(#solg2)" stroke="#0a0a0a" stroke-width="3"/><defs><linearGradient id="solg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff2d95"/><stop offset="1" stop-color="#ff8fd0"/></linearGradient></defs><path d="M11 27 Q12 15 19 12 L19 3 L27 10 L33 1 L38 10 L47 4 L45 13 Q53 17 53 27 Q43 18 32 19 Q20 19 11 27 Z" fill="#fafafa" stroke="#0a0a0a" stroke-width="2.5" stroke-linejoin="round"/><rect x="13" y="27" width="38" height="12" rx="6" fill="#0a0a0a"/><path d="M23 44 Q32 56 41 44 Z" fill="#0a0a0a"/></svg>Ask SolBoy <kbd>/</kbd></button>
+<button class="ask-fab" id="askFab"><img class="fab-face" src="__MASCOT__" alt="">Ask SolBoy <kbd>/</kbd></button>
 <aside class="drawer" id="drawer" aria-label="SolBoy Assistant">
   <header><div><b>SolBoy Assistant</b><small id="aiEngine">...</small></div><span class="spacer"></span>
     <button class="btn" id="chatClear" title="Start a new chat">New chat</button><button class="btn" id="drawerClose" aria-label="Close">✕</button></header>
