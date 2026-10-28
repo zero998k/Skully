@@ -1,7 +1,10 @@
 import http from 'node:http';
+import { PublicKey } from '@solana/web3.js';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import DASHBOARD_HTML from './dashboard-html.js';
+import PULSE_HTML from './pulse-html.js';
+import { saveConfigValue } from './config.js';
 import { log, onLog, readTrades } from './log.js';
 import { summarize, scoreboard } from './stats.js';
 import { tokenNames, positionWorth } from './tokens.js';
@@ -45,10 +48,11 @@ function openInBrowser(url) {
  * The game-style dashboard, served only to this computer (127.0.0.1). Every API call must carry
  * a secret made fresh each run and baked into the page, so other websites can't read or click anything.
  */
-export async function startDashboard({ cfg, bot, book, account, updater, serverMode = false }) {
+export async function startDashboard({ cfg, bot, book, account, updater, pulse = null, serverMode = false }) {
   const positions = book.positions;
   const secret = crypto.randomBytes(16).toString('hex');
   const page = DASHBOARD_HTML.replace('__TOKEN__', secret).replace('__SERVER_MODE__', serverMode ? 'true' : 'false');
+  const pulsePage = PULSE_HTML.replace('__TOKEN__', secret).replace('__SERVER_MODE__', serverMode ? 'true' : 'false');
   const auth = serverMode ? createAuth(() => process.env.DASHBOARD_PASSWORD_HASH, file('data/sessions.json')) : null;
   const backlog = [];
   const clients = new Set();
@@ -78,6 +82,28 @@ export async function startDashboard({ cfg, bot, book, account, updater, serverM
       .sort((a, b) => b.pnl - a.pnl);
   }
 
+  async function worthFallback(mint, pos) {
+    try {
+      const v = await bot.valueOf(mint, pos.tokens);
+      return v == null ? null : Number(v) / 1e9;
+    } catch {
+      return null;
+    }
+  }
+
+  // Your position in one coin, for the Pulse trade box (value cached a few seconds so it doesn't spam quotes).
+  const posCache = new Map();
+  async function positionFor(mint) {
+    const pos = positions.get(mint);
+    if (!pos) return null;
+    let hit = posCache.get(mint);
+    if (!hit || hit.tokens !== pos.tokens || Date.now() - hit.at > 3000) {
+      hit = { at: Date.now(), tokens: pos.tokens, worth: await worthFallback(mint, pos) };
+      posCache.set(mint, hit);
+    }
+    return { solSpent: pos.solSpent, tokens: pos.tokens, worth: hit.worth, pnl: hit.worth == null ? null : hit.worth - pos.solSpent, from: pos.sourceLabel, mode: book.mode };
+  }
+
   async function accountState() {
     let balance = null;
     try {
@@ -98,7 +124,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, serverM
         from: pos.sourceLabel,
         paid: pos.solSpent,
         openedAt: pos.openedAt,
-        worth: await positionWorth(mint, pos, cfg.sellSlippageBps),
+        worth: (await positionWorth(mint, pos, cfg.sellSlippageBps)) ?? (await worthFallback(mint, pos)),
       })),
     );
     return {
@@ -170,7 +196,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, serverM
         }
       }
       if (!auth.isLoggedIn(req)) {
-        if (url.pathname === '/') {
+        if (url.pathname === '/' || url.pathname === '/pulse') {
           res.writeHead(302, { Location: '/login' });
           return res.end();
         }
@@ -186,6 +212,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, serverM
       if (host !== 'localhost' && host !== '127.0.0.1') return send(res, 403, { error: 'forbidden' });
     }
     if (url.pathname === '/') return send(res, 200, page, 'text/html; charset=utf-8');
+    if (url.pathname === '/pulse') return pulse ? send(res, 200, pulsePage, 'text/html; charset=utf-8') : send(res, 404, 'Pulse is turned off in config.json', 'text/plain');
     if (!url.pathname.startsWith('/api/')) return send(res, 404, { error: 'not found' });
     if (url.searchParams.get('t') !== secret) return send(res, 403, { error: 'forbidden' });
 
@@ -267,6 +294,76 @@ export async function startDashboard({ cfg, bot, book, account, updater, serverM
           send(res, 400, { error: e.message });
         }
         return;
+      }
+
+      if (url.pathname.startsWith('/api/pulse/')) {
+        if (!pulse) return send(res, 404, { error: 'Pulse is turned off in config.json.' });
+        const mintParam = url.searchParams.get('mint');
+        const checkMint = (m) => {
+          try {
+            return new PublicKey(String(m)).toBase58();
+          } catch {
+            throw new Error("That isn't a valid coin address.");
+          }
+        };
+        try {
+          if (req.method === 'GET' && url.pathname === '/api/pulse/stream') {
+            const focusMint = url.searchParams.get('focus') ? checkMint(url.searchParams.get('focus')) : null;
+            const wantBoard = url.searchParams.get('board') === '1';
+            res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
+            const push = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+            let off = null;
+            if (focusMint) {
+              pulse.open(focusMint);
+              off = pulse.onTrade((ev) => ev.mint === focusMint && push({ trade: ev.trade }));
+            }
+            let busy = false;
+            const tick = async () => {
+              if (busy) return;
+              busy = true;
+              try {
+                push({ status: pulse.status(), mode: book.mode, ...(wantBoard ? { board: pulse.board() } : {}), ...(focusMint ? { position: await positionFor(focusMint) } : {}) });
+              } catch {}
+              busy = false;
+            };
+            tick();
+            const timer = setInterval(tick, 1000);
+            req.on('close', () => {
+              clearInterval(timer);
+              off?.();
+              if (focusMint) pulse.close(focusMint);
+            });
+            return;
+          }
+          if (req.method === 'GET' && url.pathname === '/api/pulse/coin') return send(res, 200, { ...(await pulse.coin(checkMint(mintParam))), position: await positionFor(checkMint(mintParam)), mode: book.mode });
+          if (req.method === 'GET' && url.pathname === '/api/pulse/candles') return send(res, 200, { candles: await pulse.history(checkMint(mintParam)) });
+          if (req.method === 'GET' && url.pathname === '/api/pulse/filters') return send(res, 200, { filters: pulse.filters(), protocols: pulse.protocols, quickBuy: cfg.pulse.quickBuy, quickSell: cfg.pulse.quickSell, kols: cfg.pulse.kols });
+          if (req.method === 'POST') {
+            const body = await readBody(req);
+            if (url.pathname === '/api/pulse/filters') return send(res, 200, { filters: pulse.setFilters(body.filters) });
+            if (url.pathname === '/api/pulse/analyze') return send(res, 200, await pulse.analyze(checkMint(body.mint)));
+            if (url.pathname === '/api/pulse/trade') {
+              const out = await bot.manualTrade({ mint: checkMint(body.mint), side: body.side === 'sell' ? 'sell' : 'buy', sol: body.sol, percent: body.percent, slippagePct: body.slippagePct });
+              posCache.delete(body.mint);
+              return send(res, 200, out ?? { ok: true });
+            }
+            if (url.pathname === '/api/pulse/prefs') {
+              const next = { ...cfg.pulse };
+              const nums = (list, max) => (Array.isArray(list) ? list.map(Number).filter((n) => n > 0 && n <= max).slice(0, 6) : null);
+              if (body.quickBuy) next.quickBuy = nums(body.quickBuy, 1000) ?? next.quickBuy;
+              if (body.quickSell) next.quickSell = nums(body.quickSell, 100) ?? next.quickSell;
+              if (Array.isArray(body.kols)) {
+                next.kols = body.kols.slice(0, 500).map((k) => ({ address: checkMint(k.address), label: String(k.label ?? '').trim().slice(0, 30) || 'KOL' }));
+              }
+              cfg.pulse = next;
+              saveConfigValue('pulse', next);
+              return send(res, 200, { ok: true, quickBuy: next.quickBuy, quickSell: next.quickSell, kols: next.kols });
+            }
+          }
+          return send(res, 404, { error: 'not found' });
+        } catch (e) {
+          return send(res, 400, { error: e.message });
+        }
       }
 
       if (req.method === 'POST' && url.pathname === '/api/settings') {

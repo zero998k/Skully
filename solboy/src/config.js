@@ -26,6 +26,8 @@ export const DEFAULTS = {
   maxCopyDelaySeconds: 15,
   research: { provider: 'groq' }, // the free AI behind Ask SolBoy
   dashboard: { enabled: true, port: 7777, openBrowser: true },
+  // Pulse trading terminal. stretchPct: bonding curve % where a coin moves to Final Stretch. kols: [{ address, label }].
+  pulse: { enabled: true, stretchPct: 45, kols: [], quickBuy: [0.05, 0.1, 0.5, 1], quickSell: [25, 50, 100] },
   assistant: { model: 'free' },
   keepAwake: true,
 };
@@ -44,6 +46,7 @@ export function loadConfig(file = basePath('config.json')) {
     ...raw,
     research: { ...DEFAULTS.research, ...raw.research },
     dashboard: { ...DEFAULTS.dashboard, ...raw.dashboard },
+    pulse: { ...DEFAULTS.pulse, ...raw.pulse },
     assistant: { ...DEFAULTS.assistant, ...raw.assistant },
   };
 

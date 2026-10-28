@@ -13,6 +13,11 @@ casual messages; explain results in plain English, no jargon.
   is the app itself.
 - `src/bot.js` copy trading (detect a watched wallet's trade, copy it, take profit / stop loss, copy rules).
   `src/detect.js` turns a transaction into buys and sells. `src/jupiter.js` swaps. `src/rpc.js` rate limiter.
+- `src/pulse.js` Pulse trading terminal backend: PumpPortal live feed, per-coin state (curve, trades, wallets,
+  dev/sniper/bundler tags), metrics, Axiom-style filters (`passes`), DexScreener enrichment, on-chain launch check
+  (backfill) and insider check. `src/pulse.html` the Pulse page (baked into `src/pulse-html.js` with the
+  lightweight-charts library by `npm run embed`). Manual trades: `bot.manualTrade` (Jupiter, falling back to the
+  curve price in paper mode and to PumpPortal's trade-local API in real-money mode).
 - `src/assistant.js` Ask SolBoy (tools only *propose* changes; the owner clicks Do it).
 - `src/settings.js` settings that can change while running (Quick settings, assistant, terminal `tp`/`sl`).
 - `src/server.js` dashboard HTTP server and API. `src/dashboard.html` the whole dashboard (one file),
@@ -29,7 +34,7 @@ casual messages; explain results in plain English, no jargon.
 - `npm run build` builds all five apps into `dist/` (needs Bun 1.4.4).
 - `test/e2e/run-all.sh` end-to-end tests of the real packaged app against fake Solana/Jupiter/DexScreener/
   Pump.fun/X/Groq/GitHub servers, with Playwright and a pty. Needs Linux x64, Bun, Python 3 and
-  `npm i --no-save playwright && npx playwright install chromium`. About 8 minutes. Prints PASS/FAIL per
+  `npm i --no-save playwright && npx playwright install chromium`. About 10 minutes. Prints PASS/FAIL per
   feature and exits non-zero on any failure. Add checks to `test/e2e/full.cjs` + `check.cjs` for new features.
 
 ## Releasing (this is how the owner gets changes)

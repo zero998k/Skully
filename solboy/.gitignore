@@ -6,3 +6,5 @@ config.json
 data/
 src/dashboard-html.js
 src/version.js
+src/pulse-html.js
+preview/

@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SolBoy Pulse</title>
+<style>
+:root {
+  --bg: #050505; --panel: #0b0b0c; --panel-2: #121214; --edge: #1f1f23; --edge-2: #2c2c32;
+  --ink: #f4f4f5; --ink-2: #b4b4bb; --ink-3: #75757e; --accent: #ff3355; --up: #16c784; --down: #ff3355;
+  --sun: #ffd23f; --sky: #5ce1ff; --grape: #a78bfa;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.35 var(--body); }
+body { overflow: hidden; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+input, select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--edge-2); border-radius: 8px; padding: 7px 9px; }
+input:focus, select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+.mono { font-family: var(--mono); }
+.up { color: var(--up); } .down { color: var(--down); } .dim { color: var(--ink-3); } .warn { color: var(--sun); }
+
+/* top bar */
+.top { height: 52px; display: flex; align-items: center; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--edge); background: #070708; }
+.logo { font-weight: 900; font-size: 18px; letter-spacing: -.5px; } .logo b { color: var(--accent); }
+.nav a { color: var(--ink-2); font-weight: 600; padding: 6px 10px; border-radius: 8px; } .nav a.on, .nav a:hover { color: var(--ink); background: var(--panel-2); }
+.spacer { flex: 1; }
+.chip { font: 600 12px var(--mono); padding: 4px 9px; border-radius: 999px; border: 1px solid var(--edge-2); color: var(--ink-2); white-space: nowrap; }
+.chip.live { color: var(--up); border-color: rgba(22,199,132,.4); } .chip.off { color: var(--down); border-color: rgba(255,51,85,.4); }
+.chip.paper { color: #0a0a0a; background: var(--sun); border-color: #000; } .chip.real { color: #fff; background: var(--accent); border-color: #000; }
+.icon-btn { background: var(--panel-2); border: 1px solid var(--edge-2); border-radius: 8px; padding: 6px 10px; font-weight: 600; }
+.icon-btn:hover { border-color: var(--ink-3); }
+.btn { background: var(--panel-2); border: 1px solid var(--edge-2); border-radius: 8px; padding: 8px 14px; font-weight: 700; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.buy { background: var(--up); border-color: var(--up); color: #04140d; } .btn.sell { background: var(--down); border-color: var(--down); color: #fff; }
+.btn:disabled { opacity: .5; cursor: wait; }
+
+/* board */
+main { height: calc(100% - 52px); }
+.board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); height: 100%; }
+.col { display: flex; flex-direction: column; border-right: 1px solid var(--edge); min-width: 0; }
+.col:last-child { border-right: 0; }
+.col-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--edge); background: var(--panel); flex-wrap: wrap; }
+.col-head h2 { margin: 0; font-size: 15px; font-weight: 800; flex: 1; white-space: nowrap; }
+.col-head .count { color: var(--ink-3); font: 12px var(--mono); }
+.col-head input.q { width: 120px; padding: 5px 8px; font-size: 12px; }
+.col-head .qb { display: flex; align-items: center; gap: 4px; background: var(--bg); border: 1px solid var(--edge-2); border-radius: 8px; padding: 0 6px; }
+.col-head .qb input { width: 52px; border: 0; padding: 5px 2px; background: transparent; font: 12px var(--mono); }
+.paused-tag { font: 700 10px var(--mono); color: var(--sun); border: 1px solid rgba(255,210,63,.5); padding: 2px 6px; border-radius: 6px; }
+.filters-dot { position: relative; } .filters-dot.on::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.list { overflow-y: auto; flex: 1; }
+.empty { color: var(--ink-3); padding: 30px 16px; text-align: center; line-height: 1.6; }
+
+.card { display: grid; grid-template-columns: 72px 1fr auto; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--edge); cursor: pointer; position: relative; }
+.card:hover { background: var(--panel-2); }
+.card.fresh { animation: flash .9s ease-out; }
+@keyframes flash { from { background: rgba(255,51,85,.16); } to { background: transparent; } }
+.pic { width: 72px; height: 72px; border-radius: 10px; background: var(--panel-2) center/cover no-repeat; border: 2px solid var(--edge-2); position: relative; display: grid; place-items: center; font-weight: 900; font-size: 22px; color: var(--ink-3); }
+.pic .proto { position: absolute; right: -5px; bottom: -5px; font: 700 9px var(--mono); padding: 2px 4px; border-radius: 6px; background: #000; border: 1px solid var(--edge-2); color: var(--sun); }
+.pic .ring { position: absolute; inset: -2px; border-radius: 10px; border: 2px solid transparent; }
+.ca { font: 10px var(--mono); color: var(--ink-3); text-align: center; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 72px; }
+.mid { min-width: 0; display: grid; gap: 4px; align-content: start; }
+.name { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.name b { font-size: 15px; white-space: nowrap; }
+.name span { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy { color: var(--ink-3); font-size: 11px; background: none; border: 0; padding: 0 2px; }
+.meta { display: flex; align-items: center; gap: 9px; color: var(--ink-2); font: 12px var(--mono); flex-wrap: wrap; }
+.meta .age { color: var(--up); font-weight: 700; }
+.soc a { color: var(--ink-2); font-size: 12px; } .soc a:hover { color: var(--ink); }
+.handle { color: var(--grape); font: 12px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcts { display: flex; gap: 8px; flex-wrap: wrap; font: 11px var(--mono); }
+.pct { display: inline-flex; gap: 3px; align-items: center; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--edge-2); }
+.pct.good { color: var(--up); } .pct.bad { color: var(--down); border-color: rgba(255,51,85,.35); } .pct.na { color: var(--ink-3); }
+.right { display: grid; justify-items: end; align-content: start; gap: 3px; font: 12px var(--mono); }
+.right .v, .right .mc { white-space: nowrap; } .right .mc b { color: var(--sky); font-size: 14px; } .right .v b { color: var(--ink); }
+.bsbar { width: 70px; height: 3px; background: var(--down); border-radius: 2px; overflow: hidden; } .bsbar i { display: block; height: 100%; background: var(--up); }
+.qbtn { margin-top: 4px; background: #1d4ed8; border: 0; color: #fff; font: 700 12px var(--mono); padding: 5px 10px; border-radius: 999px; }
+.qbtn:hover { background: #2563eb; }
+.prog { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--up); opacity: .7; }
+
+/* filters modal */
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: grid; place-items: center; z-index: 50; }
+.modal { width: min(560px, 96vw); max-height: 92vh; background: var(--panel); border: 1px solid var(--edge-2); border-radius: 16px; display: flex; flex-direction: column; }
+.modal header { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--edge); }
+.modal header h3 { margin: 0; flex: 1; font-size: 16px; }
+.presets button { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--edge-2); background: var(--bg); font: 700 11px var(--mono); color: var(--ink-3); }
+.presets button.on { color: #fff; background: var(--accent); border-color: var(--accent); }
+.modal .body { overflow-y: auto; padding: 14px 16px; display: grid; gap: 14px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs button { background: none; border: 0; padding: 7px 11px; border-radius: 8px; color: var(--ink-2); font-weight: 600; }
+.tabs button.on { background: var(--panel-2); color: var(--ink); }
+.tabs button .n { display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; margin-left: 5px; border-radius: 9px; background: #1d4ed8; color: #fff; font: 700 10px var(--mono); }
+.box { background: var(--bg); border: 1px solid var(--edge); border-radius: 12px; padding: 12px; display: grid; gap: 12px; }
+.box label.f { display: grid; gap: 6px; color: var(--ink-2); font-size: 12px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pair input, .pair4 input, .pair4 select, .pair .kw { width: 100%; min-width: 0; }
+.box { min-width: 0; overflow: hidden; }
+.pair4 { display: grid; grid-template-columns: 1fr 70px 1fr 70px; gap: 8px; }
+.kw { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: var(--bg); border: 1px solid var(--edge-2); border-radius: 8px; padding: 4px 6px; min-height: 36px; }
+.kw input { border: 0; flex: 1; min-width: 90px; padding: 4px; }
+.kw span { background: var(--panel-2); border: 1px solid var(--edge-2); border-radius: 6px; padding: 2px 6px; font-size: 12px; }
+.kw span button { background: none; border: 0; color: var(--ink-3); padding: 0 0 0 4px; }
+.toggles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.tog { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--edge-2); border-radius: 8px; color: var(--ink-2); user-select: none; cursor: pointer; }
+.tog input { accent-color: var(--accent); width: 15px; height: 15px; }
+.tog.off { opacity: .45; cursor: not-allowed; }
+.tog small { color: var(--ink-3); margin-left: auto; font-size: 10px; }
+.modal footer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--edge); align-items: center; }
+.note { color: var(--ink-3); font-size: 12px; line-height: 1.5; }
+
+/* coin view */
+.coin { display: grid; grid-template-columns: minmax(0, 1fr) 330px; height: 100%; }
+.coin-main { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--edge); overflow: hidden; }
+.coin-head { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--edge); flex-wrap: wrap; }
+.coin-head .pic { width: 44px; height: 44px; font-size: 16px; }
+.coin-head .title b { font-size: 17px; } .coin-head .title { display: grid; gap: 2px; }
+.stat { display: grid; gap: 1px; } .stat small { color: var(--ink-3); font-size: 11px; } .stat b { font: 600 13px var(--mono); }
+.stat.big b { font-size: 20px; color: var(--sky); }
+.chart-bar { display: flex; gap: 6px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--edge); font: 12px var(--mono); }
+.chart-bar button { background: none; border: 0; color: var(--ink-3); padding: 4px 7px; border-radius: 6px; }
+.chart-bar button.on { color: var(--ink); background: var(--panel-2); }
+#chart { height: 44%; min-height: 220px; position: relative; }
+.chart-msg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-3); pointer-events: none; }
+.coin-tabs { display: flex; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--edge); border-top: 1px solid var(--edge); align-items: center; flex-wrap: wrap; }
+.coin-tabs button { background: none; border: 0; padding: 6px 10px; color: var(--ink-2); font-weight: 600; border-radius: 6px; }
+.coin-tabs button.on { color: var(--ink); background: var(--panel-2); }
+.coin-tabs .sub { margin-left: auto; display: flex; gap: 4px; }
+.coin-tabs .sub button { font-size: 12px; padding: 4px 8px; }
+.table-wrap { overflow-y: auto; flex: 1; }
+table { width: 100%; border-collapse: collapse; font: 12px var(--mono); }
+th { position: sticky; top: 0; background: var(--panel); color: var(--ink-3); font-weight: 500; text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--edge); }
+td { padding: 6px 10px; border-bottom: 1px solid #141417; white-space: nowrap; }
+tr.new td { animation: flash .9s ease-out; }
+.tag { display: inline-block; font: 700 9px var(--mono); padding: 1px 5px; border-radius: 5px; margin-left: 4px; border: 1px solid; }
+.tag.dev { color: var(--sun); } .tag.sniper { color: var(--down); } .tag.bundler { color: var(--grape); } .tag.kol { color: var(--sky); } .tag.insider { color: #fb923c; } .tag.cluster { color: #f472b6; } .tag.pool { color: var(--ink-3); } .tag.you { color: var(--up); }
+.bar { height: 4px; background: var(--edge); border-radius: 2px; width: 90px; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--sky); }
+
+.side { overflow-y: auto; padding: 12px; display: grid; gap: 12px; align-content: start; background: var(--panel); }
+.panel { background: var(--bg); border: 1px solid var(--edge); border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
+.panel h4 { margin: 0; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.info { border: 1px solid var(--edge); border-radius: 10px; padding: 8px 4px; text-align: center; }
+.info b { display: block; font: 700 14px var(--mono); } .info small { color: var(--ink-3); font-size: 10px; }
+
+/* trade box (side panel and floating) */
+.trade .bs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.trade .bs button { padding: 8px; border-radius: 8px; border: 1px solid var(--edge-2); background: var(--panel-2); font-weight: 800; color: var(--ink-2); }
+.trade .bs button.on.b { background: var(--up); color: #04140d; border-color: var(--up); } .trade .bs button.on.s { background: var(--down); color: #fff; border-color: var(--down); }
+.amts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.amts button { background: var(--panel-2); border: 1px solid var(--edge-2); border-radius: 8px; padding: 7px 4px; font: 600 12px var(--mono); }
+.amts button.on { border-color: var(--accent); color: var(--ink); }
+.trade .row { display: flex; gap: 8px; align-items: center; } .trade .row input { flex: 1; min-width: 0; }
+.trade .go { width: 100%; padding: 11px; font-size: 14px; }
+.pos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; font: 12px var(--mono); }
+.pos small { display: block; color: var(--ink-3); font: 10px var(--body); }
+.floating { position: fixed; width: 300px; z-index: 40; background: var(--panel); border: 1px solid var(--edge-2); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.6); }
+.floating .drag { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--edge); cursor: move; user-select: none; }
+.floating .drag b { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.floating .drag button { background: none; border: 0; color: var(--ink-3); padding: 2px 4px; font-size: 14px; }
+.floating .trade { padding: 12px; display: grid; gap: 10px; }
+body.quick-mode .top, body.quick-mode main { display: none; }
+body.quick-mode .floating { position: static; width: auto; border-radius: 0; border: 0; box-shadow: none; }
+
+.toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 60; }
+.toast { background: var(--panel-2); border: 1px solid var(--edge-2); border-left: 3px solid var(--sky); border-radius: 10px; padding: 10px 12px; max-width: 340px; font-size: 13px; animation: in .2s ease-out; }
+.toast.win { border-left-color: var(--up); } .toast.loss { border-left-color: var(--down); }
+@keyframes in { from { transform: translateY(8px); opacity: 0; } }
+@media (max-width: 1100px) { .board { grid-template-columns: 1fr; overflow-y: auto; } .col { height: 80vh; border-right: 0; border-bottom: 1px solid var(--edge); } body { overflow: auto; } main { height: auto; } .coin { grid-template-columns: 1fr; } .coin-main { height: 120vh; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="logo">SOL<b>BOY</b> <span class="dim" style="font-weight:600">Pulse</span></div>
+  <nav class="nav"><a href="/" id="navDash">Dashboard</a><a href="/pulse" class="on">Pulse</a></nav>
+  <span class="spacer"></span>
+  <span class="chip" id="feedChip">connecting</span>
+  <span class="chip" id="solChip">SOL $-</span>
+  <span class="chip" id="modeChip">-</span>
+  <button class="icon-btn" id="prefsBtn" title="Quick buy amounts and KOL wallets">⚙</button>
+  <button class="icon-btn" id="quickBtn" title="Show the floating quick trade box">⚡ Quick trade</button>
+</header>
+<main>
+  <section class="board" id="board">
+    <div class="col" data-col="new"></div>
+    <div class="col" data-col="stretch"></div>
+    <div class="col" data-col="migrated"></div>
+  </section>
+  <section class="coin" id="coin" hidden></section>
+</main>
+
+<div class="modal-bg" id="filterModal" hidden></div>
+<div class="modal-bg" id="prefsModal" hidden></div>
+<div class="floating" id="floating" hidden></div>
+<div class="toasts" id="toasts"></div>
+
+<script>/*__CHART_LIB__*/</script>
+<script>
+const TOKEN = '__TOKEN__';
+const SERVER_MODE = '__SERVER_MODE__' === 'true';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const store = { get(k, d) { try { const v = localStorage.getItem(`pulse.${k}`); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(`pulse.${k}`, JSON.stringify(v)); } catch {} } };
+const COLS = { new: 'New Pairs', stretch: 'Final Stretch', migrated: 'Migrated' };
+
+async function api(path, body) {
+  const res = await fetch(`${path}${path.includes('?') ? '&' : '?'}t=${TOKEN}`, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
+  if (res.status === 401 && SERVER_MODE) { location.href = '/login'; throw new Error('Log in first.'); }
+  if (res.status === 403) { location.reload(); throw new Error('reloading'); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `error ${res.status}`);
+  return data;
+}
+function toast(kind, text) {
+  const t = document.createElement('div'); t.className = `toast ${kind}`; t.textContent = text; $('toasts').prepend(t);
+  setTimeout(() => t.remove(), 5000);
+}
+const money = (n) => n == null ? '-' : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(n >= 1e5 ? 0 : 1)}K` : `$${n.toFixed(n < 10 ? 2 : 0)}`;
+const pctf = (n) => n == null ? '-' : `${n < 10 ? n.toFixed(1) : Math.round(n)}%`;
+const sol = (n) => n == null ? '-' : `${n >= 100 ? n.toFixed(0) : n >= 1 ? n.toFixed(2) : n.toFixed(3)}`;
+const ageOf = (s) => s == null ? '-' : s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
+const ago = (t) => ageOf(Math.max(0, Math.round((Date.now() - t) / 1000)));
+const short = (a) => a ? `${a.slice(0, 4)}…${a.slice(-4)}` : '-';
+const PROTO_SHORT = { pump: 'PUMP', bonk: 'BONK', 'pump-amm': 'P·AMM', raydium: 'RAY', meteora: 'MET', 'meteora-v2': 'MET2', orca: 'ORCA' };
+
+let STATUS = {}, MODE = 'paper', CFG = { quickBuy: [0.05, 0.1, 0.5, 1], quickSell: [25, 50, 100], kols: [] }, FILTERS = null, PROTOCOLS = [];
+function renderStatus() {
+  const f = STATUS.feed;
+  $('feedChip').className = `chip ${f === 'live' ? 'live' : f === 'connecting' ? '' : 'off'}`;
+  $('feedChip').textContent = f === 'live' ? `● LIVE · ${STATUS.tracking ?? 0} coins` : f === 'quiet' ? 'feed quiet' : f === 'connecting' ? 'connecting…' : 'feed offline';
+  $('solChip').textContent = `SOL ${STATUS.solUsd ? '$' + STATUS.solUsd.toFixed(2) : '$-'}`;
+  $('modeChip').className = `chip ${MODE === 'live' ? 'real' : 'paper'}`;
+  $('modeChip').textContent = MODE === 'live' ? 'REAL MONEY' : 'PAPER';
+}
+
+/* ---------- board ---------- */
+const BOARD = { new: [], stretch: [], migrated: [] };
+const paused = {};
+const seen = new Set();
+const quick = { new: store.get('qb.new', 0.1), stretch: store.get('qb.stretch', 0.1), migrated: store.get('qb.migrated', 0.1) };
+const search = { new: '', stretch: '', migrated: '' };
+function colHead(c) {
+  return `<div class="col-head"><h2>${COLS[c]} <span class="count" id="cnt-${c}"></span></h2>
+    <span class="paused-tag" id="pz-${c}" hidden>PAUSED</span>
+    <input class="q" placeholder="Search ticker or name" data-search="${c}" value="${esc(search[c])}">
+    <span class="qb" title="Quick buy amount (SOL) for the ⚡ buttons">⚡<input data-qb="${c}" value="${quick[c]}" inputmode="decimal"></span>
+    <button class="icon-btn filters-dot" data-filter="${c}" title="Filters">⚙ Filters</button></div>
+    <div class="list" id="list-${c}"></div>`;
+}
+document.querySelectorAll('.col').forEach((el) => {
+  const c = el.dataset.col; el.innerHTML = colHead(c);
+  const list = el.querySelector('.list');
+  list.onmouseenter = () => { paused[c] = true; $(`pz-${c}`).hidden = false; };
+  list.onmouseleave = () => { paused[c] = false; $(`pz-${c}`).hidden = true; renderCol(c); };
+});
+document.addEventListener('input', (e) => {
+  const s = e.target.dataset.search; if (s) { search[s] = e.target.value.trim().toLowerCase(); renderCol(s, true); }
+  const q = e.target.dataset.qb; if (q) { quick[q] = e.target.value; store.set(`qb.${q}`, e.target.value); }
+});
+function pctChip(icon, title, v, badAt) {
+  if (v == null) return `<span class="pct na" title="${title}: not known yet">${icon} -</span>`;
+  return `<span class="pct ${v >= badAt ? 'bad' : 'good'}" title="${title}">${icon} ${pctf(v)}</span>`;
+}
+function card(r) {
+  const img = r.image ? `style="background-image:url('${esc(r.image)}')"` : '';
+  const bs = r.buys + r.sells ? Math.round((r.buys / (r.buys + r.sells)) * 100) : 50;
+  return `<div class="card${seen.has(r.mint) ? '' : ' fresh'}" data-mint="${esc(r.mint)}">
+    <div><div class="pic" ${img}>${r.image ? '' : esc((r.symbol || '?').slice(0, 2))}<span class="proto">${PROTO_SHORT[r.protocol] ?? esc(r.protocol)}</span></div><div class="ca">${short(r.mint)}</div></div>
+    <div class="mid">
+      <div class="name"><b>${esc(r.symbol || '???')}</b><span>${esc(r.name)}</span><button class="copy" data-copy="${esc(r.mint)}" title="Copy address">⧉</button></div>
+      <div class="meta"><span class="age">${ageOf(r.ageSec)}</span>
+        <span class="soc">${r.twitter ? `<a href="${esc(r.twitter)}" target="_blank" rel="noopener" title="X">𝕏</a> ` : ''}${r.website ? `<a href="${esc(r.website)}" target="_blank" rel="noopener" title="Website">🌐</a> ` : ''}${r.telegram ? `<a href="${esc(r.telegram)}" target="_blank" rel="noopener" title="Telegram">✈</a> ` : ''}<a href="https://x.com/search?q=${encodeURIComponent(r.mint)}" target="_blank" rel="noopener" title="Search the address on X">🔍</a></span>
+        <span title="Holders">👥 ${r.holders ?? '-'}</span>
+        ${r.devPairs != null ? `<span title="Coins this dev launched before (that SolBoy saw)">🛠 ${r.devPairs}</span>` : ''}
+        ${r.dexPaid ? '<span class="warn" title="DexScreener profile paid">DEX✓</span>' : ''}
+        ${r.devSold ? '<span class="down" title="The creator sold everything">DS</span>' : ''}
+        ${r.twitterReuses ? `<span class="warn" title="This X account was used by ${r.twitterReuses} other coin(s)">♻ ${r.twitterReuses}</span>` : ''}
+      </div>
+      ${r.xHandle ? `<div class="handle">@${esc(r.xHandle)}</div>` : ''}
+      <div class="pcts">
+        ${pctChip('👤', 'Top 10 holders', r.top10, 30)}
+        ${pctChip('🧑‍🍳', 'Dev holding', r.dev, 10)}
+        ${pctChip('🎯', 'Snipers holding', r.snipers, 10)}
+        ${pctChip('🐀', 'Insiders holding (open the coin and analyze)', r.insiders, 10)}
+        ${pctChip('📦', 'Bundlers holding', r.bundle, 15)}
+      </div>
+    </div>
+    <div class="right">
+      <div class="v">V <b>${money(r.volUsd)}</b></div>
+      <div class="mc">MC <b>${money(r.mcUsd)}</b></div>
+      <div class="dim">F ${money(r.feesUsd)} · TX ${r.txns}</div>
+      <div class="bsbar" title="${r.buys} buys / ${r.sells} sells"><i style="width:${bs}%"></i></div>
+      <button class="qbtn" data-qbuy="${esc(r.mint)}" data-sym="${esc(r.symbol)}" title="Buy now">⚡ ${esc(quick[colOf(r)] || '0')}</button>
+    </div>
+    ${r.progress != null && !r.migrated ? `<div class="prog" style="width:${r.progress}%" title="Bonding curve ${pctf(r.progress)}"></div>` : ''}
+  </div>`;
+}
+const colOf = (r) => r.migrated ? 'migrated' : BOARD.stretch.some((x) => x.mint === r.mint) ? 'stretch' : 'new';
+function renderCol(c, force = false) {
+  if (paused[c] && !force) return;
+  const rows = BOARD[c].filter((r) => !search[c] || `${r.symbol} ${r.name} ${r.mint}`.toLowerCase().includes(search[c]));
+  $(`cnt-${c}`).textContent = rows.length;
+  $(`list-${c}`).innerHTML = rows.length ? rows.map(card).join('') : `<div class="empty">${STATUS.feed === 'live' ? (c === 'migrated' ? 'Coins appear here when they finish their bonding curve.' : 'Waiting for coins that match your filters…') : 'Connecting to the live feed…'}</div>`;
+  for (const r of rows) seen.add(r.mint);
+}
+document.addEventListener('click', async (e) => {
+  const cp = e.target.closest('[data-copy]');
+  if (cp) { e.stopPropagation(); try { await navigator.clipboard.writeText(cp.dataset.copy); toast('', 'Address copied'); } catch {} return; }
+  if (e.target.closest('.soc a')) { e.stopPropagation(); return; }
+  const qb = e.target.closest('[data-qbuy]');
+  if (qb) {
+    e.stopPropagation();
+    const col = qb.closest('.col')?.dataset.col;
+    const amount = Number(quick[col] ?? CFG.quickBuy[0]);
+    qb.disabled = true;
+    try { await api('/api/pulse/trade', { mint: qb.dataset.qbuy, side: 'buy', sol: amount }); toast('win', `Bought ${amount} SOL of $${qb.dataset.sym}${MODE === 'live' ? '' : ' (paper)'}`); setQuickMint(qb.dataset.qbuy, qb.dataset.sym); }
+    catch (err) { toast('loss', `Buy failed: ${err.message}`); }
+    qb.disabled = false; return;
+  }
+  const f = e.target.closest('[data-filter]'); if (f) return openFilters(f.dataset.filter);
+  const cardEl = e.target.closest('.card');
+  if (cardEl) { if (e.metaKey || e.ctrlKey) return window.open(`/pulse#coin=${cardEl.dataset.mint}`, '_blank'); location.hash = `coin=${cardEl.dataset.mint}`; }
+});
+
+/* ---------- live stream ---------- */
+let es = null;
+function stream(focus) {
+  es?.close();
+  es = new EventSource(`/api/pulse/stream?t=${TOKEN}${focus ? `&focus=${focus}` : '&board=1'}`);
+  es.onmessage = (m) => {
+    const d = JSON.parse(m.data);
+    if (d.status) { STATUS = d.status; MODE = d.mode ?? MODE; renderStatus(); }
+    if (d.board) { for (const c of Object.keys(COLS)) { BOARD[c] = d.board[c] ?? []; renderCol(c); } }
+    if (d.trade) onLiveTrade(d.trade);
+    if ('position' in d) renderPosition(d.position);
+  };
+  es.onerror = () => { STATUS.feed = 'offline'; renderStatus(); fetch(`/api/pulse/filters?t=${TOKEN}`).then((r) => { if (r.status === 403) location.reload(); }).catch(() => {}); };
+}
+
+/* ---------- filters (Axiom style) ---------- */
+const AUDIT_ROWS = [['top10', 'Top 10 Holders %'], ['dev', 'Dev Holding %'], ['snipers', 'Snipers %'], ['insiders', 'Insiders %'], ['bundle', 'Bundle %'], ['holders', 'Holders'], ['devMigrations', 'Dev Migrations'], ['devPairs', 'Dev Pairs Created']];
+const METRIC_ROWS = [['liquidity', 'Liquidity ($)'], ['volume', 'Volume ($)'], ['mc', 'Market Cap ($)'], ['curve', 'B. Curve %'], ['fees', 'Global Fees Paid ($)'], ['txns', 'Txns'], ['buys', 'Num Buys'], ['sells', 'Num Sells']];
+let fState = { col: 'new', tab: 'audit', draft: null };
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const filled = (r) => r && (r.min !== '' && r.min != null || r.max !== '' && r.max != null);
+function counts(f) {
+  const protocols = Object.values(f.protocols ?? {}).filter((v) => v === false).length;
+  const audit = (f.audit.dexPaid ? 1 : 0) + (f.audit.caEndsPump ? 1 : 0) + (f.audit.age.min !== '' || f.audit.age.max !== '' ? 1 : 0) + AUDIT_ROWS.filter(([k]) => filled(f.audit[k])).length;
+  const metrics = METRIC_ROWS.filter(([k]) => filled(f.metrics[k])).length;
+  const socials = ['twitter', 'website', 'telegram', 'anySocial'].filter((k) => f.socials[k]).length + (filled(f.socials.twitterReuses) ? 1 : 0);
+  const keywords = (f.include?.length ? 1 : 0) + (f.exclude?.length ? 1 : 0);
+  return { protocols, audit, metrics, socials, total: protocols + audit + metrics + socials + keywords };
+}
+function markFilterButtons() {
+  if (!FILTERS) return;
+  const p = FILTERS.presets[FILTERS.active];
+  document.querySelectorAll('[data-filter]').forEach((b) => b.classList.toggle('on', counts(p[b.dataset.filter]).total > 0));
+}
+function openFilters(col) {
+  fState = { col, tab: fState.tab, draft: clone(FILTERS) };
+  $('filterModal').hidden = false; renderFilters();
+}
+const range = (path, label, r, disabled) => `<label class="f">${label}${disabled ? ' <span class="dim">(Axiom-only data)</span>' : ''}<div class="pair"><input placeholder="Min" data-path="${path}.min" value="${esc(r?.min ?? '')}" inputmode="decimal" ${disabled ? 'disabled' : ''}><input placeholder="Max" data-path="${path}.max" value="${esc(r?.max ?? '')}" inputmode="decimal" ${disabled ? 'disabled' : ''}></div></label>`;
+const unitSel = (path, v) => `<select data-path="${path}">${['s', 'm', 'h', 'd'].map((u) => `<option value="${u}" ${v === u ? 'selected' : ''}>${u}</option>`).join('')}</select>`;
+function renderFilters() {
+  const P = fState.draft.presets[fState.draft.active];
+  const f = P[fState.col];
+  const n = counts(f);
+  const kw = (key, label) => `<label class="f">${label}<div class="kw" data-kw="${key}">${f[key].map((k, i) => `<span>${esc(k)}<button data-kwdel="${key}:${i}">×</button></span>`).join('')}<input placeholder="Type a keyword, press Enter" data-kwin="${key}"></div></label>`;
+  let tab = '';
+  if (fState.tab === 'protocols') {
+    tab = `<div class="toggles">${PROTOCOLS.map(([id, name, live]) => `<label class="tog ${live ? '' : 'off'}" title="${live ? '' : 'SolBoy has no free live feed for this launchpad yet'}"><input type="checkbox" data-path="protocols.${id}" ${f.protocols[id] !== false ? 'checked' : ''} ${live ? '' : 'disabled'}>${esc(name)}${live ? '' : '<small>soon</small>'}</label>`).join('')}</div>
+      <div class="note">Quote token: SOL. Untick a launchpad to hide its coins.</div>`;
+  } else if (fState.tab === 'audit') {
+    tab = `<div class="toggles"><label class="tog"><input type="checkbox" data-path="audit.dexPaid" ${f.audit.dexPaid ? 'checked' : ''}>Dex Paid</label><label class="tog"><input type="checkbox" data-path="audit.caEndsPump" ${f.audit.caEndsPump ? 'checked' : ''}>CA ends in "pump"</label></div>
+      ${range('', 'Recent Visitors', null, true)}
+      <label class="f">Age<div class="pair4"><input placeholder="Min" data-path="audit.age.min" value="${esc(f.audit.age.min)}" inputmode="decimal">${unitSel('audit.age.minUnit', f.audit.age.minUnit)}<input placeholder="Max" data-path="audit.age.max" value="${esc(f.audit.age.max)}" inputmode="decimal">${unitSel('audit.age.maxUnit', f.audit.age.maxUnit)}</div></label>
+      ${AUDIT_ROWS.map(([k, l]) => range(`audit.${k}`, l, f.audit[k])).join('')}
+      ${range('audit.proTraders', 'Pro Traders', f.audit.proTraders, true)}`;
+  } else if (fState.tab === 'metrics') {
+    tab = METRIC_ROWS.map(([k, l]) => range(`metrics.${k}`, l, f.metrics[k])).join('');
+  } else {
+    tab = `${range('socials.twitterReuses', 'Twitter Reuses', f.socials.twitterReuses)}
+      <div class="toggles">${[['twitter', 'Twitter'], ['website', 'Website'], ['telegram', 'Telegram'], ['anySocial', 'At Least One Social']].map(([k, l]) => `<label class="tog"><input type="checkbox" data-path="socials.${k}" ${f.socials[k] ? 'checked' : ''}>${l}</label>`).join('')}<label class="tog off"><input type="checkbox" disabled>Only Pump Live<small>soon</small></label></div>`;
+  }
+  $('filterModal').innerHTML = `<div class="modal" role="dialog" aria-label="Pulse filters">
+    <header><h3>Pulse Filters</h3>
+      <span class="presets">${[1, 2, 3].map((i) => `<button data-preset="${i}" class="${fState.draft.active === i ? 'on' : ''}" title="Filter preset ${i}">${i}</button>`).join(' ')}</span>
+      <button class="icon-btn" id="fImport" title="Import filters from a file">⇩</button><button class="icon-btn" id="fExport" title="Export filters to a file">⇧</button><button class="icon-btn" id="fShare" title="Copy filters to share">🔗</button>
+      <button class="icon-btn" id="fClose" title="Close">✕</button></header>
+    <div class="body">
+      <div class="tabs">${Object.entries(COLS).map(([c, l]) => `<button data-fcol="${c}" class="${fState.col === c ? 'on' : ''}">${l}${counts(P[c]).total ? `<span class="n">${counts(P[c]).total}</span>` : ''}</button>`).join('')}<span class="spacer" style="flex:1"></span><button id="fReset" title="Reset this column">↺ Reset</button></div>
+      <div class="box"><div class="pair">${kw('include', 'Search Keywords')}${kw('exclude', 'Exclude Keywords')}</div></div>
+      <div class="tabs">${[['protocols', 'Protocols', n.protocols], ['audit', 'Audit', n.audit], ['metrics', '$ Metrics', n.metrics], ['socials', 'Socials', n.socials]].map(([k, l, c]) => `<button data-ftab="${k}" class="${fState.tab === k ? 'on' : ''}">${l}${c ? `<span class="n">${c}</span>` : ''}</button>`).join('')}</div>
+      <div class="box">${tab}</div>
+      <div class="note">Coins whose numbers aren't known yet (for example insiders before you analyze a coin) aren't hidden by a filter. Percentages are of the 1 billion supply.</div>
+    </div>
+    <footer><button class="btn" id="fAll">Apply to all columns</button><span class="spacer" style="flex:1"></span><button class="btn primary" id="fApply">Apply</button></footer></div>`;
+}
+function setPath(obj, path, value) { const keys = path.split('.'); let o = obj; for (const k of keys.slice(0, -1)) o = o[k]; o[keys.at(-1)] = value; }
+$('filterModal').addEventListener('input', (e) => {
+  const p = e.target.dataset.path; if (!p) return;
+  const f = fState.draft.presets[fState.draft.active][fState.col];
+  setPath(f, p, e.target.type === 'checkbox' ? e.target.checked : e.target.value.trim());
+  if (e.target.type === 'checkbox' || e.target.tagName === 'SELECT') renderFilters();
+});
+$('filterModal').addEventListener('keydown', (e) => {
+  const k = e.target.dataset.kwin; if (!k || e.key !== 'Enter') return;
+  e.preventDefault(); const v = e.target.value.trim(); if (!v) return;
+  fState.draft.presets[fState.draft.active][fState.col][k].push(v); renderFilters();
+  document.querySelector(`[data-kwin="${k}"]`)?.focus();
+});
+$('filterModal').addEventListener('click', async (e) => {
+  const t = e.target;
+  if (t === $('filterModal') || t.id === 'fClose') { $('filterModal').hidden = true; return; }
+  if (t.dataset.fcol) { fState.col = t.dataset.fcol; return renderFilters(); }
+  if (t.dataset.ftab) { fState.tab = t.dataset.ftab; return renderFilters(); }
+  if (t.dataset.preset) { fState.draft.active = Number(t.dataset.preset); return renderFilters(); }
+  if (t.dataset.kwdel) { const [k, i] = t.dataset.kwdel.split(':'); fState.draft.presets[fState.draft.active][fState.col][k].splice(Number(i), 1); return renderFilters(); }
+  if (t.id === 'fReset') { fState.draft.presets[fState.draft.active][fState.col] = clone(BLANK); return renderFilters(); }
+  if (t.id === 'fAll') { const f = fState.draft.presets[fState.draft.active][fState.col]; for (const c of Object.keys(COLS)) fState.draft.presets[fState.draft.active][c] = clone(f); toast('', `Applied ${COLS[fState.col]} filters to all columns`); return renderFilters(); }
+  if (t.id === 'fExport') { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(fState.draft, null, 2)], { type: 'application/json' })); a.download = 'solboy-pulse-filters.json'; a.click(); return; }
+  if (t.id === 'fShare') { try { await navigator.clipboard.writeText(JSON.stringify(fState.draft)); toast('', 'Filters copied. Paste them to a friend; they import them with ⇩.'); } catch {} return; }
+  if (t.id === 'fImport') {
+    const text = prompt('Paste filters (from 🔗 Share), or leave empty to choose a file:');
+    const load = (txt) => { try { const d = JSON.parse(txt); if (!d.presets) throw 0; fState.draft = d; renderFilters(); toast('win', 'Filters imported. Click Apply to use them.'); } catch { toast('loss', "That isn't a SolBoy filters file."); } };
+    if (text) return load(text);
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json'; inp.onchange = async () => load(await inp.files[0].text()); inp.click(); return;
+  }
+  if (t.id === 'fApply') {
+    try { FILTERS = (await api('/api/pulse/filters', { filters: fState.draft })).filters; $('filterModal').hidden = true; markFilterButtons(); toast('win', 'Filters applied'); }
+    catch (err) { toast('loss', err.message); }
+  }
+});
+
+/* ---------- coin page ---------- */
+let COIN = null, chart = null, series = null, volSeries = null, interval = store.get('interval', 15), chartMode = store.get('chartMode', 'mc'), coinTab = 'trades', tradeFilter = 'all', coinTimer = null, extCandles = [];
+function openCoin(mint) {
+  $('board').hidden = true; $('coin').hidden = false;
+  $('coin').innerHTML = `<div class="coin-main"><div class="coin-head" id="coinHead"><button class="icon-btn" id="back">← Pulse</button><span class="dim">Loading…</span></div>
+      <div class="chart-bar">${[[1, '1s'], [15, '15s'], [60, '1m'], [300, '5m']].map(([s, l]) => `<button data-iv="${s}" class="${interval === s ? 'on' : ''}">${l}</button>`).join('')}<span style="flex:1"></span><button data-cm="mc" class="${chartMode === 'mc' ? 'on' : ''}">MarketCap</button><button data-cm="price" class="${chartMode === 'price' ? 'on' : ''}">Price</button></div>
+      <div id="chart"><div class="chart-msg" id="chartMsg">Waiting for trades…</div></div>
+      <div class="coin-tabs" id="coinTabs"></div><div class="table-wrap" id="coinTable"></div></div>
+    <aside class="side" id="coinSide"></aside>`;
+  makeChart();
+  loadCoin(mint, true);
+  clearInterval(coinTimer); coinTimer = setInterval(() => loadCoin(mint), 5000);
+  stream(mint);
+  setQuickMint(mint);
+}
+function closeCoin() {
+  clearInterval(coinTimer); COIN = null; chart?.remove(); chart = null;
+  $('coin').hidden = true; $('board').hidden = false; stream(null);
+}
+async function loadCoin(mint, first = false) {
+  try {
+    const c = await api(`/api/pulse/coin?mint=${encodeURIComponent(mint)}`);
+    if (location.hash !== `#coin=${mint}`) return;
+    COIN = c; MODE = c.mode ?? MODE; STATUS.solUsd = c.solUsd ?? STATUS.solUsd;
+    renderCoinHead(); renderSide(); renderCoinTable();
+    if (first) {
+      extCandles = [];
+      if (!c.followedSinceLaunch) { try { extCandles = (await api(`/api/pulse/candles?mint=${encodeURIComponent(mint)}`)).candles; } catch {} }
+      drawChart();
+    }
+    if (c.position !== undefined) renderPosition(c.position);
+  } catch (err) { if (first) { $('coinHead').innerHTML = `<button class="icon-btn" id="back">← Pulse</button><span class="down">${esc(err.message)}</span>`; } }
+}
+function renderCoinHead() {
+  const c = COIN;
+  $('coinHead').innerHTML = `<button class="icon-btn" id="back">← Pulse</button>
+    <div class="pic" ${c.image ? `style="background-image:url('${esc(c.image)}')"` : ''}>${c.image ? '' : esc((c.symbol || '?').slice(0, 2))}</div>
+    <div class="title"><div><b>${esc(c.symbol || short(c.mint))}</b> <span class="dim">${esc(c.name)}</span> <button class="copy" data-copy="${esc(c.mint)}">⧉ ${short(c.mint)}</button></div>
+      <div class="meta"><span class="age">${ageOf(c.ageSec)}</span>${c.twitter ? `<a href="${esc(c.twitter)}" target="_blank" rel="noopener">𝕏</a>` : ''}${c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener">🌐</a>` : ''}${c.telegram ? `<a href="${esc(c.telegram)}" target="_blank" rel="noopener">✈</a>` : ''}
+        <a href="https://dexscreener.com/solana/${esc(c.mint)}" target="_blank" rel="noopener" class="dim">DexScreener</a><a href="https://solscan.io/token/${esc(c.mint)}" target="_blank" rel="noopener" class="dim">Solscan</a>${c.launchpad === 'pump' ? `<a href="https://pump.fun/coin/${esc(c.mint)}" target="_blank" rel="noopener" class="dim">Pump.fun</a>` : ''}</div></div>
+    <div class="stat big"><small>Market cap</small><b>${money(c.mcUsd)}</b></div>
+    <div class="stat"><small>Price</small><b>${c.priceSol != null && c.solUsd ? '$' + (c.priceSol * c.solUsd).toPrecision(4) : '-'}</b></div>
+    <div class="stat"><small>Liquidity</small><b>${money(c.liqUsd)}</b></div>
+    <div class="stat"><small>Volume</small><b>${money(c.volUsd)}</b></div>
+    <div class="stat"><small>Supply</small><b>1B</b></div>
+    <div class="stat"><small>Fees paid (est.)</small><b>${money(c.feesUsd)}</b></div>
+    <div class="stat"><small>ATH</small><b>${money(c.athMcUsd)}</b></div>
+    <div class="stat"><small>${c.migrated ? 'Migrated' : 'Bonding curve'}</small><b>${c.migrated ? '✓ ' + esc(PROTO_SHORT[c.protocol] ?? c.protocol) : pctf(c.progress)}</b></div>
+    <div class="stat"><small>Buys / Sells</small><b><span class="up">${c.buys}</span> / <span class="down">${c.sells}</span></b></div>`;
+}
+const tagsHtml = (r) => [...(r.tags ?? [])].map((t) => `<span class="tag ${t}">${{ dev: 'DEV', sniper: 'SNIPER', bundler: 'BUNDLE', cluster: 'CLUSTER' }[t] ?? t.toUpperCase()}</span>`).join('') + (r.kol ? '<span class="tag kol">KOL</span>' : '') + (r.insider ? '<span class="tag insider">INSIDER</span>' : '') + (r.pool ? '<span class="tag pool">POOL</span>' : '');
+const walletCell = (r) => `<a href="https://solscan.io/account/${esc(r.wallet)}" target="_blank" rel="noopener">${esc(r.label ?? short(r.wallet))}</a>${tagsHtml(r)}`;
+function renderCoinTable() {
+  const c = COIN; if (!c) return;
+  const tabs = [['trades', 'Trades'], ['holders', `Holders (${c.holders ?? c.holdersList.length})`], ['top', 'Top Traders'], ['early', `Snipers & Bundles (${c.early.length})`], ['dev', `Dev Tokens (${c.devCreated ?? 0})`]];
+  $('coinTabs').innerHTML = tabs.map(([k, l]) => `<button data-ctab="${k}" class="${coinTab === k ? 'on' : ''}">${l}</button>`).join('') +
+    (coinTab === 'trades' ? `<span class="sub">${[['all', 'All'], ['dev', 'Dev'], ['kol', 'KOL'], ['sniper', 'Snipers'], ['bundler', 'Bundlers'], ['big', '≥1 SOL']].map(([k, l]) => `<button data-tf="${k}" class="${tradeFilter === k ? 'on' : ''}">${l}</button>`).join('')}</span>` : '');
+  let html = '';
+  if (coinTab === 'trades') {
+    const rows = c.trades.filter(tradeOk);
+    html = `<table><thead><tr><th>Age</th><th>Type</th><th>MC</th><th>Amount</th><th>SOL</th><th>Trader</th><th></th></tr></thead><tbody id="tradeBody">${rows.map(tradeRow).join('')}</tbody></table>${rows.length ? '' : '<div class="empty">No trades yet since SolBoy started watching this coin. They stream in live.</div>'}`;
+  } else if (coinTab === 'holders') {
+    html = `<table><thead><tr><th>#</th><th>Wallet</th><th>% held</th><th>Bought</th><th>Sold</th><th>PnL (SOL)</th><th>Funded by</th></tr></thead><tbody>${c.holdersList.map((h, i) => `<tr><td>${i + 1}</td><td>${walletCell(h)}</td><td><div style="display:flex;gap:8px;align-items:center">${pctf(h.pct)}<div class="bar"><i style="width:${Math.min(100, h.pct * 3)}%"></i></div></div></td><td class="up">${h.buySol != null ? sol(h.buySol) : '-'}</td><td class="down">${h.sellSol != null ? sol(h.sellSol) : '-'}</td><td class="${(h.pnlSol ?? 0) >= 0 ? 'up' : 'down'}">${h.pnlSol != null ? sol(h.pnlSol) : '-'}</td><td>${h.funder ? short(h.funder) : '<span class="dim">-</span>'}</td></tr>`).join('')}</tbody></table>`;
+  } else if (coinTab === 'top') {
+    html = `<table><thead><tr><th>Trader</th><th>Bought</th><th>Sold</th><th>PnL (SOL)</th><th>Holding</th><th>Buys/Sells</th></tr></thead><tbody>${c.topTraders.map((t) => `<tr><td>${walletCell(t)}</td><td class="up">${sol(t.buySol)}</td><td class="down">${sol(t.sellSol)}</td><td class="${t.pnlSol >= 0 ? 'up' : 'down'}">${sol(t.pnlSol)}</td><td>${pctf(t.holdingPct)}</td><td>${t.buys}/${t.sells}</td></tr>`).join('')}</tbody></table>${c.topTraders.length ? '' : '<div class="empty">Trader stats build up from the live feed.</div>'}`;
+  } else if (coinTab === 'early') {
+    html = `<table><thead><tr><th>Wallet</th><th>Bought %</th><th>Holding %</th><th>Spent</th><th>Got back</th><th>Status</th></tr></thead><tbody>${c.early.map((w) => `<tr><td>${walletCell(w)}</td><td>${pctf(w.boughtPct)}</td><td>${pctf(w.holdingPct)}</td><td>${sol(w.buySol)}</td><td>${sol(w.sellSol)}</td><td class="${w.status === 'holding' ? 'warn' : 'dim'}">${w.status}</td></tr>`).join('')}</tbody></table>${c.early.length ? '' : `<div class="empty">${c.followedSinceLaunch ? 'No snipers or bundled buys. Clean launch.' : "SolBoy didn't see this coin launch, so it can't tell who sniped or bundled it."}</div>`}<div class="note" style="padding:8px 12px">Bundle = bought within about 1 second of the launch (same block). Sniper = bought within the first 5 seconds.</div>`;
+  } else {
+    html = `<table><thead><tr><th>Coin</th><th>Status</th></tr></thead><tbody>${c.devTokens.map((d) => `<tr><td><a href="/pulse#coin=${esc(d.mint)}">${esc(d.symbol ? '$' + d.symbol : short(d.mint))}</a> <span class="dim">${esc(d.name ?? '')}</span></td><td>${d.migrated ? '<span class="up">migrated</span>' : '<span class="dim">-</span>'}</td></tr>`).join('')}</tbody></table>${c.devTokens.length ? '' : '<div class="empty">No other coins from this creator seen yet. This list grows the longer SolBoy runs.</div>'}`;
+  }
+  $('coinTable').innerHTML = html;
+}
+function tradeOk(t) {
+  if (tradeFilter === 'all') return true;
+  if (tradeFilter === 'kol') return t.kol;
+  if (tradeFilter === 'big') return t.sol >= 1;
+  return (t.tags ?? []).includes(tradeFilter);
+}
+const tradeRow = (t, fresh) => `<tr class="${fresh ? 'new' : ''}"><td class="dim">${ago(t.t)}</td><td class="${t.side === 'buy' ? 'up' : 'down'}">${t.side === 'buy' ? 'Buy' : 'Sell'}</td><td>${money(t.mcUsd)}</td><td class="${t.side === 'buy' ? 'up' : 'down'}">${t.usd != null ? money(t.usd) : '-'}</td><td>${sol(t.sol)}</td><td>${walletCell(t)}</td><td>${t.sig ? `<a class="dim" href="https://solscan.io/tx/${esc(t.sig)}" target="_blank" rel="noopener">tx</a>` : ''}</td></tr>`;
+function onLiveTrade(t) {
+  if (!COIN) return;
+  COIN.trades.unshift(t); COIN.trades.length = Math.min(COIN.trades.length, 300);
+  t.side === 'buy' ? COIN.buys++ : COIN.sells++;
+  if (coinTab === 'trades' && tradeOk(t)) { const body = $('tradeBody'); if (body) body.insertAdjacentHTML('afterbegin', tradeRow(t, true)); }
+  addToChart(t);
+}
+function renderSide() {
+  const c = COIN;
+  $('coinSide').innerHTML = `<div class="panel trade" id="sideTrade">${tradeBox(c.mint, c.symbol)}</div>
+    <div class="panel"><h4>Token info <button class="icon-btn" id="analyze" title="Checks who funded the top holders' wallets (about 40 Solana requests)">${c.analysis ? '↻ Re-check insiders' : '🐀 Analyze insiders'}</button></h4>
+      <div class="grid3">
+        ${info(pctf(c.top10), 'Top 10 H.', c.top10 >= 30)}${info(pctf(c.dev), 'Dev H.', c.dev >= 10)}${info(pctf(c.snipers), 'Snipers H.', c.snipers >= 10)}
+        ${info(c.insiders != null ? pctf(c.insiders) : '?', 'Insiders', c.insiders >= 10)}${info(pctf(c.bundle), 'Bundlers', c.bundle >= 15)}${info(c.migrated && c.protocol === 'pump-amm' ? '100%' : c.migrated ? '?' : '-', 'LP Burned', false)}
+        ${info(c.holders ?? '-', 'Holders', false)}${info(c.snipersCount ?? '-', 'Snipers', false)}${info(c.bundlersCount ?? '-', 'Bundlers #', false)}
+        ${info(c.devPairs ?? '-', 'Dev coins', c.devPairs >= 5)}${info(c.devMigrations ?? '-', 'Dev migrated', false)}${info(c.dexPaid == null ? '-' : c.dexPaid ? 'Paid' : 'No', 'Dex paid', false)}
+      </div>
+      ${c.analysis ? `<div class="note">Insider check: ${c.analysis.insiders} wallet(s) funded by the creator, ${c.analysis.clusters} group(s) of holders funded by the same wallet.</div>` : ''}
+      <div class="note">${c.launchCheck === 'exact' ? '✓ Launch checked on the chain: bundle and sniper numbers are exact.' : c.launchCheck === 'partial' ? 'Too many trades to check the launch on the chain; bundle and sniper numbers are from the live feed only.' : c.launchCheck === 'failed' ? "Couldn't check the launch on the chain right now." : 'Checking the launch on the chain…'}</div>
+      ${c.followedSinceLaunch ? '' : '<div class="note">SolBoy started watching this coin after launch, so wallet stats (holders, snipers, bundles, dev) cover only what it has seen. The Holders tab still shows the real top 20 from the chain.</div>'}
+      ${c.description ? `<div class="note">${esc(c.description)}</div>` : ''}</div>`;
+}
+const info = (v, l, bad) => `<div class="info"><b class="${bad ? 'down' : ''}">${esc(v)}</b><small>${l}</small></div>`;
+$('coin').addEventListener('click', async (e) => {
+  const t = e.target;
+  if (t.id === 'back') { location.hash = ''; return; }
+  if (t.dataset.ctab) { coinTab = t.dataset.ctab; return renderCoinTable(); }
+  if (t.dataset.tf) { tradeFilter = t.dataset.tf; return renderCoinTable(); }
+  if (t.dataset.iv) { interval = Number(t.dataset.iv); store.set('interval', interval); document.querySelectorAll('[data-iv]').forEach((b) => b.classList.toggle('on', b === t)); return drawChart(); }
+  if (t.dataset.cm) { chartMode = t.dataset.cm; store.set('chartMode', chartMode); document.querySelectorAll('[data-cm]').forEach((b) => b.classList.toggle('on', b === t)); return drawChart(); }
+  if (t.id === 'analyze') { t.disabled = true; t.textContent = 'Checking wallets…'; try { const r = await api('/api/pulse/analyze', { mint: COIN.mint }); toast('', `Checked ${r.checked} holders: ${r.insiders} insider(s), ${r.clusters} cluster(s).`); loadCoin(COIN.mint); } catch (err) { toast('loss', err.message); t.disabled = false; } }
+});
+
+/* chart: candles built from live trades (market cap or price, in USD) */
+function makeChart() {
+  if (typeof LightweightCharts === 'undefined') { $('chartMsg').textContent = 'Chart unavailable'; return; }
+  chart = LightweightCharts.createChart($('chart'), { autoSize: true, layout: { background: { color: '#050505' }, textColor: '#9a9aa2', fontFamily: 'ui-monospace, Menlo, monospace' }, grid: { vertLines: { color: '#111114' }, horzLines: { color: '#111114' } }, timeScale: { timeVisible: true, secondsVisible: true, borderColor: '#1f1f23' }, rightPriceScale: { borderColor: '#1f1f23' }, crosshair: { mode: 0 } });
+  series = chart.addCandlestickSeries({ upColor: '#16c784', downColor: '#ff3355', borderVisible: false, wickUpColor: '#16c784', wickDownColor: '#ff3355', priceFormat: { type: 'custom', formatter: (v) => chartMode === 'mc' ? money(v) : v.toPrecision(4) } });
+  volSeries = chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, color: '#2a2a33' });
+  chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+}
+let candles = [];
+const valueOfTrade = (t) => t.mcUsd == null ? null : chartMode === 'mc' ? t.mcUsd : t.mcUsd / 1e9;
+function drawChart() {
+  if (!series || !COIN) return;
+  candles = [];
+  if (extCandles.length) {
+    const k = chartMode === 'mc' ? 1e9 : 1;
+    for (const c of extCandles) candles.push({ time: Math.floor(c.t / 1000), open: c.o * k, high: c.h * k, low: c.l * k, close: c.c * k, volume: c.v });
+  }
+  for (const t of [...COIN.trades].reverse()) addToChart(t, false);
+  series.setData(candles.map(({ volume, ...c }) => c));
+  volSeries.setData(candles.map((c) => ({ time: c.time, value: c.volume ?? 0, color: c.close >= c.open ? 'rgba(22,199,132,.35)' : 'rgba(255,51,85,.35)' })));
+  $('chartMsg').hidden = candles.length > 0;
+  chart.timeScale().scrollToRealTime();
+}
+function addToChart(t, live = true) {
+  const v = valueOfTrade(t); if (v == null || !series) return;
+  const step = extCandles.length && interval < 60 ? 60 : interval;
+  const time = Math.floor(t.t / 1000 / step) * step;
+  let last = candles.at(-1);
+  if (last && time < last.time) return;
+  if (!last || time > last.time) { last = { time, open: last ? last.close : v, high: v, low: v, close: v, volume: 0 }; candles.push(last); }
+  last.high = Math.max(last.high, v); last.low = Math.min(last.low, v); last.close = v; last.volume += t.usd ?? 0;
+  if (live) { series.update({ time: last.time, open: last.open, high: last.high, low: last.low, close: last.close }); volSeries.update({ time: last.time, value: last.volume, color: last.close >= last.open ? 'rgba(22,199,132,.35)' : 'rgba(255,51,85,.35)' }); $('chartMsg').hidden = true; }
+}
+
+/* ---------- trade box (side panel, floating, pop-out) ---------- */
+const tb = { side: 'buy', amount: store.get('tb.amount', null), pct: 100, slip: store.get('tb.slip', '') };
+let QUICK = store.get('quickMint', null);
+let lastPos = null;
+function tradeBox(mint, symbol) {
+  const buy = tb.side === 'buy';
+  const amts = buy ? CFG.quickBuy : CFG.quickSell;
+  return `<div class="bs"><button class="b ${buy ? 'on' : ''}" data-tside="buy">Buy</button><button class="s ${buy ? '' : 'on'}" data-tside="sell">Sell</button></div>
+    <div class="amts">${amts.map((a) => `<button data-tamt="${a}" class="${(buy ? Number(tb.amount) : tb.pct) === a ? 'on' : ''}">${buy ? a : a + '%'}</button>`).join('')}</div>
+    <div class="row"><input data-tinput placeholder="${buy ? 'Amount in SOL' : 'Percent to sell'}" value="${esc(buy ? tb.amount ?? '' : tb.pct)}" inputmode="decimal"><span class="dim">${buy ? 'SOL' : '%'}</span></div>
+    <div class="row"><span class="dim" style="font-size:12px">Slippage</span><input data-tslip placeholder="auto (settings)" value="${esc(tb.slip)}" inputmode="decimal" style="max-width:110px"><span class="dim">%</span></div>
+    <button class="btn ${buy ? 'buy' : 'sell'} go" data-tgo="${esc(mint ?? '')}" data-sym="${esc(symbol ?? '')}" ${mint ? '' : 'disabled'}>${mint ? `${buy ? 'Buy' : 'Sell'} ${esc(symbol ? '$' + symbol : short(mint))}` : 'Open a coin first'}</button>
+    <div class="pos" data-pos>${posHtml(lastPos)}</div>
+    <div class="note" style="text-align:center">${MODE === 'live' ? '<span class="down">Real money</span>' : 'Paper mode: practice trades'}</div>`;
+}
+function posHtml(p) {
+  if (!p) return '<div style="grid-column:1/-1" class="dim">No position yet</div>';
+  return `<div><small>Bought</small>${sol(p.solSpent)}</div><div><small>Worth</small>${p.worth != null ? sol(p.worth) : '-'}</div><div><small>PnL</small><span class="${(p.pnl ?? 0) >= 0 ? 'up' : 'down'}">${p.pnl != null ? (p.pnl >= 0 ? '+' : '') + sol(p.pnl) : '-'}</span></div><div><small>PnL %</small><span class="${(p.pnl ?? 0) >= 0 ? 'up' : 'down'}">${p.pnl != null && p.solSpent ? Math.round((p.pnl / p.solSpent) * 100) + '%' : '-'}</span></div>`;
+}
+function renderPosition(p) { lastPos = p; document.querySelectorAll('[data-pos]').forEach((el) => (el.innerHTML = posHtml(p))); }
+function rerenderTradeBoxes() {
+  if ($('sideTrade') && COIN) $('sideTrade').innerHTML = tradeBox(COIN.mint, COIN.symbol);
+  renderFloating();
+}
+document.addEventListener('click', async (e) => {
+  const t = e.target;
+  if (t.dataset.tside) { tb.side = t.dataset.tside; return rerenderTradeBoxes(); }
+  if (t.dataset.tamt) { if (tb.side === 'buy') { tb.amount = Number(t.dataset.tamt); store.set('tb.amount', tb.amount); } else tb.pct = Number(t.dataset.tamt); return rerenderTradeBoxes(); }
+  if (t.dataset.tgo !== undefined && t.dataset.tgo) {
+    const body = { mint: t.dataset.tgo, side: tb.side, slippagePct: tb.slip || undefined, ...(tb.side === 'buy' ? { sol: Number(tb.amount) } : { percent: Number(tb.pct) }) };
+    if (tb.side === 'buy' && !(body.sol > 0)) return toast('loss', 'Pick or type an amount first.');
+    t.disabled = true; t.textContent = tb.side === 'buy' ? 'Buying…' : 'Selling…';
+    try {
+      const r = await api('/api/pulse/trade', body);
+      toast('win', tb.side === 'buy' ? `Bought ${r.sol} SOL of $${t.dataset.sym}${MODE === 'live' ? '' : ' (paper)'}` : `Sold for ${sol(r.sol)} SOL (${r.pnl >= 0 ? '+' : ''}${sol(r.pnl)} SOL)`);
+    } catch (err) { toast('loss', `${tb.side === 'buy' ? 'Buy' : 'Sell'} failed: ${err.message}`); }
+    rerenderTradeBoxes();
+  }
+});
+document.addEventListener('input', (e) => {
+  if (e.target.matches('[data-tinput]')) { if (tb.side === 'buy') { tb.amount = e.target.value; store.set('tb.amount', tb.amount); } else tb.pct = e.target.value; }
+  if (e.target.matches('[data-tslip]')) { tb.slip = e.target.value; store.set('tb.slip', tb.slip); }
+});
+
+function setQuickMint(mint, symbol) {
+  QUICK = { mint, symbol: symbol ?? COIN?.symbol ?? QUICK?.symbol ?? '' };
+  if (COIN?.mint === mint) QUICK.symbol = COIN.symbol;
+  store.set('quickMint', QUICK); renderFloating();
+}
+const floatPos = store.get('floatPos', { x: Math.max(20, innerWidth - 340), y: 80 });
+function renderFloating() {
+  const el = $('floating');
+  if (el.hidden && !document.body.classList.contains('quick-mode')) return;
+  el.innerHTML = `<div class="drag" id="dragBar"><b>⚡ ${QUICK?.mint ? esc(QUICK.symbol ? '$' + QUICK.symbol : short(QUICK.mint)) : 'Quick trade'}</b>
+      ${document.body.classList.contains('quick-mode') ? '' : '<button id="popOut" title="Pop out into its own window">⧉</button><button id="floatClose" title="Hide">✕</button>'}</div>
+    <div class="trade">${tradeBox(QUICK?.mint, QUICK?.symbol)}</div>`;
+  if (!document.body.classList.contains('quick-mode')) { el.style.left = `${floatPos.x}px`; el.style.top = `${floatPos.y}px`; }
+}
+$('quickBtn').onclick = () => { const el = $('floating'); el.hidden = !el.hidden; store.set('floatOpen', !el.hidden); renderFloating(); };
+$('floating').addEventListener('click', (e) => {
+  if (e.target.id === 'floatClose') { $('floating').hidden = true; store.set('floatOpen', false); }
+  if (e.target.id === 'popOut') {
+    const w = window.open(`/pulse?quick=${encodeURIComponent(QUICK?.mint ?? '')}`, 'solboyQuick', 'width=330,height=470');
+    if (w) { $('floating').hidden = true; store.set('floatOpen', false); } else toast('loss', 'Your browser blocked the pop-up. Allow pop-ups for SolBoy.');
+  }
+});
+$('floating').addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('#dragBar') || e.target.closest('button') || document.body.classList.contains('quick-mode')) return;
+  const el = $('floating'), sx = e.clientX - floatPos.x, sy = e.clientY - floatPos.y;
+  const move = (m) => { floatPos.x = Math.max(0, Math.min(innerWidth - 120, m.clientX - sx)); floatPos.y = Math.max(0, Math.min(innerHeight - 40, m.clientY - sy)); el.style.left = `${floatPos.x}px`; el.style.top = `${floatPos.y}px`; };
+  const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); store.set('floatPos', floatPos); };
+  addEventListener('pointermove', move); addEventListener('pointerup', up);
+});
+
+/* ---------- prefs: quick amounts and KOL wallets ---------- */
+$('prefsBtn').onclick = () => {
+  $('prefsModal').hidden = false;
+  $('prefsModal').innerHTML = `<div class="modal"><header><h3>Pulse settings</h3><button class="icon-btn" id="pClose">✕</button></header>
+    <div class="body">
+      <label class="f box">Quick buy amounts (SOL, comma separated)<input id="pBuy" value="${esc(CFG.quickBuy.join(', '))}"></label>
+      <label class="f box">Quick sell amounts (% of your coins)<input id="pSell" value="${esc(CFG.quickSell.join(', '))}"></label>
+      <label class="f box">KOL / tracked wallets: one per line, address then a name. They get a KOL tag in trades and holders.<textarea id="pKols" rows="7" style="font:12px var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--edge-2);border-radius:8px;padding:8px">${esc(CFG.kols.map((k) => `${k.address} ${k.label}`).join('\n'))}</textarea></label>
+      <div class="note">Your copied wallets are tagged automatically. Take profit and stop loss (Dashboard → Loadout) also apply to coins you buy here.</div>
+    </div><footer><span style="flex:1"></span><button class="btn primary" id="pSave">Save</button></footer></div>`;
+};
+$('prefsModal').addEventListener('click', async (e) => {
+  if (e.target === $('prefsModal') || e.target.id === 'pClose') { $('prefsModal').hidden = true; return; }
+  if (e.target.id === 'pSave') {
+    const nums = (s) => s.split(/[,\s]+/).map(Number).filter((n) => n > 0);
+    const kols = $('pKols').value.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [address, ...name] = l.split(/\s+/); return { address, label: name.join(' ') }; });
+    try { const r = await api('/api/pulse/prefs', { quickBuy: nums($('pBuy').value), quickSell: nums($('pSell').value), kols }); Object.assign(CFG, r); $('prefsModal').hidden = true; toast('win', 'Saved'); rerenderTradeBoxes(); }
+    catch (err) { toast('loss', err.message); }
+  }
+});
+
+/* ---------- routing ---------- */
+let BLANK = null;
+function route() {
+  const m = /^#coin=([1-9A-HJ-NP-Za-km-z]{32,44})$/.exec(location.hash);
+  if (m) { if (COIN?.mint !== m[1]) openCoin(m[1]); } else if (!$('coin').hidden || !es) { closeCoin(); }
+}
+addEventListener('hashchange', route);
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { if (!$('filterModal').hidden) $('filterModal').hidden = true; else if (!$('prefsModal').hidden) $('prefsModal').hidden = true; else if (location.hash) location.hash = ''; }
+});
+(async function init() {
+  const quickMint = new URLSearchParams(location.search).get('quick');
+  try {
+    const d = await api('/api/pulse/filters');
+    FILTERS = d.filters; PROTOCOLS = d.protocols; CFG = { quickBuy: d.quickBuy, quickSell: d.quickSell, kols: d.kols };
+    BLANK = clone(d.filters.presets[1].new); BLANK = blankLike(BLANK);
+  } catch (err) { toast('loss', err.message); }
+  markFilterButtons();
+  if (quickMint !== null) {
+    document.body.classList.add('quick-mode'); document.title = 'SolBoy quick trade';
+    $('floating').hidden = false;
+    if (quickMint) { setQuickMint(quickMint); stream(quickMint); } else renderFloating();
+    return;
+  }
+  if (store.get('floatOpen', false)) { $('floating').hidden = false; renderFloating(); }
+  route();
+})();
+// A clean copy of one column's filters, with every limit cleared and every launchpad allowed.
+function blankLike(f) {
+  const out = clone(f);
+  out.include = []; out.exclude = [];
+  for (const k of Object.keys(out.protocols)) out.protocols[k] = true;
+  for (const group of ['audit', 'metrics', 'socials']) for (const [k, v] of Object.entries(out[group])) {
+    if (typeof v === 'boolean') out[group][k] = false;
+    else if (v && typeof v === 'object') for (const kk of Object.keys(v)) v[kk] = kk.endsWith('Unit') ? 'm' : '';
+  }
+  return out;
+}
+</script>
+</body>
+</html>

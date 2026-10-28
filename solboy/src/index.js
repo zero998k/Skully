@@ -15,6 +15,7 @@ import { log, captureLibraryOutput } from './log.js';
 import { keepAwake } from './awake.js';
 import { runWebSetupIfNeeded } from './websetup.js';
 import { createUpdater } from './update.js';
+import { createPulse } from './pulse.js';
 import { VERSION } from './version.js';
 
 // Server mode: SolBoy runs online on a server, set up and used through the browser with a password.
@@ -88,13 +89,14 @@ async function main() {
   if (cfg.keepAwake) keepAwake();
 
   const account = createAccount({ cfg, connection, book, positionsFor: book.positionsFor });
-  const bot = createBot({ cfg, connection, book, rpcFetch: rpc.fetch });
+  const pulse = cfg.pulse.enabled && cfg.dashboard.enabled ? createPulse({ cfg, connection }) : null;
+  const bot = createBot({ cfg, connection, book, rpcFetch: rpc.fetch, pulse });
   bot.start();
   const updater = createUpdater();
   let dashboard = null;
   if (cfg.dashboard.enabled) {
     try {
-      dashboard = await startDashboard({ cfg, bot, book, account, updater, serverMode: SERVER_MODE });
+      dashboard = await startDashboard({ cfg, bot, book, account, updater, pulse, serverMode: SERVER_MODE });
     } catch (e) {
       log(`Dashboard couldn't start (${e.message}). The bot keeps running here in the terminal.`);
     }

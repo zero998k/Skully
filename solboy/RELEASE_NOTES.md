@@ -1,3 +1,9 @@
+**New in 1.4.0: Pulse, a trading terminal like Axiom**
+- Click **📈 Pulse** on the dashboard: live **New Pairs**, **Final Stretch** and **Migrated** columns with every coin's age, socials, holders, volume, market cap and the top 10 / dev / snipers / insiders / bundlers percentages.
+- **Axiom-style filters** on each column: keywords, launchpads, Audit, $ Metrics and Socials, with 3 presets and import/export/share.
+- **Coin pages:** live chart, every buy and sell in real time, holders with % and profit, top traders, snipers and bundles (checked on the chain), dev's other coins, and an insider check.
+- **Quick trading:** ⚡ buy from any card, a buy/sell panel on each coin, and a floating trade box you can drag around or pop out. Works in paper mode and with real money.
+
 **New in 1.3.0**
 - **Copying fixed for traders who keep a "moon bag":** SolBoy now sells when the wallet sells 90% or more. Before, a trader keeping a few % forever meant SolBoy never sold, your slots filled up, and new buys were skipped.
 - **Fresh buys copied again:** a wallet holding a little dust from an old trade no longer counts as "adding more".

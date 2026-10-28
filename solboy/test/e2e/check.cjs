@@ -83,5 +83,31 @@ U('keys, settings and positions untouched', u.settingsUntouched === true && u.po
 U('still trades after updating', u.sellAfterUpdate === true && u.buttonGone === true, 'sellAfterUpdate');
 U('no page errors', Array.isArray(u.errors) && u.errors.length === 0, 'errors');
 
+const pp = json('pulse.json');
+const PP = (name, ok, key) => check('pulse', name, ok, pp[key] ?? pp.crashed);
+PP('dashboard links to Pulse', pp.dashboardHasPulseLink === true, 'dashboardHasPulseLink');
+PP('live feed connects', pp.feedLive === true && pp.subs?.[0]?.newToken === true && pp.subs?.[0]?.migration === true, 'subs');
+PP('new coins land in New Pairs', ['MCAT', 'BPUP', 'RUG'].every((x) => pp.newCol?.includes(x)), 'newCol');
+PP('a coin past 45% bonding curve is in Final Stretch', pp.stretchCol?.includes('FROG') && !pp.newCol?.includes('FROG'), 'stretchCol');
+PP('migrated coins land in Migrated, with Dex paid', pp.migratedCol?.includes('BIRD') && pp.migratedPaid === true, 'migratedCol');
+PP('SolBoy subscribes to each coin\'s trades', pp.tradeDelivered >= 1, 'tradeDelivered');
+PP('cards show socials, holders and percentages', pp.socialLinks >= 3 && /@mooncat/.test(pp.mcatCard ?? '') && /👥 \d/.test(pp.mcatCard ?? ''), 'mcatCard');
+PP('filter window has Axiom tabs and fields', pp.filterTabs?.join() === 'Protocols,Audit,$ Metrics,Socials' && ['Age', 'Top 10 Holders %', 'Dev Holding %', 'Snipers %', 'Insiders %', 'Bundle %', 'Holders', 'Dev Migrations', 'Dev Pairs Created'].every((x) => pp.auditFields?.includes(x)) && ['Liquidity ($)', 'Volume ($)', 'Market Cap ($)', 'B. Curve %', 'Global Fees Paid ($)', 'Txns', 'Num Buys', 'Num Sells'].every((x) => pp.metricFields?.includes(x)), 'auditFields');
+PP('exclude keyword hides a coin', pp.rugHiddenByExclude === true, 'rugHiddenByExclude');
+PP('dev holding filter hides coins', Array.isArray(pp.afterDevMax) && pp.afterDevMax.length === 0, 'afterDevMax');
+PP('"needs Twitter" keeps only coins with X', pp.afterNeedsTwitter?.join() === 'MCAT', 'afterNeedsTwitter');
+PP('filter presets and reset', pp.preset2ShowsAll === true && pp.afterReset?.length === 3, 'afterReset');
+PP('⚡ quick buy from a card (curve price when Jupiter has no route)', /^Bought 0.1 SOL of \$MCAT/.test(pp.quickBuyToast ?? ''), 'quickBuyToast');
+PP('coin page: live trades with dev tag and chart', pp.tradesRows >= 3 && pp.devTagInTrades >= 1 && pp.chartCanvas > 0 && pp.liveTradeArrived === true, 'tradesRows');
+PP('coin page: holders with bonding curve labelled', pp.holderRows >= 3 && pp.curveLabelled === true, 'holderRows');
+PP('insider check finds the dev-funded wallet', /1 insider/.test(pp.analyzeToast ?? '') && pp.insiderTagged >= 1, 'analyzeToast');
+PP('bundled launch buy found on the chain', pp.bundleFoundOnChain === true && pp.bundleChip > 0, 'bundleFoundOnChain');
+PP('sell from the trade panel', /^Sold for/.test(pp.sellToast ?? ''), 'sellToast');
+PP('real money: buy and sell through PumpPortal when Jupiter has no route', pp.liveBuy?.mode === 200 && pp.liveBuy?.buy?.ok === true && pp.liveBuy?.sell?.ok === true && pp.tradeLocal?.join() === 'buy:true:auto,sell:false:auto', 'liveBuy');
+PP('quick trade box opens and drags', pp.floatVisible === true && pp.dragged === true && /MCAT/.test(pp.floatCoin ?? ''), 'dragged');
+PP('quick trade box pops out into its own window', pp.popupQuickMode === true && /MCAT/.test(pp.popupCoin ?? '') && pp.popupHasBuy === true, 'popupQuickMode');
+PP('back to the board', pp.backOnBoard === true, 'backOnBoard');
+PP('no page errors', Array.isArray(pp.errors) && pp.errors.length === 0, 'errors');
+
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
