@@ -317,6 +317,8 @@ td .bar { margin-top: 4px; width: 110px; } .fee { color: var(--ink-2); }
 @keyframes sweep { to { transform: rotate(360deg); } }
 .gauge .gv { font-variant-numeric: tabular-nums; }
 .ginfo { display: grid; justify-items: center; gap: 2px; } .ginfo .gauge { border: 0; padding: 0; flex-direction: column; } .ginfo .gv { font: 700 13px var(--mono); }
+.why { display: grid; gap: 8px; padding: 10px; border-radius: 10px; border: 1px solid var(--edge-2); font-size: 12.5px; line-height: 1.45; margin-top: 8px; }
+.why.bad { border-color: rgba(255,77,94,.45); } .why.ok { border-color: rgba(22,199,132,.45); } .why ul { margin: 0; padding-left: 18px; color: var(--sun); }
 @media (max-width: 700px) {
   .top { height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 8px; }
   .logo { font-size: 18px; } .logo img { width: 36px; height: 36px; } .logo .sub, #delayChip, #solChip, .btn kbd { display: none; }
@@ -522,6 +524,11 @@ function renderCol(c, force = false) {
   const rows = BOARD[c].filter((r) => !search[c] || `${r.symbol} ${r.name} ${r.mint}`.toLowerCase().includes(search[c]));
   $(`cnt-${c}`).textContent = rows.length;
   const list = $(`list-${c}`);
+  if (!rows.length && /^[1-9a-z]{32,44}$/.test(search[c])) {
+    const html = `<div class="empty">No coin with that address in ${COLS[c]}.<br><button class="btn" data-whycol="${c}">🔎 Why isn't it here?</button></div>`;
+    if (list._empty !== html) { list.innerHTML = html; list._empty = html; }
+    return;
+  }
   if (!rows.length) {
     list._h = null;
     const html = STATUS.feed === 'live' ? `<div class="empty"><span class="big">${c === 'migrated' ? '🎓' : c === 'stretch' ? '🏁' : '🌱'}</span>${c === 'migrated' ? 'Coins appear here when they finish their bonding curve.' : 'Waiting for coins that match your filters…'}</div>` : SKELETON;
@@ -560,6 +567,12 @@ function renderCol(c, force = false) {
   }
 }
 document.addEventListener('click', async (e) => {
+  const whyCol = e.target.closest('[data-whycol]');
+  if (whyCol) {
+    const raw = document.querySelector(`[data-search="${whyCol.dataset.whycol}"]`).value.trim();
+    $('prefsBtn').click(); $('whyIn').value = raw; $('whyGo').click();
+    return;
+  }
   const qualBtn = e.target.closest('[data-quality]');
   if (qualBtn && FILTERS) {
     const c = qualBtn.dataset.quality, f = FILTERS.presets[FILTERS.active][c];
@@ -1108,6 +1121,8 @@ $('prefsBtn').onclick = () => {
   $('prefsModal').hidden = false;
   $('prefsModal').innerHTML = `<div class="modal"><header><h3>Pulse settings</h3><button class="icon-btn" id="pClose">✕</button></header>
     <div class="body">
+      <div class="box"><b>🔎 Missing a coin that Axiom (or another terminal) shows?</b>
+        <div class="row" style="display:flex;gap:8px"><input id="whyIn" placeholder="Paste the coin's address" style="flex:1;min-width:0"><button class="btn" id="whyGo">Check</button></div><div id="whyOut"></div></div>
       <label class="f box">Final Stretch starts at this bonding curve % (coins below it stay in New Pairs)<input id="pStretch" value="${esc(CFG.stretchPct ?? 45)}" inputmode="numeric"></label>
       <label class="f box">Quick buy amounts (SOL, comma separated)<input id="pBuy" value="${esc(CFG.quickBuy.join(', '))}"></label>
       <label class="f box">Quick sell amounts (% of your coins)<input id="pSell" value="${esc(CFG.quickSell.join(', '))}"></label>
@@ -1119,6 +1134,13 @@ $('prefsBtn').onclick = () => {
 };
 $('prefsModal').addEventListener('click', async (e) => {
   if (e.target === $('prefsModal') || e.target.id === 'pClose') { $('prefsModal').hidden = true; return; }
+  if (e.target.id === 'whyGo' || e.target.dataset.whyopen !== undefined) {
+    const mint = ($('whyIn').value || '').trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) { $('whyOut').innerHTML = '<div class="note down">That isn\'t a coin address.</div>'; return; }
+    $('whyOut').innerHTML = '<div class="note">Checking…</div>';
+    try { $('whyOut').innerHTML = whyHtml(mint, await api(`/api/pulse/why?mint=${mint}`)); } catch (err) { $('whyOut').innerHTML = `<div class="note down">${esc(err.message)}</div>`; }
+    return;
+  }
   if (e.target.id === 'pHealth') {
     e.target.disabled = true; e.target.textContent = 'Checking…'; $('healthOut').innerHTML = '<div class="note">Checking (up to 10 seconds)…</div>';
     try {
@@ -1136,6 +1158,17 @@ $('prefsModal').addEventListener('click', async (e) => {
     catch (err) { toast('loss', err.message); }
   }
 });
+
+// plain-English answer for "why isn't this coin on my board?"
+function whyHtml(mint, w) {
+  const name = w.symbol ? `$${esc(w.symbol)}` : short(mint);
+  const open = `<a class="btn" href="/pulse#coin=${esc(mint)}" onclick="document.getElementById('prefsModal').hidden=true">Open ${name} in SolBoy</a>`;
+  if (!w.known) return `<div class="why bad"><b>SolBoy never received ${name}.</b> The live feed didn't deliver it (it may have launched while SolBoy was closed, or the feed dropped it). Opening it loads it now, and the 📡 Live data check below shows whether the feed is healthy.<div>${open}</div></div>`;
+  const col = COLS[w.column];
+  if (w.reasons.length) return `<div class="why"><b>${name} is in ${col}, but your filters hide it:</b><ul>${w.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul><div class="note">SolBoy doesn't know every number Axiom does for coins it didn't see launch; unknown numbers never hide a coin, but a known one can be different.</div><div>${open}</div></div>`;
+  if (w.position < 0) return `<div class="why"><b>${name} is in ${col} and passes your filters,</b> but isn't in the newest 100 shown there.<div>${open}</div></div>`;
+  return `<div class="why ok"><b>${name} is on your board: ${col}, #${w.position + 1}.</b>${w.migrated ? ` Marked as graduated by ${w.migratedBy === 'feed' ? 'the live feed (it saw the migration)' : w.migratedBy ?? 'a saved board'}.` : ''}${w.progress != null && !w.migrated ? ` Bonding curve ${pctf(w.progress)} (Final Stretch starts at ${CFG.stretchPct ?? 45}%: change it above if Axiom has it in another column).` : ''}<div>${open}</div></div>`;
+}
 
 /* ---------- routing ---------- */
 let BLANK = null;

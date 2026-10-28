@@ -130,6 +130,8 @@ PP('everything scrolls on a short screen (columns, filters, coin page)', pp.scro
 PP('risk numbers are animated gauges', pp.gauges >= 5, 'gauges');
 PP('"Pump only" keeps graduated Pump.fun coins in Migrated (like Axiom)', pp.pumpOnlyMigrated?.includes('BIRD'), 'pumpOnlyMigrated');
 PP('Final Stretch % can be set', pp.stretchAt99?.inNew === true && !pp.stretchAt99?.stretch?.includes('FROG'), 'stretchAt99');
+PP('"why isn\'t this coin showing?": names the filter, finds coins on the board, spots coins never received', pp.whyRug?.reasons?.some((x) => /Excluded keywords/.test(x)) && pp.whyMcat?.position >= 0 && /never received/.test(pp.whyUnseen ?? ''), 'whyUnseen');
+PP('a curve coin with an early PumpSwap pool stays in Final Stretch, not Migrated', pp.earlyPoolNotMigrated === true && pp.geckoSeeded === true, 'earlyPoolNotMigrated');
 PP('back to the board', pp.backOnBoard === true, 'backOnBoard');
 PP('no page errors', Array.isArray(pp.errors) && pp.errors.length === 0, 'errors');
 

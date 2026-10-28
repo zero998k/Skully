@@ -147,6 +147,28 @@ export function passes(row, f) {
   return true;
 }
 
+// Which of a column's filters hide this coin, in plain words (each filter tried on its own).
+const FILTER_LABELS = {
+  dexPaid: 'Dex paid only', caEndsPump: 'Address ends in "pump"', age: 'Age', top10: 'Top 10 holders %', dev: 'Dev holding %', snipers: 'Snipers %',
+  insiders: 'Insiders %', bundle: 'Bundle %', holders: 'Holders', proTraders: 'Pro traders', devMigrations: 'Dev migrations', devPairs: 'Dev pairs created',
+  liquidity: 'Liquidity', volume: 'Volume', mc: 'Market cap', curve: 'Bonding curve %', fees: 'Fees paid', txns: 'Txns', buys: 'Buys', sells: 'Sells',
+  twitterReuses: 'X account reuses', twitter: 'Has X', website: 'Has website', telegram: 'Has Telegram', anySocial: 'Has any social',
+};
+export function filterReasons(row, f) {
+  if (!f) return [];
+  const out = [];
+  const one = (label, patch) => { const g = blankFilters(); patch(g); if (!passes(row, g)) out.push(label); };
+  const isSet = (v) => v && typeof v === 'object' ? Object.entries(v).some(([k, x]) => !k.endsWith('Unit') && x !== '') : Boolean(v);
+  if (f.quality) one('✨ Quality switch', (g) => (g.quality = true));
+  if (f.include?.length) one(`Search keywords (${f.include.join(', ')})`, (g) => (g.include = f.include));
+  if (f.exclude?.length) one(`Excluded keywords (${f.exclude.join(', ')})`, (g) => (g.exclude = f.exclude));
+  if (f.protocols) one('Launchpads', (g) => (g.protocols = { ...f.protocols }));
+  for (const group of ['audit', 'metrics', 'socials']) {
+    for (const [k, v] of Object.entries(f[group] ?? {})) if (isSet(v)) one(FILTER_LABELS[k] ?? k, (g) => (g[group][k] = v));
+  }
+  return out;
+}
+
 export function createPulse({ cfg, connection }) {
   const tokens = new Map();
   const subscribed = new Set();
@@ -315,6 +337,10 @@ export function createPulse({ cfg, connection }) {
     const sol = num(d.solAmount) ?? 0;
     const amount = num(d.tokenAmount) ?? 0;
     const who = d.traderPublicKey;
+    if ((d.pool === 'pump' || d.pool === 'bonk') && tok.migrated && tok.migratedBy !== 'feed') {
+      tok.migrated = false; // it still trades on its bonding curve: it hasn't graduated
+      tok.migratedBy = null;
+    }
     curve(tok, d);
     if (d.pool && d.pool !== 'pump' && d.pool !== 'bonk') {
       tok.pool = d.pool;
@@ -354,8 +380,9 @@ export function createPulse({ cfg, connection }) {
   function onMigrate(d) {
     let tok = tokens.get(d.mint);
     if (!tok) tokens.set(d.mint, (tok = blankToken(d.mint)));
-    if (tok.migrated) return;
+    if (tok.migrated && tok.migratedBy === 'feed') return;
     tok.migrated = true;
+    tok.migratedBy = 'feed';
     tok.migratedAt = Date.now();
     tok.pool = d.pool && d.pool !== 'pump' ? d.pool : 'pump-amm';
     if (tok.creator && history.devs[tok.creator]) {
@@ -520,7 +547,8 @@ export function createPulse({ cfg, connection }) {
       if (focus.has(mint)) continue;
       const age = now - (t.createdAt ?? t.seenAt);
       const quiet = now - (t.lastTradeAt ?? t.seenAt);
-      const dead = (age > 3600_000 && solMc(t) < 15_000) || (age > 15 * 60_000 && quiet > 10 * 60_000 && progressOf(t) < 15) || age > 12 * 3600_000;
+      // keep coins as long as the big terminals list them; only clearly dead ones go
+      const dead = (age > 3 * 3600_000 && solMc(t) < 8_000) || (age > 2 * 3600_000 && quiet > 30 * 60_000 && progressOf(t) < 10) || age > 24 * 3600_000;
       if (dead || (force && tokens.size > MAX_TOKENS && quiet > 120_000)) {
         tokens.delete(mint);
         unfollow(mint);
@@ -728,7 +756,7 @@ export function createPulse({ cfg, connection }) {
       snipersCount: known ? [...t.wallets.values()].filter((w) => w.tags.has('sniper')).length : null,
       bundlersCount: known ? [...t.wallets.values()].filter((w) => w.tags.has('bundler')).length : null,
       proTraders: null,
-      devPairs: devHist ? Math.max(0, devHist.created - 1) : null,
+      devPairs: devHist && devHist.created > 1 ? devHist.created - 1 : null, // only launches SolBoy saw: one means unknown, not zero
       devMigrations: devHist ? devHist.migrated - (t.migrated ? 1 : 0) : null,
       creator: t.creator,
       twitter, telegram, website, xHandle: handleOf(twitter),
@@ -746,7 +774,7 @@ export function createPulse({ cfg, connection }) {
   }
 
   /** The three columns, filtered with the active preset. */
-  function board(limit = 40) {
+  function board(limit = 100) {
     const f = filters.presets[filters.active] ?? blankCols();
     const cols = { new: [], stretch: [], migrated: [] };
     const nameless = [];
@@ -758,7 +786,11 @@ export function createPulse({ cfg, connection }) {
       }
       cols[column(t)].push(t);
     }
-    if (nameless.length) enrich(nameless.slice(0, 30));
+    if (nameless.length) {
+      enrich(nameless.slice(0, 30));
+      // DexScreener can take minutes to list a coin that just graduated: Helius knows its name and picture now
+      for (const t of nameless.slice(0, 10)) if (!t.dasNamed && dasLeft()) { t.dasNamed = true; wantMeta(t); }
+    }
     cols.new.sort((a, b) => (b.createdAt ?? b.seenAt) - (a.createdAt ?? a.seenAt));
     cols.stretch.sort((a, b) => (progressOf(b) ?? 0) - (progressOf(a) ?? 0));
     cols.migrated.sort((a, b) => (b.migratedAt ?? 0) - (a.migratedAt ?? 0));
@@ -1194,6 +1226,7 @@ export function createPulse({ cfg, connection }) {
     }
     if (c.complete && !tok.migrated) {
       tok.migrated = true;
+      tok.migratedBy = c.source ?? 'pump.fun';
       tok.migratedAt = num(c.last_trade_timestamp) ?? Date.now();
     }
     if (!tok.meta && (c.image_uri || c.twitter || c.website || c.telegram)) {
@@ -1240,13 +1273,16 @@ export function createPulse({ cfg, connection }) {
         const baseId = pool.relationships?.base_token?.data?.id ?? '';
         const mint = baseId.replace(/^solana_/, '');
         const curve = dexId === 'pump-fun';
-        const migrated = /pumpswap|pump-swap/.test(dexId);
+        // anyone can open a PumpSwap pool for a coin still on its curve; only the pool Pump.fun creates at graduation counts
+        let canonical = false;
+        try { canonical = /pumpswap|pump-swap/.test(dexId) && a.address === pumpSwapPool(mint); } catch {}
+        const migrated = canonical;
         if (!mint || (!curve && !migrated)) continue;
         const tk = tokensById.get(baseId) ?? {};
         const mcSol = (num(a.market_cap_usd) ?? num(a.fdv_usd) ?? 0) / solUsd;
         if (!(mcSol > 0)) continue;
         const created = Date.parse(a.pool_created_at) || null;
-        const c = { mint, name: tk.name ?? String(a.name ?? '').split(' / ')[0], symbol: tk.symbol ?? String(a.name ?? '').split(' / ')[0], market_cap: mcSol, last_trade_timestamp: Date.now(), complete: migrated };
+        const c = { mint, name: tk.name ?? String(a.name ?? '').split(' / ')[0], symbol: tk.symbol ?? String(a.name ?? '').split(' / ')[0], market_cap: mcSol, last_trade_timestamp: Date.now(), complete: migrated, source: 'geckoterminal' };
         if (tk.image_url && !/missing/.test(tk.image_url)) c.image_uri = tk.image_url;
         if (curve) {
           const vTokens = Math.sqrt((PUMP_K * SUPPLY) / mcSol); // where on the curve this market cap sits
@@ -1265,7 +1301,7 @@ export function createPulse({ cfg, connection }) {
     const keep = [...tokens.values()].filter((t) => t.name && (t.mcSol != null || t.migrated)).sort((a, b) => (b.lastTradeAt ?? b.seenAt) - (a.lastTradeAt ?? a.seenAt)).slice(0, 500);
     const pick = (t) => ({
       mint: t.mint, name: t.name, symbol: t.symbol, uri: t.uri, protocol: t.protocol, creator: t.creator, createdAt: t.createdAt, bondingCurveKey: t.bondingCurveKey,
-      vSol: t.vSol, vTokens: t.vTokens, mcSol: t.mcSol, athMcSol: t.athMcSol, migrated: t.migrated, migratedAt: t.migratedAt, pool: t.pool,
+      vSol: t.vSol, vTokens: t.vTokens, mcSol: t.mcSol, athMcSol: t.athMcSol, migrated: t.migrated, migratedBy: t.migratedBy, migratedAt: t.migratedAt, pool: t.pool,
       buys: t.buys, sells: t.sells, volSol: t.volSol, lastTradeAt: t.lastTradeAt, meta: t.meta, trades: t.trades.slice(-80), tweet: t.tweet ?? null,
       fromBirth: t.fromBirth, backfill: t.backfill === 'exact' ? 'exact' : undefined,
       // the biggest wallets with their dev/sniper/bundler tags, so those numbers survive a restart
@@ -1411,6 +1447,23 @@ export function createPulse({ cfg, connection }) {
           return `$${solUsd.toFixed(2)}`;
         }),
       ]);
+    },
+    /** Why a coin isn't on the board: never received, in another column, hidden by a filter, or below the top 100. */
+    async why(mint) {
+      new PublicKey(mint);
+      const tok = tokens.get(mint);
+      if (!tok) {
+        const das = await dasAsset(mint).catch(() => null);
+        return { known: false, name: das?.name ?? null, symbol: das?.symbol ?? null };
+      }
+      const r = row(tok);
+      const col = column(tok);
+      const f = (filters.presets[filters.active] ?? {})[col];
+      const list = board()[col];
+      return {
+        known: true, name: r.name, symbol: r.symbol, column: col, reasons: filterReasons(r, f), position: list.findIndex((x) => x.mint === mint),
+        progress: r.progress, ageSec: r.ageSec, migrated: r.migrated, migratedBy: tok.migratedBy ?? null, followedSinceLaunch: tok.fromBirth, detailsLoaded: tok.metaState === 'done', named: Boolean(r.name),
+      };
     },
     storyFacts(mint) {
       const t = tokens.get(mint);

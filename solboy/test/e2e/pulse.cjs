@@ -22,6 +22,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.seededStretch = await until(async () => (await p.locator('#list-stretch .card .name b').allInnerTexts()).includes('SEED'), 10000);
   R.seededMigrated = (await p.locator('#list-migrated .card .name b').allInnerTexts()).includes('GRAD');
   R.geckoSeeded = await until(async () => (await p.locator('#list-stretch .card .name b').allInnerTexts()).includes('GKO') && (await p.locator('#list-migrated .card .name b').allInnerTexts()).includes('GKM'), 8000);
+  R.earlyPoolNotMigrated = !(await p.locator('#list-migrated .card .name b').allInnerTexts()).includes('GKO');
 
   // launches: a bundled + sniped coin, a coin to exclude, one that reaches Final Stretch, one that migrates
   const a = await F('/pp/create?name=Moon%20Cat&symbol=MCAT&dev=dev1&initial=1');
@@ -79,6 +80,14 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await p.screenshot({ path: `${E}/p2-filters.png` });
   await p.click('#fApply'); await sleep(1800);
   R.rugHiddenByExclude = !(await col('new')).includes('RUG');
+  R.whyRug = await p.evaluate((m) => api(`/api/pulse/why?mint=${m}`), rug.mint);
+  R.whyMcat = await p.evaluate((m) => api(`/api/pulse/why?mint=${m}`), a.mint);
+  // a coin the feed never delivered: paste it into a column's search and ask why
+  const unseen = await F('/pp/create?name=Never%20Seen&symbol=NVR&dev=dev9&initial=0.2&hidden=1');
+  await p.fill('[data-search="new"]', unseen.mint); await sleep(700);
+  await p.click('[data-whycol="new"]'); await sleep(1500);
+  R.whyUnseen = (await p.locator('#whyOut').innerText()).replace(/\s+/g, ' ');
+  await p.click('#pClose'); await p.fill('[data-search="new"]', ''); await sleep(500);
   await p.click('[data-filter="new"]'); await p.click('[data-ftab="audit"]');
   await p.fill('[data-path="audit.dev.max"]', '0.5'); await p.click('#fApply'); await sleep(1800);
   R.afterDevMax = await col('new');

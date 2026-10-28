@@ -366,6 +366,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
             return;
           }
           if (req.method === 'GET' && url.pathname === '/api/pulse/coin') return send(res, 200, { ...(await pulse.coin(checkMint(mintParam))), position: await positionFor(checkMint(mintParam)), mode: book.mode });
+          if (req.method === 'GET' && url.pathname === '/api/pulse/why') return send(res, 200, await pulse.why(checkMint(mintParam)));
           if (req.method === 'GET' && url.pathname === '/api/pulse/health') {
             const checks = await pulse.health();
             const t0 = Date.now();
