@@ -12,6 +12,7 @@ const S = { groq413: 1, groqdown: 0, apidown: 0, release: 0, corrupt: 0, mult: 1
 // ---- fake Pump.fun world for Pulse (PumpPortal-style feed) ----
 const P0 = Date.now(); const slotNow = () => 1000 + Math.floor((Date.now() - P0) / 400);
 const P = { chainTx: new Map(), coins: new Map(), names: new Map(), accts: new Map(), funds: new Map(), fundSigs: new Map(), clients: new Set(), noroute: new Set(), vaults: new Map() };
+P.seed = web3.Keypair.generate().publicKey.toBase58(); P.grad = web3.Keypair.generate().publicKey.toBase58();
 const pk = () => web3.Keypair.generate().publicKey.toBase58();
 const who = (name) => { if (!P.names.has(name)) P.names.set(name, pk()); return P.names.get(name); };
 const acctFor = (mint, owner) => { const k = mint + owner; if (!P.accts.has(k)) { const a = pk(); P.accts.set(k, a); P.accts.set(a, owner); } return P.accts.get(k); };
@@ -162,6 +163,13 @@ http.createServer(async (r, res) => { const b = await body(r); const u = new URL
   if (p === '/price') return json(res, { So11111111111111111111111111111111111111112: { usdPrice: 150 } });
   if (p.startsWith('/meta/')) { const sym = p.slice(6); return json(res, { name: sym, symbol: sym, description: `${sym} is a test coin`, image: 'http://127.0.0.1:18903/img.png', twitter: sym === 'MCAT' ? 'https://x.com/mooncat' : undefined, website: sym === 'MCAT' ? 'https://mooncat.fun' : undefined, telegram: sym === 'MCAT' ? 'https://t.me/mooncat' : undefined }); }
   if (p === '/img.png') { res.setHeader('content-type', 'image/png'); return res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')); }
+  if (p === '/pump-api/coins') { const q = u.searchParams; const vt = 1073000191 - 0.8 * 793100191, vs = (30 * 1073000191) / vt;
+    const coin = (mint, name, symbol, extra) => ({ mint, name, symbol, metadata_uri: `http://127.0.0.1:18903/meta/${symbol}`, image_uri: 'http://127.0.0.1:18903/img.png', creator: who('seeddev'), created_timestamp: Date.now() - 1800e3, bonding_curve: pk(), virtual_sol_reserves: Math.round(vs * 1e9), virtual_token_reserves: Math.round(vt * 1e6), market_cap: (vs / vt) * 1e9, last_trade_timestamp: Date.now() - 5000, complete: false, twitter: 'https://x.com/seedcoin', ...extra });
+    if (q.get('complete') === 'false') return json(res, [coin(P.seed, 'Seed Stretch', 'SEED')]);
+    if (q.get('complete') === 'true') return json(res, [coin(P.grad, 'Graduated One', 'GRAD', { complete: true, market_cap: 600 })]);
+    return json(res, []); }
+  if (p === `/gecko/networks/solana/tokens/${P.seed}/pools`) return json(res, { data: [{ attributes: { address: 'GeckoSeedPool' } }] });
+  if (p === '/gecko/networks/solana/pools/GeckoSeedPool/trades') return json(res, { data: Array.from({ length: 30 }, (_, i) => ({ attributes: { tx_hash: `seedtx${i}`, tx_from_address: who(`seedw${i % 7}`), kind: i % 3 ? 'buy' : 'sell', from_token_amount: i % 3 ? '0.5' : '1000000', to_token_amount: i % 3 ? '1000000' : '0.45', price_to_in_usd: '0.000025', price_from_in_usd: '0.000025', block_timestamp: new Date(Date.now() - (30 - i) * 20e3).toISOString() } })) });
   if (p.startsWith('/gecko/')) return json(res, { data: [] });
   if (p.startsWith('/tokens/v1/solana/')) return json(res, p.includes(MINT) ? [pair('BOYZ', MINT, 250000, { priceChange: { m5: 12, h1: 85, h6: 140, h24: 140 }, volume: { m5: 9000, h1: 60000, h6: 90000, h24: 90000 }, txns: { m5: { buys: 40, sells: 12 }, h1: { buys: 300, sells: 110 } }, boosts: { active: 2 } })] : []);
   if (p === '/latest/dex/search') { const qq = (u.searchParams.get('q') || '').toUpperCase();

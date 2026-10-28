@@ -90,13 +90,17 @@ PP('live feed connects', pp.feedLive === true && pp.subs?.[0]?.newToken === true
 PP('new coins land in New Pairs', ['MCAT', 'BPUP', 'RUG'].every((x) => pp.newCol?.includes(x)), 'newCol');
 PP('a coin past 45% bonding curve is in Final Stretch', pp.stretchCol?.includes('FROG') && !pp.newCol?.includes('FROG'), 'stretchCol');
 PP('migrated coins land in Migrated, with Dex paid', pp.migratedCol?.includes('BIRD') && pp.migratedPaid === true, 'migratedCol');
+PP('columns fill straight away from Pump.fun', pp.seededStretch === true && pp.seededMigrated === true, 'seededStretch');
+PP('coin pictures load through SolBoy', /^200 image\/png/.test(pp.imgEndpoint ?? '') && pp.imagesShown === true, 'imgEndpoint');
+PP('coin page opens fast with recent trades and a chart', pp.seedHeadMs < 2500 && pp.seedTradesRows >= 20 && pp.seedChart === true, 'seedHeadMs');
+PP('board updates smoothly (cards and pictures stay, new coins slide in)', pp.smooth?.removed === 0 && pp.smooth?.sameImg === true && pp.smooth?.entered === true, 'smooth');
 PP('SolBoy subscribes to each coin\'s trades', pp.tradeDelivered >= 1, 'tradeDelivered');
 PP('cards show socials, holders and percentages', pp.socialLinks >= 3 && /@mooncat/.test(pp.mcatCard ?? '') && /👥 \d/.test(pp.mcatCard ?? ''), 'mcatCard');
 PP('filter window has Axiom tabs and fields', pp.filterTabs?.join() === 'Protocols,Audit,$ Metrics,Socials' && ['Age', 'Top 10 Holders %', 'Dev Holding %', 'Snipers %', 'Insiders %', 'Bundle %', 'Holders', 'Dev Migrations', 'Dev Pairs Created'].every((x) => pp.auditFields?.includes(x)) && ['Liquidity ($)', 'Volume ($)', 'Market Cap ($)', 'B. Curve %', 'Global Fees Paid ($)', 'Txns', 'Num Buys', 'Num Sells'].every((x) => pp.metricFields?.includes(x)), 'auditFields');
 PP('exclude keyword hides a coin', pp.rugHiddenByExclude === true, 'rugHiddenByExclude');
 PP('dev holding filter hides coins', Array.isArray(pp.afterDevMax) && pp.afterDevMax.length === 0, 'afterDevMax');
 PP('"needs Twitter" keeps only coins with X', pp.afterNeedsTwitter?.join() === 'MCAT', 'afterNeedsTwitter');
-PP('filter presets and reset', pp.preset2ShowsAll === true && pp.afterReset?.length === 3, 'afterReset');
+PP('filter presets and reset', pp.preset2ShowsAll === true && pp.afterReset?.length === 4, 'afterReset');
 PP('⚡ quick buy from a card (curve price when Jupiter has no route)', /^Bought 0.1 SOL of \$MCAT/.test(pp.quickBuyToast ?? ''), 'quickBuyToast');
 PP('coin page: live trades with dev tag and chart', pp.tradesRows >= 3 && pp.devTagInTrades >= 1 && pp.chartCanvas > 0 && pp.liveTradeArrived === true, 'tradesRows');
 PP('coin page: holders with bonding curve labelled', pp.holderRows >= 3 && pp.curveLabelled === true, 'holderRows');

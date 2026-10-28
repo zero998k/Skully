@@ -328,7 +328,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
               busy = false;
             };
             tick();
-            const timer = setInterval(tick, wantBoard ? 500 : 1000);
+            const timer = setInterval(tick, wantBoard ? 300 : 1000);
             req.on('close', () => {
               clearInterval(timer);
               pulse.viewing(-1);
@@ -338,6 +338,15 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
             return;
           }
           if (req.method === 'GET' && url.pathname === '/api/pulse/coin') return send(res, 200, { ...(await pulse.coin(checkMint(mintParam))), position: await positionFor(checkMint(mintParam)), mode: book.mode });
+          if (req.method === 'GET' && url.pathname === '/api/pulse/img') {
+            const img = await pulse.image(checkMint(mintParam));
+            if (!img) {
+              res.writeHead(404, { 'Cache-Control': 'private, max-age=30' });
+              return res.end();
+            }
+            res.writeHead(200, { 'Content-Type': img.type, 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'" });
+            return res.end(img.buf);
+          }
           if (req.method === 'GET' && url.pathname === '/api/pulse/candles') return send(res, 200, { candles: await pulse.history(checkMint(mintParam)) });
           if (req.method === 'GET' && url.pathname === '/api/pulse/filters') return send(res, 200, { filters: pulse.filters(), protocols: pulse.protocols, quickBuy: cfg.pulse.quickBuy, quickSell: cfg.pulse.quickSell, kols: cfg.pulse.kols });
           if (req.method === 'POST') {

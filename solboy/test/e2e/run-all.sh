@@ -73,7 +73,8 @@ fresh_app "$OUT/pulse" "PUMPPORTAL_WS_URL=ws://127.0.0.1:18904
 SOL_PRICE_URL=http://127.0.0.1:18903/price
 GECKO_API_URL=http://127.0.0.1:18903/gecko
 PULSE_ALLOW_LOCAL_URLS=1
-PUMPPORTAL_API_URL=http://127.0.0.1:18903/pp-api"
+PUMPPORTAL_API_URL=http://127.0.0.1:18903/pp-api
+PUMP_API_URL=http://127.0.0.1:18903/pump-api"
 node -e "const f='$OUT/pulse/config.json',c=JSON.parse(require('fs').readFileSync(f));c.pulse={backfillGapMs:300};require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
 start_fake pulse
 (sleep 1200 | "$OUT/pulse/SolBoy" > "$OUT/app-pulse.txt" 2>&1) &

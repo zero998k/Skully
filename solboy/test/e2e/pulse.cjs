@@ -18,6 +18,10 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await p.click('#pulseLink'); await sleep(1500);
   R.feedLive = await until(async () => /LIVE/.test(await p.textContent('#feedChip')), 10000);
 
+  // columns are filled straight away from Pump.fun's lists, before any coin launches
+  R.seededStretch = await until(async () => (await p.locator('#list-stretch .card .name b').allInnerTexts()).includes('SEED'), 10000);
+  R.seededMigrated = (await p.locator('#list-migrated .card .name b').allInnerTexts()).includes('GRAD');
+
   // launches: a bundled + sniped coin, a coin to exclude, one that reaches Final Stretch, one that migrates
   const a = await F('/pp/create?name=Moon%20Cat&symbol=MCAT&dev=dev1&initial=1');
   R.createDelivered = a.delivered;
@@ -45,7 +49,15 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.mcatCard = (await mcatCard.innerText()).replace(/\s+/g, ' ');
   R.bpupBundle = (await p.locator(`.card[data-mint="${b2.mint}"] .pct`).allInnerTexts()).join(' | ');
   R.socialLinks = await mcatCard.locator('.soc a').count();
+  R.imgEndpoint = await p.evaluate(async (m) => { const r = await fetch(`/api/pulse/img?mint=${m}&t=${TOKEN}`); return `${r.status} ${r.headers.get('content-type')}`; }, a.mint);
+  R.imagesShown = await until(async () => (await p.locator('.pic img.ok').count()) >= 3, 6000);
   R.migratedPaid = (await p.locator(`.card[data-mint="${mig.mint}"]`).innerText()).includes('DEX✓');
+  // smooth board: while trades and a new launch stream in, existing cards and their pictures are never rebuilt
+  await p.evaluate(() => { window.__removed = 0; window.__img = document.querySelector('#list-new .card .pic img');
+    for (const l of document.querySelectorAll('.list')) new MutationObserver((ms) => { for (const m of ms) for (const n of m.removedNodes) if (n.classList?.contains('card')) window.__removed++; }).observe(l, { childList: true }); });
+  await F(`/pp/trade?mint=${a.mint}&side=buy&sol=0.2&wallet=w7`); await F(`/pp/trade?mint=${b2.mint}&side=buy&sol=0.2&wallet=w8`);
+  const late = await F('/pp/create?name=Late%20Launch&symbol=LATE&dev=dev6&initial=0.3'); await sleep(2500);
+  R.smooth = await p.evaluate((m) => ({ removed: window.__removed, sameImg: !!window.__img && document.contains(window.__img), entered: !!document.querySelector(`.card[data-mint="${m}"]`) }), late.mint);
   await p.screenshot({ path: `${E}/p1-board.png` });
 
   // filters: exclude keyword, dev holding max, presets, reset
@@ -120,6 +132,15 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await p.click('[data-ctab="early"]'); await sleep(300);
   R.bundleFoundOnChain = (await p.locator('#coinTable').innerText()).includes('BUNDLE');
   R.bundleChip = await p.evaluate(async (m) => (await (await fetch(`/api/pulse/coin?mint=${m}&t=${TOKEN}`)).json()).bundle, b2.mint);
+
+  // a coin SolBoy didn't see launch: the page opens straight away and fills with its recent trades
+  await p.click('#back').catch(() => {}); await sleep(500);
+  const seedCard = p.locator('#list-stretch .card', { hasText: 'SEED' }).first();
+  const t0 = Date.now(); await seedCard.locator('.name b').click();
+  await until(async () => /SEED/.test(await p.locator('#coinHead').innerText()), 5000); R.seedHeadMs = Date.now() - t0;
+  await p.click('[data-ctab="trades"]').catch(() => {});
+  R.seedTradesRows = await until(async () => (await p.locator('#coinTable tbody tr').count()) >= 20, 6000) ? await p.locator('#coinTable tbody tr').count() : await p.locator('#coinTable tbody tr').count();
+  R.seedChart = await p.evaluate(() => !document.getElementById('chartMsg') || document.getElementById('chartMsg').hidden);
 
   // a migrated coin: its price comes straight from the pool's vaults on the chain, trade by trade
   await p.goto(`http://localhost:7777/pulse#coin=${mig.mint}`); await sleep(4000); await p.click('[data-ctab="trades"]'); await sleep(300);

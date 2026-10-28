@@ -1,3 +1,9 @@
+**New in 1.4.1: a smoother, fuller Pulse**
+- **Moves smoothly, like Axiom:** cards update in place instead of redrawing, new coins slide in at the top while the others glide down, pictures never blink, and the board refreshes about 3 times a second. Coin pages no longer jump, reset your typed amount or lose your scroll spot.
+- **Full columns straight away:** Final Stretch and Migrated fill as soon as SolBoy starts (from Pump.fun's own lists), and the board is saved so it's still full after a restart or update.
+- **Coin pictures load:** SolBoy fetches each picture once through the fastest IPFS server and keeps it, instead of your browser waiting on slow servers.
+- **Coin pages open instantly:** the page shows right away and fills in holders within a second or two. Coins SolBoy didn't watch from launch now show their recent buys and sells and a chart straight away.
+
 **New in 1.4.0: Pulse, a trading terminal like Axiom**
 - Click **📈 Pulse** on the dashboard: live **New Pairs**, **Final Stretch** and **Migrated** columns with every coin's age, socials, holders, volume, market cap and the top 10 / dev / snipers / insiders / bundlers percentages.
 - **Axiom-style filters** on each column: keywords, launchpads, Audit, $ Metrics and Socials, with 3 presets and import/export/share.

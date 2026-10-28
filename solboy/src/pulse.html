@@ -61,10 +61,13 @@ main { height: calc(100% - 52px); }
 
 .card { display: grid; grid-template-columns: 72px 1fr auto; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--edge); cursor: pointer; position: relative; }
 .card:hover { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
-.card.fresh { animation: flash .9s ease-out; }
+.card.enter { animation: enter .45s cubic-bezier(.2,.8,.2,1); }
+@keyframes enter { 0% { opacity: 0; transform: translateY(-16px) scale(.98); background: rgba(255,45,149,.18); } 60% { opacity: 1; } 100% { background: transparent; } }
+.card { will-change: transform; }
 @keyframes flash { from { background: rgba(255,45,149,.16); } to { background: transparent; } }
 .pic { width: 72px; height: 72px; border-radius: 10px; background: var(--panel-2) center/cover no-repeat; border: 2px solid var(--edge-2); position: relative; display: grid; place-items: center; font-weight: 900; font-size: 22px; color: var(--ink-3); }
-.pic .proto { position: absolute; right: -5px; bottom: -5px; font: 700 9px var(--mono); padding: 2px 4px; border-radius: 6px; background: #000; border: 1px solid var(--edge-2); color: var(--sun); }
+.pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 8px; opacity: 0; transition: opacity .2s; } .pic img.ok { opacity: 1; }
+.pic .proto { z-index: 1;  position: absolute; right: -5px; bottom: -5px; font: 700 9px var(--mono); padding: 2px 4px; border-radius: 6px; background: #000; border: 1px solid var(--edge-2); color: var(--sun); }
 .pic .ring { position: absolute; inset: -2px; border-radius: 10px; border: 2px solid transparent; }
 .ca { font: 10px var(--mono); color: var(--ink-3); text-align: center; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 72px; }
 .mid { min-width: 0; display: grid; gap: 4px; align-content: start; }
@@ -298,6 +301,33 @@ const sol = (n) => n == null ? '-' : `${n >= 100 ? n.toFixed(0) : n >= 1 ? n.toF
 const ageOf = (s) => s == null ? '-' : s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
 const ago = (t) => ageOf(Math.max(0, Math.round((Date.now() - t) / 1000)));
 const short = (a) => a ? `${a.slice(0, 4)}…${a.slice(-4)}` : '-';
+// coin pictures come through SolBoy, which caches them from the fastest IPFS gateway; the initials show until then
+const picImg = (r) => r.image ? `<img src="/api/pulse/img?mint=${encodeURIComponent(r.mint)}&t=${TOKEN}" alt="" loading="lazy" decoding="async" onload="this.classList.add('ok')" onerror="this.remove()">` : '';
+/* Smooth updates: change only the parts of the page that really changed, so nothing blinks, jumps or loses focus. */
+function morph(from, to) {
+  if (from.nodeType !== to.nodeType || from.nodeName !== to.nodeName) return void from.replaceWith(to.cloneNode(true));
+  if (from.nodeType === 3 || from.nodeType === 8) { if (from.data !== to.data) from.data = to.data; return; }
+  if (from.nodeType !== 1) return;
+  if (from.tagName === 'IMG' && from.getAttribute('src') === to.getAttribute('src')) return; // keep a loaded picture
+  const focused = from === document.activeElement;
+  for (const a of [...from.attributes]) if (!to.hasAttribute(a.name) && !(a.name === 'class' && from.dataset.keepClass)) from.removeAttribute(a.name);
+  for (const a of to.attributes) if (from.getAttribute(a.name) !== a.value && !(focused && a.name === 'value')) from.setAttribute(a.name, a.value);
+  if ((from.tagName === 'INPUT' || from.tagName === 'TEXTAREA') && !focused && from.value !== (to.getAttribute('value') ?? '')) from.value = to.getAttribute('value') ?? '';
+  morphKids(from, to);
+}
+function morphKids(from, to) {
+  const fc = [...from.childNodes], tc = [...to.childNodes];
+  tc.forEach((n, i) => (i < fc.length ? morph(fc[i], n) : from.appendChild(n.cloneNode(true))));
+  for (let i = tc.length; i < fc.length; i++) fc[i].remove();
+}
+function setHTML(el, html) {
+  if (!el || el._h === html) return;
+  el._h = html;
+  if (!el.firstChild) { el.innerHTML = html; return; }
+  const t = document.createElement(el.tagName === 'TBODY' ? 'tbody' : 'div'); t.innerHTML = html;
+  morphKids(el, t);
+}
+const htmlNode = (html) => { const t = document.createElement('div'); t.innerHTML = html.trim(); return t.firstChild; };
 const PROTO_SHORT = { pump: 'PUMP', bonk: 'BONK', 'pump-amm': 'P·AMM', raydium: 'RAY', meteora: 'MET', 'meteora-v2': 'MET2', orca: 'ORCA' };
 
 let STATUS = {}, MODE = 'paper', CFG = { quickBuy: [0.05, 0.1, 0.5, 1], quickSell: [25, 50, 100], kols: [] }, FILTERS = null, PROTOCOLS = [];
@@ -342,10 +372,9 @@ function pctChip(icon, title, v, badAt) {
   return `<span class="pct ${v >= badAt ? 'bad' : 'good'}" title="${title}">${icon} ${pctf(v)}</span>`;
 }
 function card(r) {
-  const img = r.image ? `style="background-image:url('${esc(r.image)}')"` : '';
   const bs = r.buys + r.sells ? Math.round((r.buys / (r.buys + r.sells)) * 100) : 50;
-  return `<div class="card${seen.has(r.mint) ? '' : ' fresh'}" data-mint="${esc(r.mint)}">
-    <div class="picw${r.progress >= 80 ? ' hot' : ''}"${r.progress != null && !r.migrated ? ` style="--p:${Math.round(r.progress)}"` : ''}><div class="pic" ${img}>${r.image ? '' : esc((r.symbol || '?').slice(0, 2))}<span class="proto">${PROTO_SHORT[r.protocol] ?? esc(r.protocol)}</span></div><div class="ca">${short(r.mint)}</div></div>
+  return `<div class="card" data-mint="${esc(r.mint)}">
+    <div class="picw${r.progress >= 80 ? ' hot' : ''}"${r.progress != null && !r.migrated ? ` style="--p:${Math.round(r.progress)}"` : ''}><div class="pic">${esc((r.symbol || '?').slice(0, 2))}${picImg(r)}<span class="proto">${PROTO_SHORT[r.protocol] ?? esc(r.protocol)}</span></div><div class="ca">${short(r.mint)}</div></div>
     <div class="mid">
       <div class="name"><b>${esc(r.symbol || '???')}</b><span>${esc(r.name)}</span><button class="copy" data-copy="${esc(r.mint)}" title="Copy address">⧉</button></div>
       <div class="meta"><span class="age${r.ageSec > 3600 ? ' old' : ''}" title="Age">${ageOf(r.ageSec)}</span>
@@ -368,7 +397,7 @@ function card(r) {
     <div class="right">
       <div class="v">V <b>${money(r.volUsd)}</b></div>
       <div class="mc">MC <b class="${tick(r)}">${money(r.mcUsd)}</b></div>
-      <div class="dim">F ${money(r.feesUsd)} · TX ${r.txns}</div>
+      <div class="dim">F ${money(r.feesUsd)} · TX ${r.txns ?? "-"}</div>
       <div class="bsbar" title="${r.buys} buys / ${r.sells} sells"><i style="width:${bs}%"></i></div>
       <button class="qbtn" data-qbuy="${esc(r.mint)}" data-sym="${esc(r.symbol)}" title="Buy now">⚡ ${esc(quick[colOf(r)] || '0')}</button>
     </div>
@@ -388,8 +417,43 @@ function renderCol(c, force = false) {
   if (paused[c] && !force) return;
   const rows = BOARD[c].filter((r) => !search[c] || `${r.symbol} ${r.name} ${r.mint}`.toLowerCase().includes(search[c]));
   $(`cnt-${c}`).textContent = rows.length;
-  $(`list-${c}`).innerHTML = rows.length ? rows.map(card).join('') : (STATUS.feed === 'live' ? `<div class="empty"><span class="big">${c === 'migrated' ? '🎓' : c === 'stretch' ? '🏁' : '🌱'}</span>${c === 'migrated' ? 'Coins appear here when they finish their bonding curve.' : 'Waiting for coins that match your filters…'}</div>` : SKELETON);
+  const list = $(`list-${c}`);
+  if (!rows.length) {
+    list._h = null;
+    const html = STATUS.feed === 'live' ? `<div class="empty"><span class="big">${c === 'migrated' ? '🎓' : c === 'stretch' ? '🏁' : '🌱'}</span>${c === 'migrated' ? 'Coins appear here when they finish their bonding curve.' : 'Waiting for coins that match your filters…'}</div>` : SKELETON;
+    if (list._empty !== html) { list.innerHTML = html; list._empty = html; }
+    return;
+  }
+  if (list._empty) { list.innerHTML = ''; list._empty = null; }
+  // keyed update: existing cards are patched in place, new ones slide in, and the rest glide to their new spot (FLIP)
+  const byMint = new Map([...list.children].map((el) => [el.dataset.mint, el]));
+  const order = rows.map((r) => r.mint).join();
+  const moved = order !== [...list.children].map((el) => el.dataset.mint).join();
+  const before = moved ? new Map([...byMint].map(([m, el]) => [m, el.getBoundingClientRect().top])) : null;
+  const keep = new Set(rows.map((r) => r.mint));
+  for (const [m, el] of byMint) if (!keep.has(m)) { el.remove(); byMint.delete(m); }
+  let prev = null;
+  for (const r of rows) {
+    const html = card(r);
+    let el = byMint.get(r.mint);
+    if (!el) {
+      el = htmlNode(html); el._h = html;
+      if (seen.size) { el.classList.add('enter'); el.dataset.keepClass = '1'; el.addEventListener('animationend', () => { el.classList.remove('enter'); delete el.dataset.keepClass; }, { once: true }); }
+    } else if (el._h !== html) { el._h = html; morph(el, htmlNode(html)); }
+    const want = prev ? prev.nextSibling : list.firstChild;
+    if (want !== el) list.insertBefore(el, want);
+    prev = el;
+  }
   for (const r of rows) seen.add(r.mint);
+  if (!before) return;
+  for (const el of list.children) {
+    const old = before.get(el.dataset.mint);
+    if (old == null) continue;
+    const dy = old - el.getBoundingClientRect().top;
+    if (Math.abs(dy) < 1) continue;
+    el.style.transition = 'none'; el.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transition = 'transform .32s cubic-bezier(.2,.8,.2,1)'; el.style.transform = ''; }));
+  }
 }
 document.addEventListener('click', async (e) => {
   const cp = e.target.closest('[data-copy]');
@@ -522,7 +586,7 @@ $('filterModal').addEventListener('click', async (e) => {
 });
 
 /* ---------- coin page ---------- */
-let COIN = null, chart = null, series = null, volSeries = null, interval = store.get('interval', 15), chartMode = store.get('chartMode', 'mc'), coinTab = 'trades', tradeFilter = 'all', coinTimer = null, extCandles = [];
+let COIN = null, chart = null, series = null, volSeries = null, interval = store.get('interval', 15), chartMode = store.get('chartMode', 'mc'), coinTab = 'trades', tradeFilter = 'all', coinTimer = null, coinQuick = null, candlesFor = null, drawnTrades = 0, extCandles = [];
 function openCoin(mint) {
   $('board').hidden = true; $('coin').hidden = false;
   $('coin').innerHTML = `<div class="coin-main"><div class="coin-head" id="coinHead"><button class="icon-btn" id="back">← Pulse</button><span class="dim">Loading…</span></div>
@@ -531,13 +595,17 @@ function openCoin(mint) {
       <div class="coin-tabs" id="coinTabs"></div><div class="table-wrap" id="coinTable"></div></div>
     <aside class="side" id="coinSide"></aside>`;
   makeChart();
+  extCandles = []; drawnTrades = 0;
+  candlesFor = { mint, p: api(`/api/pulse/candles?mint=${encodeURIComponent(mint)}`).then((d) => d.candles ?? []).catch(() => []) };
   loadCoin(mint, true);
-  clearInterval(coinTimer); coinTimer = setInterval(() => loadCoin(mint), 5000);
+  // holders and older trades arrive within a second or two: look again quickly, then every 3 seconds
+  clearTimeout(coinQuick); coinQuick = setTimeout(() => { loadCoin(mint); coinQuick = setTimeout(() => loadCoin(mint), 1800); }, 1200);
+  clearInterval(coinTimer); coinTimer = setInterval(() => loadCoin(mint), 3000);
   stream(mint);
   setQuickMint(mint);
 }
 function closeCoin() {
-  clearInterval(coinTimer); COIN = null; chart?.remove(); chart = null;
+  clearInterval(coinTimer); clearTimeout(coinQuick); COIN = null; chart?.remove(); chart = null;
   $('coin').hidden = true; $('board').hidden = false; stream(null);
   document.title = 'SolBoy Pulse';
 }
@@ -549,18 +617,17 @@ async function loadCoin(mint, first = false) {
     if (QUICK?.mint === c.mint && QUICK.symbol !== c.symbol) setQuickMint(c.mint, c.symbol);
     renderCoinHead(); renderSide(); renderCoinTable();
     if (first) {
-      extCandles = [];
-      if (!c.followedSinceLaunch) { try { extCandles = (await api(`/api/pulse/candles?mint=${encodeURIComponent(mint)}`)).candles; } catch {} }
       drawChart();
-    }
+      if (!c.followedSinceLaunch && candlesFor?.mint === mint) candlesFor.p.then((cs) => { if (COIN?.mint === mint && cs.length) { extCandles = cs; drawChart(); } });
+    } else if (c.trades.length > drawnTrades + 10) drawChart(); // older trades just arrived
     if (c.position !== undefined) renderPosition(c.position);
   } catch (err) { if (first) { $('coinHead').innerHTML = `<button class="icon-btn" id="back">← Pulse</button><span class="down">${esc(err.message)}</span>`; } }
 }
 function renderCoinHead() {
   const c = COIN;
   document.title = `${c.symbol ? '$' + c.symbol : short(c.mint)} ${money(c.mcUsd)} · SolBoy Pulse`;
-  $('coinHead').innerHTML = `<button class="icon-btn" id="back">← Pulse</button>
-    <div class="pic" ${c.image ? `style="background-image:url('${esc(c.image)}')"` : ''}>${c.image ? '' : esc((c.symbol || '?').slice(0, 2))}</div>
+  setHTML($('coinHead'), `<button class="icon-btn" id="back">← Pulse</button>
+    <div class="pic">${esc((c.symbol || '?').slice(0, 2))}${picImg(c)}</div>
     <div class="title"><div><b>${esc(c.symbol || short(c.mint))}</b> <span class="dim">${esc(c.name)}</span> <button class="copy" data-copy="${esc(c.mint)}">⧉ ${short(c.mint)}</button></div>
       <div class="meta"><span class="age">${ageOf(c.ageSec)}</span>${c.twitter ? `<a href="${esc(c.twitter)}" target="_blank" rel="noopener">𝕏</a>` : ''}${c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener">🌐</a>` : ''}${c.telegram ? `<a href="${esc(c.telegram)}" target="_blank" rel="noopener">✈</a>` : ''}
         <a href="https://dexscreener.com/solana/${esc(c.mint)}" target="_blank" rel="noopener" class="dim">DexScreener</a><a href="https://solscan.io/token/${esc(c.mint)}" target="_blank" rel="noopener" class="dim">Solscan</a>${c.launchpad === 'pump' ? `<a href="https://pump.fun/coin/${esc(c.mint)}" target="_blank" rel="noopener" class="dim">Pump.fun</a>` : ''}</div></div>
@@ -572,7 +639,7 @@ function renderCoinHead() {
     <div class="stat"><small>Fees paid (est.)</small><b>${money(c.feesUsd)}</b></div>
     <div class="stat"><small>ATH</small><b>${money(c.athMcUsd)}</b></div>
     <div class="stat"><small>${c.migrated ? 'Migrated' : 'Bonding curve'}</small><b>${c.migrated ? '✓ ' + esc(PROTO_SHORT[c.protocol] ?? c.protocol) : pctf(c.progress)}</b></div>
-    <div class="stat"><small>Buys / Sells</small><b><span class="up">${c.buys}</span> / <span class="down">${c.sells}</span></b></div>`;
+    <div class="stat"><small>Buys / Sells</small><b><span class="up">${c.buys}</span> / <span class="down">${c.sells}</span></b></div>`);
 }
 const srcBadge = (s) => ({ feed: '<span class="up" title="Every trade from the live feed">● live</span>', pool: '<span class="up" title="Read straight from the pool on the chain, every trade">● live (pool)</span>', dexscreener: '<span class="warn" title="Live pool not available for this coin: DexScreener updates about every 20 seconds">● ~20s delay</span>', waiting: '<span class="dim">waiting for trades</span>' })[s] ?? '';
 const tagsHtml = (r) => [...(r.tags ?? [])].map((t) => `<span class="tag ${t}">${{ dev: 'DEV', sniper: 'SNIPER', bundler: 'BUNDLE', cluster: 'CLUSTER' }[t] ?? t.toUpperCase()}</span>`).join('') + (r.kol ? '<span class="tag kol">KOL</span>' : '') + (r.insider ? '<span class="tag insider">INSIDER</span>' : '') + (r.pool ? '<span class="tag pool">POOL</span>' : '');
@@ -580,8 +647,8 @@ const walletCell = (r) => r.wallet ? `<a href="https://solscan.io/account/${esc(
 function renderCoinTable() {
   const c = COIN; if (!c) return;
   const tabs = [['trades', 'Trades'], ['holders', `Holders (${c.holders ?? c.holdersList.length})`], ['top', 'Top Traders'], ['early', `Snipers & Bundles (${c.early.length})`], ['dev', `Dev Tokens (${c.devCreated ?? 0})`]];
-  $('coinTabs').innerHTML = tabs.map(([k, l]) => `<button data-ctab="${k}" class="${coinTab === k ? 'on' : ''}">${l}</button>`).join('') +
-    (coinTab === 'trades' ? `<span class="sub">${[['all', 'All'], ['dev', 'Dev'], ['kol', 'KOL'], ['sniper', 'Snipers'], ['bundler', 'Bundlers'], ['big', '≥1 SOL']].map(([k, l]) => `<button data-tf="${k}" class="${tradeFilter === k ? 'on' : ''}">${l}</button>`).join('')}</span>` : '');
+  setHTML($('coinTabs'), tabs.map(([k, l]) => `<button data-ctab="${k}" class="${coinTab === k ? 'on' : ''}">${l}</button>`).join('') +
+    (coinTab === 'trades' ? `<span class="sub">${[['all', 'All'], ['dev', 'Dev'], ['kol', 'KOL'], ['sniper', 'Snipers'], ['bundler', 'Bundlers'], ['big', '≥1 SOL']].map(([k, l]) => `<button data-tf="${k}" class="${tradeFilter === k ? 'on' : ''}">${l}</button>`).join('')}</span>` : ''));
   let html = '';
   if (coinTab === 'trades') {
     const rows = c.trades.filter(tradeOk);
@@ -595,7 +662,9 @@ function renderCoinTable() {
   } else {
     html = `<table><thead><tr><th>Coin</th><th>Status</th></tr></thead><tbody>${c.devTokens.map((d) => `<tr><td><a href="/pulse#coin=${esc(d.mint)}">${esc(d.symbol ? '$' + d.symbol : short(d.mint))}</a> <span class="dim">${esc(d.name ?? '')}</span></td><td>${d.migrated ? '<span class="up">migrated</span>' : '<span class="dim">-</span>'}</td></tr>`).join('')}</tbody></table>${c.devTokens.length ? '' : '<div class="empty">No other coins from this creator seen yet. This list grows the longer SolBoy runs.</div>'}`;
   }
-  $('coinTable').innerHTML = html;
+  const tbl = $('coinTable');
+  if (tbl.dataset.tab !== coinTab + tradeFilter) { tbl.dataset.tab = coinTab + tradeFilter; tbl._h = null; tbl.innerHTML = ''; tbl.scrollTop = 0; }
+  setHTML(tbl, html);
 }
 function tradeOk(t) {
   if (tradeFilter === 'all') return true;
@@ -608,12 +677,12 @@ function onLiveTrade(t) {
   if (!COIN) return;
   COIN.trades.unshift(t); COIN.trades.length = Math.min(COIN.trades.length, 300);
   t.side === 'buy' ? COIN.buys++ : COIN.sells++;
-  if (coinTab === 'trades' && tradeOk(t)) { const body = $('tradeBody'); if (body) body.insertAdjacentHTML('afterbegin', tradeRow(t, true)); }
+  if (coinTab === 'trades' && tradeOk(t)) { const body = $('tradeBody'); if (body) { body.insertAdjacentHTML('afterbegin', tradeRow(t, true)); while (body.rows.length > 300) body.lastElementChild.remove(); } }
   addToChart(t);
 }
 function renderSide() {
   const c = COIN;
-  $('coinSide').innerHTML = `<div class="panel trade" id="sideTrade">${tradeBox(c.mint, c.symbol)}</div>
+  setHTML($('coinSide'), `<div class="panel trade" id="sideTrade">${tradeBox(c.mint, c.symbol)}</div>
     <div class="panel"><h4>Token info <button class="icon-btn" id="analyze" title="Checks who funded the top holders' wallets (about 40 Solana requests)">${c.analysis ? '↻ Re-check insiders' : '🐀 Analyze insiders'}</button></h4>
       <div class="grid3">
         ${info(pctf(c.top10), 'Top 10 H.', c.top10 >= 30)}${info(pctf(c.dev), 'Dev H.', c.dev >= 10)}${info(pctf(c.snipers), 'Snipers H.', c.snipers >= 10)}
@@ -624,7 +693,7 @@ function renderSide() {
       ${c.analysis ? `<div class="note">Insider check: ${c.analysis.insiders} wallet(s) funded by the creator, ${c.analysis.clusters} group(s) of holders funded by the same wallet.</div>` : ''}
       <div class="note">${c.launchCheck === 'exact' ? '✓ Launch checked on the chain: bundle and sniper numbers are exact.' : c.launchCheck === 'partial' ? 'Too many trades to check the launch on the chain; bundle and sniper numbers are from the live feed only.' : c.launchCheck === 'failed' ? "Couldn't check the launch on the chain right now." : 'Checking the launch on the chain…'}</div>
       ${c.followedSinceLaunch ? '' : '<div class="note">SolBoy started watching this coin after launch, so wallet stats (holders, snipers, bundles, dev) cover only what it has seen. The Holders tab still shows the real top 20 from the chain.</div>'}
-      ${c.description ? `<div class="note">${esc(c.description)}</div>` : ''}</div>`;
+      ${c.description ? `<div class="note">${esc(c.description)}</div>` : ''}</div>`);
 }
 const info = (v, l, bad) => `<div class="info"><b class="${bad ? 'down' : ''}">${esc(v)}</b><small>${l}</small></div>`;
 $('coin').addEventListener('click', async (e) => {
@@ -655,6 +724,7 @@ function drawChart() {
     for (const c of extCandles) candles.push({ time: Math.floor(c.t / 1000), open: c.o * k, high: c.h * k, low: c.l * k, close: c.c * k, volume: c.v });
   }
   for (const t of [...COIN.trades].reverse()) addToChart(t, false);
+  drawnTrades = COIN.trades.length;
   series.setData(candles.map(({ volume, ...c }) => c));
   volSeries.setData(candles.map((c) => ({ time: c.time, value: c.volume ?? 0, color: c.close >= c.open ? 'rgba(22,199,132,.35)' : 'rgba(255,77,94,.35)' })));
   $('chartMsg').hidden = candles.length > 0;
@@ -690,7 +760,7 @@ function posHtml(p) {
   if (!p) return '<div style="grid-column:1/-1" class="dim">No position yet</div>';
   return `<div><small>Bought</small>${sol(p.solSpent)}</div><div><small>Worth</small>${p.worth != null ? sol(p.worth) : '-'}</div><div><small>PnL</small><span class="${(p.pnl ?? 0) >= 0 ? 'up' : 'down'}">${p.pnl != null ? (p.pnl >= 0 ? '+' : '') + sol(p.pnl) : '-'}</span></div><div><small>PnL %</small><span class="${(p.pnl ?? 0) >= 0 ? 'up' : 'down'}">${p.pnl != null && p.solSpent ? Math.round((p.pnl / p.solSpent) * 100) + '%' : '-'}</span></div>`;
 }
-function renderPosition(p) { lastPos = p; document.querySelectorAll('[data-pos]').forEach((el) => (el.innerHTML = posHtml(p))); }
+function renderPosition(p) { lastPos = p; document.querySelectorAll('[data-pos]').forEach((el) => setHTML(el, posHtml(p))); }
 function rerenderTradeBoxes() {
   if ($('sideTrade') && COIN) $('sideTrade').innerHTML = tradeBox(COIN.mint, COIN.symbol);
   renderFloating();

@@ -90,6 +90,7 @@ async function main() {
 
   const account = createAccount({ cfg, connection, book, positionsFor: book.positionsFor });
   const pulse = cfg.pulse.enabled && cfg.dashboard.enabled ? createPulse({ cfg, connection }) : null;
+  if (pulse) process.on('exit', () => pulse.stop()); // saves the Pulse board so it's full again after a restart or update
   const bot = createBot({ cfg, connection, book, rpcFetch: rpc.fetch, pulse });
   bot.start();
   const updater = createUpdater();
