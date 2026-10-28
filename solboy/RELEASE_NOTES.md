@@ -1,3 +1,14 @@
+**New in 1.10.0: Social Lobby and Hypothetical PnL**
+- **🧮 Hypothetical PnL** (button at the top): every copy SolBoy made, with what you actually made, what you'd have made if you'd sold exactly when the wallet sold, and what you'd have if you still held it. Type an amount in "What if every copy was __ SOL" to see it at a different size.
+- **💬 Social Lobby** (button at the top): chat with friends. Pick your username, then share your link (🔗 Share Finder). Friends open it, tap **💬 Social Lobby**, and join with a username and password.
+  - **Profiles:** profile picture, banner, bio and name color, plus online dots and "last seen".
+  - **Chat:** a group Lounge and private messages, with reactions 🔥🚀😂💀👀💎 and unread counts on the button.
+  - **📣 Calls board:** post a coin you think will run, and SolBoy tracks how much it moved since your call, with a leaderboard.
+  - **Share to the Lobby** from the Finder (a wallet or a coin), and **📈 Flex PnL** to post your SolBoy results.
+  - **You're the host 👑:** you can remove members and delete any message.
+  - **Matrix look:** glowing green terminal style on black.
+  - The Lobby lives on your computer, so it's open while your SolBoy is running. When the link changes, friends log in again with the same username and password and keep their profile.
+
 **New in 1.9.2**
 - **Share the Wallet Finder with a link:** click **🔗 Share Finder**, then **Make a link**, and send it to a friend. They open it in any browser, Windows included, with nothing to download, and get the Wallet Finder only (none of your trades, wallet, keys or settings). It works while SolBoy is running on your computer; **Stop sharing** or closing SolBoy turns it off.
 

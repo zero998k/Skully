@@ -243,9 +243,68 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   const st = (path, headers = {}) => new Promise((ok) => require('http').get({ host: '127.0.0.1', port: 7777, path, headers }, (r) => { r.resume(); ok(r.statusCode); }).on('error', () => ok(0)));
   R.shareBlocks = { ownerPageViaTunnel: await st('/', { 'cf-connecting-ip': '1.2.3.4' }), ownerPageOtherHost: await st('/', { host: 'abc.trycloudflare.com' }), ownerApiViaTunnel: await st('/api/state?t=x', { 'x-forwarded-for': '1.2.3.4' }),
     wrongToken: await st('/g/AAAAAAAAAAAAAAAA'), otherGuestPath: await st(`/g/${tok}/api/state`), guestApi: await st(`/g/${tok}/api/finder/kind?a=${FA.SMART}`, { 'cf-connecting-ip': '1.2.3.4' }) };
+  // ---- Social Lobby: host sets a name, a friend joins through the link, profiles, chat, reactions, DMs, calls ----
+  await key('Escape'); await sleep(200);
+  await p.click('#clubBtn'); await sleep(600);
+  R.lobbyHostSetup = await p.locator('#cName').count() === 1;
+  await p.fill('#cName', 'kingsol'); await p.click('#cEdit button[type=submit]'); await sleep(800);
+  await p.click('[data-croom="lounge"]'); await sleep(500);
+  await p.fill('#clubText', 'gm frens'); await p.keyboard.press('Enter'); await sleep(600);
+  await gp.reload(); await sleep(600);
+  await gp.click('#clubBtn'); await sleep(400);
+  await gp.fill('#sName', 'buddy'); await gp.fill('#sPass', 'pass1234'); await gp.click('#cSignup button[type=submit]'); await sleep(800);
+  const png = await gp.screenshot({ clip: { x: 0, y: 0, width: 120, height: 120 } });
+  await gp.setInputFiles('#cAvatar', { name: 'me.png', mimeType: 'image/png', buffer: png });
+  await gp.setInputFiles('#cBanner', { name: 'banner.png', mimeType: 'image/png', buffer: png });
+  await gp.fill('#cBio', 'just vibing <b>bold</b>'); await gp.click('#cEdit button[type=submit]'); await sleep(1000);
+  R.lobbyProfile = (await gp.locator('#clubBody .pbio').innerText()) === 'just vibing <b>bold</b>' && (await gp.locator('#clubBody .pbanner').getAttribute('style')).includes('/api/club/img/') && await gp.locator('#clubBody img.av.lg').count() === 1;
+  await gp.screenshot({ path: `${E}/10-lobby-profile.png` });
+  await gp.click('[data-croom="lounge"]'); await sleep(800);
+  R.lobbyFriendSees = (await gp.locator('#clubBody').innerText()).includes('gm frens');
+  await gp.fill('#clubText', 'yo whats good'); await gp.keyboard.press('Enter'); await sleep(400);
+  await gp.locator('#clubBody .msg-row', { hasText: 'gm frens' }).hover(); await gp.locator('#clubBody .msg-row', { hasText: 'gm frens' }).locator('[data-creact="🔥"]').first().click(); await sleep(400);
+  R.lobbyHostSees = await until(async () => (await p.locator('#clubBody').innerText()).includes('yo whats good'), 6000);
+  R.lobbyReaction = await until(async () => (await p.locator('#clubBody .reacts').innerText().catch(() => '')).includes('🔥 1'), 6000);
+  await p.click('[data-cflex]'); await sleep(800);
+  R.lobbyFlex = await p.locator('#clubBody .xcard.pnl').count() === 1;
+  // friend calls a coin and shares a wallet from the Finder
+  await gp.click('[data-ccalls]'); await sleep(400);
+  await gp.fill('#cMint', FA.COIN_A); await gp.fill('#cNote', 'dev is based'); await gp.click('#cCall button[type=submit]'); await sleep(1200);
+  R.lobbyCall = (await gp.locator('#clubBody').innerText()).match(/RUNA[\s\S]*?buddy[\s\S]*?(1\.00x)/)?.[1];
+  await gp.click('[data-cclose]'); await sleep(200);
+  await gp.fill('#finderInput', FA.SMART); await gp.click('#finderForm button[type=submit]');
+  await until(async () => gp.locator('#finderView [data-fshare]').count().then((n) => n > 0), 20000);
+  await gp.click('#finderView [data-fshare]'); await sleep(600);
+  R.lobbyWalletCard = await until(async () => (await p.locator('#clubBody .xcard').innerText().catch(() => '')).includes(`Wallet ${sh(FA.SMART)}`) || (await p.locator('#clubBody').innerText()).includes(`Wallet ${sh(FA.SMART)}`), 6000);
+  await p.screenshot({ path: `${E}/11-lobby-chat.png` });
+  // host messages the friend privately; the friend gets an unread badge and reads it
+  const buddyId = await p.locator('#clubNav [data-cprofile]', { hasText: 'buddy' }).getAttribute('data-cprofile');
+  await p.click(`#clubNav [data-cprofile="${buddyId}"]`); await sleep(500); await p.click('[data-cdm]'); await sleep(500);
+  await p.fill('#clubText', 'private alpha'); await p.keyboard.press('Enter'); await sleep(500);
+  R.lobbyBadge = await until(async () => /Social Lobby\s*[1-9]/.test(await gp.locator('#clubBtn').innerText()) && await gp.evaluate(() => Object.keys(C.unread).some((r) => r.startsWith('dm:'))), 25000);
+  R.lobbyBadgeText = await gp.locator('#clubBtn').innerText(); R.lobbyGuestState = await gp.evaluate(() => ({ me: C.me?.name, unread: C.unread, open: $('club')?.className }));
+  await gp.click('#clubBtn'); await sleep(800); await gp.locator('#clubNav [data-croom^="dm:"]').first().click(); await sleep(800);
+  R.lobbyDm = (await gp.locator('#clubBody').innerText()).includes('private alpha');
+  // what a friend can't do
+  const sess = await gp.evaluate(() => localStorage.getItem('lobbySession'));
+  const gpost = (what, body, s2 = sess) => fetch(`http://127.0.0.1:7777/g/${tok}/api/club/${what}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-club-session': s2 }, body: JSON.stringify(body) }).then((r) => r.status);
+  R.lobbyBlocks = { kick: await gpost('kick', { id: 'host' }), otherDm: await gpost('send', { room: 'dm:aaaa:bbbb', text: 'x' }), noSession: await gpost('send', { room: 'lounge', text: 'x' }, 'nope'), fakeFlex: await gpost('send', { room: 'lounge', text: '', card: { type: 'pnl', total: 999 } }), svg: await gpost('profile', { avatar: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=' }) };
+  // host removes the friend: their session stops working
+  await p.click(`#clubNav [data-cprofile="${buddyId}"]`); await sleep(400); await p.click('[data-ckick]'); await sleep(600);
+  R.lobbyKicked = await gpost('send', { room: 'lounge', text: 'still here?' });
+  await p.click('[data-cclose]'); await sleep(200);
+  await p.click('#shareBtn'); await sleep(400);
   await p.click('#shareStop'); await sleep(500);
   R.shareStopped = await st(`/g/${tok}`);
   await gp.close(); await key('Escape');
+  // ---- Hypothetical PnL ----
+  await p.click('#hypoBtn');
+  R.hypoShown = await until(async () => (await p.locator('#modalBody').innerText()).includes('If you sold when they sold'), 30000);
+  R.hypoRows = await p.locator('#modalBody table tr').count() - 1;
+  await p.fill('#hypoSize', '1'); await sleep(300);
+  R.hypoScaled = (await p.locator('#modalBody table').innerText()).includes('1.000');
+  await p.screenshot({ path: `${E}/12-hypothetical.png` });
+  await key('Escape');
   await p.setViewportSize({ width: 390, height: 900 }); await p.click(`#finderRecent [data-frecent="${FA.SMART}"]`);
   await until(async () => p.locator('#finderView .cal').count().then((n) => n > 0), 15000);
   R.finderPhoneOverflow = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth);

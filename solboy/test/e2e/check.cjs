@@ -100,6 +100,12 @@ check('finder', 'copy this wallet', fl.finderCopyPrefilled === true && fl.finder
 check('finder', 'bad address explained', /valid/.test(fl.finderBadAddress ?? ''), fl.finderBadAddress);
 check('share', 'Share Finder makes a link; the friend\'s page is the Finder only and works', /\/g\/[\w-]+$/.test(fl.shareUrl ?? '') && fl.guestOnlyFinder === true && fl.guestCoin === true && fl.guestProfile === true, fl.shareUrl);
 check('share', 'nothing else is reachable through the link, and stopping turns it off', JSON.stringify(fl.shareBlocks) === JSON.stringify({ ownerPageViaTunnel: 403, ownerPageOtherHost: 403, ownerApiViaTunnel: 403, wrongToken: 404, otherGuestPath: 404, guestApi: 200 }) && fl.shareStopped === 404, JSON.stringify(fl.shareBlocks) + ' stopped ' + fl.shareStopped);
+check('lobby', 'host sets a name; a friend joins with the link and makes a profile with picture, banner and bio (shown as text)', fl.lobbyHostSetup === true && fl.lobbyProfile === true, fl.lobbyProfile);
+check('lobby', 'chat both ways, reactions, PnL flex card', fl.lobbyFriendSees === true && fl.lobbyHostSees === true && fl.lobbyReaction === true && fl.lobbyFlex === true, `${fl.lobbyFriendSees} ${fl.lobbyHostSees} ${fl.lobbyReaction} ${fl.lobbyFlex}`);
+check('lobby', 'coin calls board and wallet cards shared from the Finder', fl.lobbyCall === '1.00x' && fl.lobbyWalletCard === true, `${fl.lobbyCall} ${fl.lobbyWalletCard}`);
+check('lobby', 'direct messages with an unread badge', fl.lobbyBadge === true && fl.lobbyDm === true, `${fl.lobbyBadge} ${fl.lobbyDm}`);
+check('lobby', 'friends cannot kick, read others\' DMs, post without logging in, fake a PnL card or upload SVG; kicked friends are out', JSON.stringify(fl.lobbyBlocks) === JSON.stringify({ kick: 403, otherDm: 404, noSession: 401, fakeFlex: 400, svg: 400 }) && fl.lobbyKicked === 401, JSON.stringify(fl.lobbyBlocks) + ' kicked ' + fl.lobbyKicked);
+check('hypothetical', 'Hypothetical PnL lists each copy with what-ifs and a size box', fl.hypoShown === true && fl.hypoRows >= 1 && fl.hypoScaled === true, `${fl.hypoRows} ${fl.hypoScaled}`);
 check('finder', 'fits a phone', fl.finderPhoneOverflow === false, fl.finderPhoneOverflow);
 
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');

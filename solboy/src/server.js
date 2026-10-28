@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import DASHBOARD_HTML, { GUEST_HTML } from './dashboard-html.js';
 import { createShare } from './share.js';
+import { createClub } from './club.js';
 import { log, onLog, readTrades } from './log.js';
 import { summarize, scoreboard } from './stats.js';
 import { tokenNames, positionWorth } from './tokens.js';
@@ -145,12 +146,12 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
     return e?.message ?? 'Something went wrong.';
   }
 
-  const readBody = (req) =>
+  const readBody = (req, max = 60_000) =>
     new Promise((resolve, reject) => {
       let body = '';
       req.on('data', (d) => {
         body += d;
-        if (body.length > 60_000) reject(new Error('too big'));
+        if (body.length > max) reject(new Error('That is too big.'));
       });
       req.on('end', () => {
         try {
@@ -167,21 +168,63 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
   };
 
   let share = null; // the Finder share link, made once the port is known
+  const club = finder ? createClub({ coinInfo: finder.coinInfo, hostStats: () => summarize(positions.counted(readTrades(book.tradeLogFile)), positions.dayStart()) }) : null;
+
+  // The Social Lobby API, for the host (dashboard) and for friends (share link, with their session token).
+  async function clubRoute(req, res, what, isHost, session) {
+    const parts = what.split('/');
+    if (req.method === 'GET' && parts[0] === 'img') {
+      const img = club.image(parts[1], parts[2]);
+      if (!img) return send(res, 404, { error: 'no picture' });
+      res.writeHead(200, { 'Content-Type': img.type, 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'" });
+      return res.end(img.body);
+    }
+    try {
+      if (req.method === 'POST' && !isHost && what === 'signup') return send(res, 200, club.signup(await readBody(req)));
+      if (req.method === 'POST' && !isHost && what === 'login') return send(res, 200, club.login(await readBody(req)));
+      const me = club.whoIs(session, isHost);
+      if (!me) return send(res, 401, { error: 'Log in to the Social Lobby first.' });
+      const q = (k) => url.searchParams.get(k);
+      const url = new URL(req.url, 'http://localhost');
+      if (req.method === 'GET') {
+        if (what === 'me') return send(res, 200, club.me(me));
+        if (what === 'members') return send(res, 200, club.members());
+        if (what === 'messages') return send(res, 200, club.messages(me, q('room') ?? 'lounge', Number(q('after') ?? 0)));
+        if (what === 'unread') { let since = {}; try { since = JSON.parse(q('since') ?? '{}'); } catch {} return send(res, 200, club.unread(me, since)); }
+        if (what === 'dms') return send(res, 200, club.dms(me));
+        if (what === 'calls') return send(res, 200, await club.calls());
+      } else if (req.method === 'POST') {
+        const body = await readBody(req, what === 'profile' ? 800_000 : 60_000);
+        if (what === 'logout') return send(res, 200, club.logout(session));
+        if (what === 'profile') return send(res, 200, club.profile(me, body));
+        if (what === 'send') return send(res, 200, club.send(me, body));
+        if (what === 'react') return send(res, 200, club.react(me, body));
+        if (what === 'remove') return send(res, 200, club.remove(me, body));
+        if (what === 'call') return send(res, 200, await club.call(me, body));
+        if (what === 'dm') return send(res, 200, { room: club.dmRoom(me, String(body.with ?? '')) });
+        if (what === 'kick') return send(res, 200, club.kick(me, String(body.id ?? '')));
+      }
+      return send(res, 404, { error: 'not found' });
+    } catch (e) {
+      return send(res, e.status ?? 400, { error: e.message });
+    }
+  }
 
   // A friend's browser, through the share link: only the guest Finder page and its read-only scans.
   async function guest(req, res, url) {
-    const m = url.pathname.match(/^\/g\/([\w-]{8,})(\/api\/finder\/(\w+))?$/);
+    const m = url.pathname.match(/^\/g\/([\w-]{8,})(\/api\/(finder|club)\/([\w/-]+))?$/);
     const t = share?.guestToken();
     if (!m || !t || m[1].length !== t.length || !crypto.timingSafeEqual(Buffer.from(m[1]), Buffer.from(t))) return send(res, 404, 'This link is off. Ask your friend for a new one.', 'text/plain; charset=utf-8');
     if (!m[2]) return send(res, 200, GUEST_HTML, 'text/html; charset=utf-8');
+    if (m[3] === 'club' && club) return clubRoute(req, res, m[4], false, String(req.headers['x-club-session'] ?? ''));
     if (req.method !== 'GET' || !finder) return send(res, 404, { error: 'not found' });
     const a = url.searchParams.get('a');
     try {
-      if (m[3] === 'kind') return send(res, 200, await finder.kind(a));
-      if (m[3] === 'wallet') return send(res, 200, finder.wallet(a, false));
-      if (m[3] === 'linked') return send(res, 200, finder.linked(a));
-      if (m[3] === 'coin') return send(res, 200, finder.coin(a));
-      if (m[3] === 'replay') return send(res, 200, finder.replay(a, url.searchParams.get('days')));
+      if (m[4] === 'kind') return send(res, 200, await finder.kind(a));
+      if (m[4] === 'wallet') return send(res, 200, finder.wallet(a, false));
+      if (m[4] === 'linked') return send(res, 200, finder.linked(a));
+      if (m[4] === 'coin') return send(res, 200, finder.coin(a));
+      if (m[4] === 'replay') return send(res, 200, finder.replay(a, url.searchParams.get('days')));
     } catch {
       return send(res, 400, { error: "That isn't a valid Solana address." });
     }
@@ -251,6 +294,8 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         return send(res, 200, { label: w.label, paused: Boolean(w.paused) });
       }
 
+      if (req.method === 'GET' && url.pathname === '/api/hypothetical') return send(res, 200, finder.hypothetical(readTrades(book.tradeLogFile), url.searchParams.get('refresh') === '1'));
+
       // Wallet Finder: scans run in the background; the page asks again until state is 'done'
       if (req.method === 'GET' && url.pathname.startsWith('/api/finder/')) {
         const what = url.pathname.slice('/api/finder/'.length), a = url.searchParams.get('a');
@@ -264,6 +309,8 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
           return send(res, 400, { error: "That isn't a valid Solana address." });
         }
       }
+
+      if (url.pathname.startsWith('/api/club/') && club) return clubRoute(req, res, url.pathname.slice('/api/club/'.length), true, '');
 
       if (url.pathname.startsWith('/api/share/') && !serverMode) {
         if (req.method === 'POST' && url.pathname === '/api/share/start') return send(res, 200, await share.start());

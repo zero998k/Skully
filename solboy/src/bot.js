@@ -3,6 +3,7 @@ import { parseTrades, looksLikeSwap, pumpTradesFromLogs, WSOL } from './detect.j
 import { getQuote, buildSwap } from './jupiter.js';
 import { log, short, recordTrade, notify, c } from './log.js';
 import { checkWallet, saveWallets } from './config.js';
+import { recordCopy } from './finder.js';
 
 const LAMPORTS = 1e9;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -314,6 +315,7 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
       });
       log(c.green(`  ${tag()}BOUGHT ${sol} SOL of ${short(t.mint)}`) + noteSpeed(t, sentAt) + (sig ? `  tx: ${sig}` : ''));
       recordTrade(book.tradeLogFile, { action: `${tag()}buy`, mint: t.mint, wallet: w.label, sol, reason: `copied ${w.label}`, tx: sig });
+      recordCopy({ mint: t.mint, wallet: w.label, source: w.address, sol, tokens: outRaw.toString() });
       notify(`${tag()}BUY ${sol} SOL of ${t.mint}\ncopied ${w.label}\nhttps://dexscreener.com/solana/${t.mint}`);
     } catch (e) {
       log(`  buy failed: ${e.message}`);

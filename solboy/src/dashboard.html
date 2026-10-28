@@ -7,7 +7,7 @@
 <title>SolBoy HQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Mono:wght@500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Mono:wght@500&family=DM+Sans:wght@400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg: #050505;
@@ -280,6 +280,7 @@ code { font-family: var(--mono); font-size: 12px; color: var(--sky); word-break:
 .modal h3:first-child { margin-top: 0; font-size: 28px; letter-spacing: -.5px; }
 .modal li { margin: 6px 0; color: var(--ink-2); } .modal p { color: var(--ink-2); margin: 8px 0; } .modal strong { color: var(--ink); }
 .modal .tldr-box { background: #1a1528; border: 2px solid var(--grape); border-radius: 14px; padding: 12px 14px; color: var(--ink); }
+.modal.wide .box { width: min(1180px, 100%); }
 .modal .foot { display: flex; gap: 10px; margin-top: 20px; }
 .toasts { position: fixed; right: 18px; bottom: 18px; z-index: 70; display: flex; flex-direction: column; gap: 10px; width: min(360px, calc(100vw - 36px)); }
 .toast { padding: 12px 14px; background: var(--panel-2); border: 2px solid #000; border-radius: 16px; font-size: 13px; color: var(--ink-2); box-shadow: 4px 4px 0 var(--accent, var(--grape));
@@ -365,6 +366,111 @@ button:active:not(:disabled) { transform: translateY(1px); }
 .ftabs button { font-family: var(--display); font-weight: 800; font-size: 12px; padding: 4px 11px; border-radius: 999px; border: 1.5px solid var(--edge); background: var(--panel-2); color: var(--ink-2); cursor: pointer; }
 .ftabs button.on { background: var(--accent); color: #fff; border-color: #000; }
 @media (max-width: 600px) { .cal-day .p { font-size: 10px; } .cal-day .n { display: none; } }
+
+/* ---------- social lobby ---------- */
+.club { position: fixed; inset: 0; z-index: 58; display: none; place-items: center; background: rgba(0,0,0,.82); padding: 12px; }
+.club.on { display: grid; animation: pop .25s var(--pop); }
+.club .win { width: min(1200px, 100%); height: min(840px, calc(100vh - 24px)); display: grid; grid-template-columns: 270px 1fr; background: var(--panel); border: 2px solid var(--edge); border-radius: 24px; box-shadow: 8px 8px 0 var(--accent); overflow: hidden; }
+.club .side { border-right: 2px solid var(--edge); display: flex; flex-direction: column; min-height: 0; background: #0a0a0a; }
+.club .side .scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 8px; }
+.club .meCard { display: flex; align-items: center; gap: 10px; padding: 12px; border-bottom: 2px solid var(--edge); }
+.club .meCard b { display: block; font-family: var(--display); }
+.club .meCard small { color: var(--ink-3); font-size: 12px; }
+.club .nav { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px; border-radius: 12px; border: 0; background: transparent; color: var(--ink-2); font: 600 14px var(--body); cursor: pointer; text-align: left; }
+.club .nav:hover { background: var(--panel-2); color: var(--ink); }
+.club .nav.on { background: var(--panel-2); color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); }
+.club .nav .badge { margin-left: auto; }
+.club .label { font-family: var(--display); font-weight: 800; font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .6px; padding: 12px 10px 4px; }
+.club .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.club .top { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 2px solid var(--edge); }
+.club .top h4 { margin: 0; font-family: var(--display); font-size: 18px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.club .body { flex: 1; overflow-y: auto; min-height: 0; padding: 12px 16px; }
+.club .menuBtn { display: none; }
+.av { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #000; object-fit: cover; flex: none; display: inline-grid; place-items: center; font-family: var(--display); font-weight: 800; color: #0a0a0a; position: relative; }
+.av.sm { width: 26px; height: 26px; font-size: 12px; } .av.lg { width: 96px; height: 96px; font-size: 38px; border-width: 4px; }
+.avwrap { position: relative; display: inline-flex; flex: none; }
+.avwrap .online { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: var(--win); border: 2px solid #0a0a0a; }
+.badge { background: var(--accent); color: #fff; font: 800 11px var(--display); border-radius: 999px; padding: 1px 7px; border: 1.5px solid #000; }
+.msg-row { display: flex; gap: 10px; padding: 6px 4px; border-radius: 12px; position: relative; }
+.msg-row:hover { background: #121212; }
+.msg-row .who { font-family: var(--display); font-weight: 800; font-size: 14px; cursor: pointer; }
+.msg-row .when { color: var(--ink-3); font-size: 11px; margin-left: 6px; }
+.msg-row .text { color: var(--ink); font-size: 14px; white-space: pre-wrap; word-break: break-word; margin-top: 1px; }
+.msg-row.system { justify-content: center; color: var(--ink-3); font-size: 13px; }
+.msg-row .tools { position: absolute; right: 6px; top: -10px; display: none; gap: 2px; background: var(--panel-2); border: 1.5px solid var(--edge); border-radius: 10px; padding: 2px; }
+.msg-row:hover .tools { display: flex; }
+.msg-row .tools button { background: transparent; border: 0; cursor: pointer; font-size: 15px; padding: 2px 4px; border-radius: 6px; }
+.msg-row .tools button:hover { background: #2b2b2b; }
+.reacts { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+.reacts button { background: var(--panel-2); border: 1.5px solid var(--edge); border-radius: 999px; padding: 1px 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.reacts button.mine { border-color: var(--accent); color: var(--ink); background: #2a0a1d; }
+.xcard { margin-top: 6px; display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 2px solid var(--edge); border-radius: 14px; padding: 10px 12px; max-width: 460px; }
+.xcard .t { flex: 1; min-width: 0; font-size: 13px; color: var(--ink-2); }
+.xcard .t b { color: var(--ink); font-family: var(--display); font-size: 15px; display: block; }
+.xcard.pnl { border-color: var(--accent); box-shadow: 4px 4px 0 var(--accent); }
+.xcard.pnl .big { font-family: var(--mono); font-size: 24px; font-weight: 600; }
+.composer { display: flex; gap: 8px; padding: 12px 16px; border-top: 2px solid var(--edge); align-items: flex-end; }
+.composer textarea { flex: 1; resize: none; min-height: 42px; max-height: 140px; background: var(--panel-2); color: var(--ink); border: 2px solid var(--edge); border-radius: 14px; padding: 10px 12px; font: 14px var(--body); }
+.composer textarea:focus { border-color: var(--accent); outline: none; }
+.pbanner { height: 170px; border-radius: 18px; border: 2px solid #000; background-size: cover; background-position: center; }
+.phead { display: flex; align-items: flex-end; gap: 14px; margin: -48px 0 0 18px; flex-wrap: wrap; }
+.phead .n { font-family: var(--display); font-weight: 800; font-size: 26px; padding-bottom: 6px; }
+.pbio { color: var(--ink-2); white-space: pre-wrap; word-break: break-word; margin: 12px 0; font-size: 15px; }
+.cform { display: grid; gap: 12px; max-width: 560px; }
+.cform label { display: grid; gap: 5px; font-weight: 700; font-size: 14px; }
+.cform small { color: var(--ink-3); font-weight: 400; }
+.cform input[type=text], .cform input[type=password], .cform textarea { background: var(--panel-2); color: var(--ink); border: 2px solid var(--edge); border-radius: 12px; padding: 10px 12px; font: 14px var(--body); }
+.swatches { display: flex; gap: 8px; } .swatches button { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #000; cursor: pointer; } .swatches button.on { outline: 3px solid #fff; outline-offset: 1px; }
+.joinGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 760px; }
+.joinGrid > div { background: var(--panel-2); border: 2px solid var(--edge); border-radius: 18px; padding: 16px; }
+.clubBtn { position: relative; }
+.clubBtn .badge { position: absolute; top: -8px; right: -8px; }
+.err { color: var(--loss); font-size: 13px; min-height: 1em; }
+/* Social Lobby look: Classic Matrix (green phosphor on black, no code rain) */
+.club { --mx: #00ff41; --mx-dim: rgba(0,255,65,.35); --mx-text: #b6ffc4; background: rgba(0,0,0,.88); }
+.club, .club input, .club textarea, .club button, .club table, .club .who, .club h3, .club h4, .club b, .club .n, .club .fcard b, .club .label { font-family: 'Share Tech Mono', 'DM Mono', monospace !important; }
+.club .win { background: #000; border: 1px solid var(--mx); border-radius: 18px; box-shadow: 0 0 34px rgba(0,255,65,.28), inset 0 0 60px rgba(0,255,65,.05); color: var(--mx-text); position: relative; }
+.club .win::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 5; border-radius: 18px; background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px); }
+.club .side { background: #000; border-right: 1px solid var(--mx-dim); }
+.club .meCard, .club .top, .club .composer { border-color: var(--mx-dim); }
+.club .top h4 { color: var(--mx); text-shadow: 0 0 8px var(--mx); letter-spacing: .5px; }
+.club .label { color: rgba(0,255,65,.6); }
+.club .nav { color: rgba(182,255,196,.75); } .club .nav:hover { background: #001a08; color: var(--mx); }
+.club .nav.on { background: #001a08; color: var(--mx); box-shadow: inset 3px 0 0 var(--mx); text-shadow: 0 0 6px var(--mx); }
+.club .badge { background: var(--mx); color: #000; border-color: #000; }
+.club .who, .club .meCard b, .club .nav span[style] { color: var(--mx) !important; text-shadow: 0 0 6px var(--mx); }
+.club .msg-row .text, .club .pbio { color: var(--mx-text); text-shadow: 0 0 4px rgba(0,255,65,.35); }
+.club .msg-row:hover { background: #001a08; } .club .msg-row .when, .club .msg-row.system { color: rgba(0,255,65,.55); }
+.club .av { border: 1px solid var(--mx); box-shadow: 0 0 8px rgba(0,255,65,.55); }
+.club span.av { background: #001a08 !important; color: var(--mx); }
+.club .av.lg { border-width: 2px; }
+.club .avwrap .online { background: var(--mx); box-shadow: 0 0 6px var(--mx); border-color: #000; }
+.club .xcard, .club .xcard.pnl { background: rgba(0,15,5,.9); border: 1px solid var(--mx); border-radius: 10px; box-shadow: none; color: var(--mx-text); }
+.club .xcard.pnl { box-shadow: 0 0 14px rgba(0,255,65,.35); } .club .xcard .t b { color: var(--mx); }
+.club .reacts button { background: #000; border: 1px solid var(--mx-dim); color: var(--mx-text); }
+.club .reacts button.mine { background: #002a0d; border-color: var(--mx); color: var(--mx); }
+.club .msg-row .tools { background: #000; border-color: var(--mx-dim); } .club .msg-row .tools button:hover { background: #002a0d; }
+.club .composer textarea, .club .cform input[type=text], .club .cform input[type=password], .club .cform textarea, .club .fbar input { background: #000a03 !important; border: 1px solid var(--mx) !important; color: var(--mx) !important; caret-color: var(--mx); border-radius: 10px !important; }
+.club textarea::placeholder, .club input::placeholder { color: rgba(0,255,65,.45); }
+.club .btn { background: #000; color: var(--mx); border: 1px solid var(--mx); box-shadow: none; border-radius: 10px; }
+.club .btn:hover { box-shadow: 0 0 12px rgba(0,255,65,.5); transform: none; border-color: var(--mx); }
+.club .btn.primary { background: var(--mx); color: #000; border-color: var(--mx); box-shadow: 0 0 12px rgba(0,255,65,.45); }
+.club .btn.danger { color: var(--loss); border-color: var(--loss); }
+.club .mini { color: var(--mx); border: 1px solid var(--mx-dim); } .club .mini:hover { border-color: var(--mx); }
+.club .fcard, .club .joinGrid > div { background: #000a03; border: 1px solid var(--mx-dim); border-radius: 10px; }
+.club .fcard span, .club .fcard small, .club .addr, .club .cform small, .club .empty-msg { color: rgba(0,255,65,.55); }
+.club th { color: rgba(0,255,65,.7); border-bottom-color: var(--mx-dim); } .club td { border-bottom-color: rgba(0,255,65,.12); } .club tr:hover td { background: #001a08; }
+.club .pbanner { border: 1px solid var(--mx); filter: saturate(.9); }
+.club .ftabs button { background: #000; border-color: var(--mx-dim); color: var(--mx-text); } .club .ftabs button.on { background: var(--mx); color: #000; border-color: var(--mx); }
+.club .fload .spin { border-color: #002a0d; border-top-color: var(--mx); }
+.club .swatches button { border-color: #000; }
+.club ::selection { background: rgba(0,255,65,.35); color: #fff; }
+.club .err { color: #ff5470; }
+@media (max-width: 760px) {
+  .club { padding: 0; } .club .win { height: 100vh; border-radius: 0; grid-template-columns: 1fr; }
+  .club .side { display: none; } .club .win.showSide .side { display: flex; position: absolute; inset: 0 30% 0 0; z-index: 2; box-shadow: 6px 0 0 #000; }
+  .club .menuBtn { display: inline-flex; } .joinGrid { grid-template-columns: 1fr; } .msg-row .tools { display: flex; position: static; margin-left: auto; align-self: flex-start; }
+}
 </style>
 </head>
 <body>
@@ -383,6 +489,8 @@ button:active:not(:disabled) { transform: translateY(1px); }
     <button class="btn primary" id="addWalletBtn">+ Add wallet <kbd>A</kbd></button>
     <span class="speed" id="copySpeed" hidden></span>
     <button class="btn" id="pauseBtn" title="Stop copying new buys. Sells keep following.">Pause copying <kbd>P</kbd></button>
+    <button class="btn clubBtn" id="clubBtn" title="Chat with friends, profiles and coin calls">💬 Social Lobby</button>
+    <button class="btn" id="hypoBtn" title="What each copy made, and what it would have made">🧮 Hypothetical PnL</button>
     <button class="btn" id="shareBtn" title="Send a friend a link to the Wallet Finder">🔗 Share Finder</button>
     <button class="btn" id="sfxBtn">Sound off <kbd>S</kbd></button>
     <button class="btn" id="logoutBtn" hidden>Log out</button>
@@ -660,7 +768,7 @@ function mdToHtml(md) {
   }
   return html + (list ? '</ul>' : '');
 }
-function closeModal() { $('modal').classList.remove('on'); }
+function closeModal() { $('modal').classList.remove('on', 'wide'); }
 $('modalClose').onclick = closeModal;
 $('modal').onclick = (e) => { if (e.target === $('modal')) closeModal(); };
 
@@ -1128,6 +1236,57 @@ function connect() {
   es.onerror = () => online(false);
 }
 
+/* ---------- hypothetical PnL: what each copy made vs following their sells vs holding ---------- */
+const H = { data: null, size: store.get('hypoSize', '') };
+async function openHypo(refresh = false) {
+  $('modal').classList.add('on', 'wide');
+  const body = $('modalBody');
+  if (!H.data || refresh) body.innerHTML = `<h3>🧮 Hypothetical PnL</h3>${loading('Reading your copy trades…')}`;
+  try {
+    for (let first = true; ; first = false) {
+      const j = await api(`/api/hypothetical${refresh && first ? '?refresh=1' : ''}`);
+      if (j.state === 'done') { H.data = j.result; break; }
+      if (j.state === 'error') throw new Error(j.error);
+      if (!$('modal').classList.contains('on')) return;
+      body.innerHTML = `<h3>🧮 Hypothetical PnL</h3>${loading(j.step)}`;
+      await new Promise((r) => setTimeout(r, 900));
+    }
+    renderHypo();
+  } catch (e) { body.innerHTML = `<h3>🧮 Hypothetical PnL</h3><div class="empty-msg">${esc(e.message)}</div>`; }
+}
+function renderHypo() {
+  const d = H.data, size = Number(H.size) > 0 ? Number(H.size) : null;
+  const k = (r) => (size ? size / r.sol : 1); // scale each copy to the "what if" size
+  const val = (r, f) => (r[f] == null ? null : r[f] * k(r));
+  const tot = (f) => d.rows.reduce((s, r) => s + (val(r, f) ?? 0), 0);
+  const cell = (v, est) => `<td class="num ${cls(v)}">${v == null ? '-' : `${est ? '≈' : ''}${sol2(v, 3)}`}</td>`;
+  const best = Math.max(tot('actual'), tot('withThem'), tot('held'));
+  const card = (label, v, note, f) => {
+    const n = d.rows.filter((r) => r[f] != null).length; // copies this number could be worked out for
+    if (!n) return `<div class="fcard"><span>${label}</span><b>-</b><small>can't tell yet: SolBoy couldn't read that wallet's trades</small></div>`;
+    return `<div class="fcard"${v === best && d.rows.length ? ' style="border-color:var(--accent)"' : ''}><span>${label}</span><b class="${cls(v)}">${sol2(v, 3)} SOL</b><small>${note}${n < d.rows.length ? ` (${n} of ${d.rows.length} copies)` : ''}</small></div>`;
+  };
+  $('modalBody').innerHTML = `<h3>🧮 Hypothetical PnL</h3>
+    <p>Every copy SolBoy made, and what it would have made done differently. Prices "now" are live; ≈ means estimated from the wallet's own buy (copies from before this version).</p>
+    <div class="fbar" style="align-items:center;margin:10px 0 14px"><label style="display:flex;align-items:center;gap:8px;color:var(--ink-2)">What if every copy was <input id="hypoSize" inputmode="decimal" placeholder="actual" value="${esc(H.size)}" style="width:90px;background:var(--panel-2);color:var(--ink);border:2px solid var(--edge);border-radius:10px;padding:7px 9px;font-family:var(--mono)"> SOL</label>
+      <span class="spacer" style="flex:1"></span><button class="btn" id="hypoRefresh">Refresh</button></div>
+    <div class="fcards">
+      ${card('What you made', tot('actual'), 'closed trades, plus open ones at today\'s price', 'actual')}
+      ${card('If you sold when they sold', tot('withThem'), 'copying their sells exactly', 'withThem')}
+      ${card('If you still held everything', tot('held'), 'never selling, at today\'s price', 'held')}
+      <div class="fcard"><span>Copies</span><b>${d.rows.length}</b><small>${(size ? size * d.rows.length : d.totals.spent).toFixed(2)} SOL put in</small></div>
+    </div>
+    ${d.rows.length ? `<div class="fscroll"><table><tr><th>When</th><th>Coin</th><th>Copied</th><th>Put in</th><th>You made</th><th>Sold with them</th><th>Held till now</th><th>They</th></tr>
+      ${d.rows.map((r) => `<tr><td>${ago(r.time)}</td><td>${coinCell(r)}</td><td>${esc(r.wallet)}${r.paper ? ' <span class="addr">paper</span>' : ''}</td><td class="num">${(size ?? r.sol).toFixed(3)}</td>${cell(val(r, 'actual'), r.open && r.estimated)}${cell(val(r, 'withThem'), r.estimated)}${cell(val(r, 'held'), r.estimated)}<td>${esc(r.open ? `${r.theirStatus} · you hold` : r.theirStatus)}</td></tr>`).join('')}</table></div>`
+      : '<div class="empty-msg">No copy trades yet. Once SolBoy copies a buy, it shows up here.</div>'}`;
+  $('hypoSize').oninput = (e) => { const pos = e.target.selectionStart; H.size = e.target.value.replace(/[^\d.]/g, ''); store.set('hypoSize', H.size); renderHypo(); $('hypoSize').focus(); $('hypoSize').setSelectionRange(pos, pos); };
+  $('hypoRefresh').onclick = () => openHypo(true);
+}
+$('hypoBtn').onclick = () => openHypo(false);
+
+/* ---------- social lobby: the owner is the host ---------- */
+const CLUB = { host: true, api: (p, b) => api(`/api/club${p}`, b), img: (id, kind, v) => `/api/club/img/${encodeURIComponent(id)}/${kind}?v=${v}&t=${TOKEN}`, setSession() {} };
+
 /* ---------- share link: the Wallet Finder for a friend, as a web address ---------- */
 async function openShare() {
   const show = (st, busy) => {
@@ -1224,7 +1383,7 @@ async function showCoins(mints, view) {
   }
   for (const c of results) {
     const good = c.buyers.filter((b) => b.pnlSol > 0).length;
-    html += `<div class="fsec"><div class="fhead">${c.image ? `<img src="${esc(c.image)}" alt="">` : ''}<div class="who">${esc(c.symbol || shortA(c.mint))}<small>${esc(c.name || c.mint)} · MC ${usdC(c.mcUsd)}</small></div></div>
+    html += `<div class="fsec"><div class="fhead">${c.image ? `<img src="${esc(c.image)}" alt="">` : ''}<div class="who">${esc(c.symbol || shortA(c.mint))}<small>${esc(c.name || c.mint)} · MC ${usdC(c.mcUsd)}</small></div><span class="spacer"></span><button class="btn" data-fsharecoin="${esc(c.mint)}" data-sym="${esc(c.symbol || '')}" data-name="${esc(c.name || '')}" data-mc="${c.mcUsd ?? ''}">💬 Share</button></div>
       <h3>Early buyers <span class="count">first ${c.scanned} trades${c.fromLaunch ? ' from launch' : ' SolBoy could reach in time (very busy coin: not all the way back to launch)'} · ${good} in profit${c.seconds != null ? ` · scanned in ${c.seconds}s` : ''}</span></h3>
       ${c.buyers.length ? `<div class="fscroll"><table><tr><th>#</th><th>Wallet</th><th>Bought</th><th>Entry MC</th><th>Sold</th><th>Now</th><th>PnL</th><th></th></tr>${c.buyers.map((b) => `<tr>
         <td class="num">${b.rank}</td><td>${walletLink(b.wallet)}${b.tags.map((t) => `<span class="ftag ${t}">${t}</span>`).join('')}</td>
@@ -1284,7 +1443,7 @@ function renderProfile(p) {
     <div class="fhead"><div class="who">${esc(shortA(p.address))}<small>${esc(p.address)}</small></div>
       <span class="verdict ${p.verdict.level}">${esc(p.verdict.text)}</span><span class="spacer"></span>
       <a class="btn" href="https://solscan.io/account/${encodeURIComponent(p.address)}" target="_blank" rel="noopener">Solscan</a>
-      <button class="btn" data-frefresh="${esc(p.address)}">Refresh</button><button class="btn primary" data-fcopy="${esc(p.address)}">Copy this wallet</button></div>
+      <button class="btn" data-fshare="wallet">💬 Share</button><button class="btn" data-frefresh="${esc(p.address)}">Refresh</button><button class="btn primary" data-fcopy="${esc(p.address)}">Copy this wallet</button></div>
     <div class="fcards">
       ${card('Net worth', `${p.netWorthSol.toFixed(2)} SOL`, usd(p.netWorthSol))}${card('SOL balance', p.sol.toFixed(2), usd(p.sol))}${card('Coins held (value)', `${p.tokensValueSol.toFixed(2)} SOL`, `<small>${p.portfolio.length} coins</small>`)}
       ${card('Win rate', pct(s.winRate), `<small>${s.closed} finished trades</small>`)}${card('Realized PnL', `${sol2(s.realizedAll)} SOL`, usd(s.realizedAll), cls(s.realizedAll))}
@@ -1353,6 +1512,9 @@ $('finderView').addEventListener('click', (e) => {
   if (prof) { $('finderInput').value = prof.dataset.fprofile; rememberFinder(prof.dataset.fprofile); openProfile(prof.dataset.fprofile); $('tab-finder').scrollIntoView({ behavior: 'smooth' }); return; }
   const cp = e.target.closest('[data-fcopy]');
   if (cp) { copyWallet(cp.dataset.fcopy); return; }
+  if (e.target.closest('[data-fshare]') && F.profile) { const p = F.profile; return clubShare({ type: 'wallet', address: p.address, verdict: p.verdict.text, winRate: p.stats.winRate, pnl30d: p.stats.pnl30d, netWorth: p.netWorthSol }); }
+  const sc = e.target.closest('[data-fsharecoin]');
+  if (sc) return clubShare({ type: 'coin', mint: sc.dataset.fsharecoin, symbol: sc.dataset.sym, name: sc.dataset.name, mcUsd: Number(sc.dataset.mc) || null });
   const rf = e.target.closest('[data-frefresh]');
   if (rf) { api(`/api/finder/wallet?a=${encodeURIComponent(rf.dataset.frefresh)}&refresh=1`).then(() => openProfile(rf.dataset.frefresh)).catch((err) => toast('loss', 'Error', err.message)); return; }
   const rp = e.target.closest('[data-freplay]');
@@ -1367,10 +1529,283 @@ $('finderView').addEventListener('click', (e) => {
 renderRecent();
 
 
+/* ---------- social lobby: profiles, chat, DMs, calls (needs CLUB = { host, api, img, setSession } from the page) ---------- */
+const C = { gone: new Set(), me: null, room: 'lounge', view: 'room', members: [], dms: [], lastId: {}, seen: JSON.parse(store.get('clubSeen', '{}') || '{}'), unread: {}, msgs: [], callsSort: 'x', timer: null, bg: null, other: null };
+const memberOf = (id) => C.members.find((m) => m.id === id) ?? { id, name: 'gone', color: '#555', avatar: 0 };
+function avatar(m, size = '') {
+  const inner = m.avatar ? `<img class="av ${size}" src="${esc(CLUB.img(m.id, 'avatar', m.avatar))}" alt="">` : `<span class="av ${size}" style="background:${esc(m.color)}">${esc((m.name || '?')[0].toUpperCase())}</span>`;
+  return `<span class="avwrap">${inner}${m.online ? '<i class="online"></i>' : ''}</span>`;
+}
+const nameTag = (m) => `<span class="who" data-cprofile="${esc(m.id)}" style="color:${esc(m.color)}">${esc(m.name)}${m.host ? ' 👑' : ''}</span>`;
+const roomTitle = (r) => (r === 'lounge' ? '# Lounge' : `@ ${memberOf(r.split(':').slice(1).find((x) => x !== C.me?.id) ?? C.me?.id).name}`);
+
+function clubDom() {
+  if ($('club')) return;
+  const el = document.createElement('div');
+  el.className = 'club'; el.id = 'club';
+  el.innerHTML = `<div class="win" id="clubWin"><aside class="side"><div class="meCard" id="clubMe"></div><div class="scroll" id="clubNav"></div></aside>
+    <section class="main"><div class="top"><button class="btn menuBtn" data-cside>☰</button><h4 id="clubTitle">Social Lobby</h4><span id="clubTopBtns"></span><button class="btn" data-cclose aria-label="Close">✕</button></div>
+    <div class="body" id="clubBody"></div><form class="composer" id="clubComposer" hidden><textarea id="clubText" rows="1" maxlength="1000" placeholder="Say something…"></textarea>${CLUB.host ? '<button class="btn" type="button" data-cflex title="Post your SolBoy PnL">📈 Flex PnL</button>' : ''}<button class="btn primary" type="submit">Send</button></form></section></div>`;
+  document.body.append(el);
+  el.addEventListener('click', clubClick);
+  $('clubComposer').onsubmit = (e) => { e.preventDefault(); sendText(); };
+  $('clubText').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); } });
+  $('clubText').addEventListener('input', (e) => { e.target.style.height = 'auto'; e.target.style.height = `${Math.min(140, e.target.scrollHeight)}px`; });
+}
+
+async function openClub(view, arg) {
+  clubDom();
+  $('club').classList.add('on');
+  if (!C.me) {
+    try { C.me = await CLUB.api('/me'); } catch { C.me = null; }
+  }
+  if (!C.me) return showJoin();
+  if (CLUB.host && C.me.name === 'host' && view !== 'edit') return showEdit(true);
+  await refreshSide();
+  if (view === 'profile') return showProfile(arg);
+  if (view === 'calls') return showCalls();
+  if (view === 'edit') return showEdit();
+  showRoom(arg ?? C.room);
+}
+function closeClub() { $('club')?.classList.remove('on'); clearInterval(C.timer); C.timer = null; }
+
+async function refreshSide() {
+  [C.members, C.dms] = await Promise.all([CLUB.api('/members'), CLUB.api('/dms')]);
+  C.me = C.members.find((m) => m.id === C.me.id) ?? C.me;
+  try { C.unread = await CLUB.api(`/unread?since=${encodeURIComponent(JSON.stringify(C.seen))}`); } catch {}
+  renderSide();
+}
+function renderSide() {
+  $('clubMe').innerHTML = `${avatar(C.me)}<div style="flex:1;min-width:0"><b style="color:${esc(C.me.color)}">${esc(C.me.name)}${C.me.host ? ' 👑' : ''}</b><small>${C.me.host ? 'host' : 'member'}</small></div><button class="mini" data-cedit style="margin:0">Edit</button>`;
+  const nav = (key, label, on, badge) => `<button class="nav${on ? ' on' : ''}" ${key}>${label}${badge ? `<span class="badge">${badge}</span>` : ''}</button>`;
+  const online = C.members.filter((m) => m.online).length;
+  $('clubNav').innerHTML = nav('data-croom="lounge"', '# Lounge', C.view === 'room' && C.room === 'lounge', C.unread.lounge)
+    + nav('data-ccalls', '📣 Calls board', C.view === 'calls')
+    + `<div class="label">Messages</div>${C.dms.map((d) => { const m = memberOf(d.with); return nav(`data-croom="${esc(d.room)}"`, `${avatar(m, 'sm')} ${esc(m.name)}`, C.view === 'room' && C.room === d.room, C.unread[d.room]); }).join('') || '<div class="addr" style="padding:4px 10px">Open someone\'s profile to message them.</div>'}`
+    + `<div class="label">Members · ${online} online</div>${C.members.map((m) => nav(`data-cprofile="${esc(m.id)}"`, `${avatar(m, 'sm')} <span style="color:${esc(m.color)}">${esc(m.name)}</span>${m.host ? ' 👑' : ''}`, C.view === 'profile' && C.other === m.id)).join('')}`;
+  clubBadge();
+}
+function clubBadge() {
+  const n = Object.values(C.unread).reduce((s, x) => s + x, 0);
+  const b = $('clubBtn');
+  if (b) b.innerHTML = `💬 Social Lobby${n ? `<span class="badge">${n > 99 ? '99+' : n}</span>` : ''}`;
+}
+function setView(view, title, composer) {
+  C.view = view;
+  $('clubTitle').textContent = title;
+  $('clubComposer').hidden = !composer;
+  $('clubTopBtns').innerHTML = '';
+  $('clubWin').classList.remove('showSide');
+  clearInterval(C.timer); C.timer = null;
+}
+
+// ---- chat ----
+function cardHtml(c) {
+  if (!c) return '';
+  if (c.type === 'wallet') return `<div class="xcard"><span style="font-size:22px">👛</span><div class="t"><b>Wallet ${esc(shortA(c.address))}</b>${esc(c.verdict || '')}${c.winRate != null ? ` · win rate ${Math.round(c.winRate * 100)}%` : ''}${c.pnl30d != null ? ` · 30d ${sol2(c.pnl30d)} SOL` : ''}</div><button class="btn" data-fgo="${esc(c.address)}">Open</button></div>`;
+  if (c.type === 'coin') return `<div class="xcard"><span style="font-size:22px">🪙</span><div class="t"><b>${esc(c.symbol || shortA(c.mint))}</b>${esc(c.name || '')}${c.mcUsd ? ` · MC ${usdC(c.mcUsd)}` : ''}<br><code>${esc(c.mint)}</code></div><button class="btn" data-fgo="${esc(c.mint)}">Buyers</button></div>`;
+  if (c.type === 'pnl') return `<div class="xcard pnl"><span style="font-size:26px">📈</span><div class="t">SolBoy PnL<div class="big ${cls(c.total)}">${sol2(c.total, 3)} SOL</div>today ${sol2(c.today, 3)} · win rate ${c.winRate == null ? '-' : Math.round(c.winRate * 100) + '%'} · ${c.trades} trades${c.streak > 1 ? ` · 🔥 ${c.streak} wins in a row` : ''}</div></div>`;
+  return '';
+}
+function msgHtml(m) {
+  if (m.system) return `<div class="msg-row system" data-mid="${m.id}">${esc(m.text)} · ${esc(ago(m.at))}</div>`;
+  const u = memberOf(m.from), mine = m.from === C.me.id;
+  const reacts = Object.entries(m.reactions ?? {}).map(([e, who]) => `<button class="${who.includes(C.me.id) ? 'mine' : ''}" data-creact="${e}" data-mid="${m.id}" title="${esc(who.map((id) => memberOf(id).name).join(', '))}">${e} ${who.length}</button>`).join('');
+  return `<div class="msg-row" data-mid="${m.id}"><span data-cprofile="${esc(u.id)}" style="cursor:pointer">${avatar(u)}</span><div style="flex:1;min-width:0">
+    <div>${nameTag(u)}<span class="when">${esc(ago(m.at))}</span></div>${m.text ? `<div class="text">${esc(m.text)}</div>` : ''}${cardHtml(m.card)}${reacts ? `<div class="reacts">${reacts}</div>` : ''}</div>
+    <span class="tools">${CLUB_REACTIONS.map((e) => `<button data-creact="${e}" data-mid="${m.id}" title="React">${e}</button>`).join('')}${mine || CLUB.host ? `<button data-cdel="${m.id}" title="Delete">🗑</button>` : ''}</span></div>`;
+}
+const CLUB_REACTIONS = ['🔥', '🚀', '😂', '💀', '👀', '💎'];
+async function showRoom(room) {
+  C.room = room;
+  setView('room', roomTitle(room), true);
+  if (room.startsWith('dm:')) { const other = room.split(':').slice(1).find((x) => x !== C.me.id); $('clubTopBtns').innerHTML = `<button class="btn" data-cprofile="${esc(other)}">Profile</button>`; }
+  C.msgs = [];
+  $('clubBody').innerHTML = loading('Loading messages…');
+  await pullMessages(true);
+  renderSide();
+  let tick = 0;
+  C.timer = setInterval(() => { tick++; pullMessages(tick % 3 === 0 ? 'sync' : false); if (tick % 4 === 0) refreshSide().catch(() => {}); }, 1500);
+  $('clubText').focus();
+}
+async function pullMessages(fresh) {
+  const room = C.room;
+  try {
+    const sync = fresh === 'sync'; // every few seconds: re-read recent messages for new reactions and deletions
+    const after = fresh ? 0 : C.msgs.at(-1)?.id ?? 0;
+    const list = await CLUB.api(`/messages?room=${encodeURIComponent(room)}&after=${after}`);
+    if (room !== C.room || C.view !== 'room') return;
+    const strangers = list.filter((m) => !C.members.some((x) => x.id === m.from) && !C.gone.has(m.from)).map((m) => m.from);
+    if (strangers.length) { // someone new: load their profile, then redraw (people who left show as "gone")
+      await refreshSide();
+      strangers.forEach((id) => { if (!C.members.some((x) => x.id === id)) C.gone.add(id); });
+      if (!fresh || sync) return pullMessages(true);
+    }
+    const box = $('clubBody'), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    if (sync) {
+      if (JSON.stringify(list) !== JSON.stringify(C.msgs)) { const top = box.scrollTop; C.msgs = list; box.innerHTML = list.length ? list.map(msgHtml).join('') : '<div class="empty-msg">No messages yet. Say hi 👋</div>'; box.scrollTop = atBottom ? box.scrollHeight : top; }
+      fresh = false;
+    }
+    else if (fresh) { C.msgs = list; box.innerHTML = list.length ? list.map(msgHtml).join('') : '<div class="empty-msg">No messages yet. Say hi 👋</div>'; }
+    else if (list.length && !sync) { if (!C.msgs.length) box.innerHTML = ''; C.msgs.push(...list); box.insertAdjacentHTML('beforeend', list.map(msgHtml).join('')); }
+    if (fresh || (list.length && atBottom)) box.scrollTop = box.scrollHeight;
+    const last = C.msgs.at(-1)?.id;
+    if (last) { C.seen[room] = last; store.set('clubSeen', JSON.stringify(C.seen)); delete C.unread[room]; clubBadge(); }
+  } catch (e) { if (e.status === 401) { C.me = null; showJoin(); } }
+}
+function replaceMsg(m) {
+  const i = C.msgs.findIndex((x) => x.id === m.id);
+  if (i >= 0) C.msgs[i] = m;
+  const el = document.querySelector(`#clubBody .msg-row[data-mid="${m.id}"]`);
+  if (el) el.outerHTML = msgHtml(m);
+}
+async function sendText() {
+  const text = $('clubText').value.trim();
+  if (!text) return;
+  try { await CLUB.api('/send', { room: C.room, text }); $('clubText').value = ''; $('clubText').style.height = ''; pullMessages(false); }
+  catch (e) { toast('loss', "Couldn't send", e.message); }
+}
+async function clubShare(card) {
+  clubDom();
+  if (!C.me) { try { C.me = await CLUB.api('/me'); } catch {} }
+  if (!C.me) { toast('info', 'Join the Social Lobby first', 'Make a profile, then share it.'); return openClub(); }
+  try { await CLUB.api('/send', { room: 'lounge', text: '', card }); toast('info', 'Shared to the Lounge', 'Your friends can open it from the chat.'); }
+  catch (e) { toast('loss', "Couldn't share", e.message); }
+}
+
+// ---- profiles ----
+async function showProfile(id) {
+  C.other = id;
+  const m = memberOf(id);
+  setView('profile', m.name, false);
+  renderSide();
+  let calls = [];
+  try { calls = (await CLUB.api('/calls')).filter((c) => c.by === id); } catch {}
+  const best = calls.filter((c) => c.x).sort((a, b) => b.x - a.x)[0];
+  const banner = m.banner ? `background-image:url('${CLUB.img(m.id, 'banner', m.banner)}')` : `background:linear-gradient(135deg, ${m.color}, #0d0d0d 70%)`;
+  $('clubBody').innerHTML = `<div class="pbanner" style="${esc(banner)}"></div>
+    <div class="phead">${avatar(m, 'lg')}<div class="n" style="color:${esc(m.color)}">${esc(m.name)}${m.host ? ' 👑' : ''}</div><span class="spacer" style="flex:1"></span>
+      ${m.id === C.me.id ? '<button class="btn" data-cedit>Edit profile</button>' : `<button class="btn primary" data-cdm="${esc(m.id)}">Message</button>${CLUB.host && !m.host ? `<button class="btn danger" data-ckick="${esc(m.id)}">Remove</button>` : ''}`}</div>
+    <div class="pbio">${m.bio ? esc(m.bio) : '<span class="addr">No bio yet.</span>'}</div>
+    <div class="fcards"><div class="fcard"><span>Status</span><b>${m.online ? '🟢 online' : m.lastSeen ? `seen ${esc(ago(m.lastSeen))}` : 'offline'}</b></div>
+      <div class="fcard"><span>Joined</span><b>${esc(ago(m.joined))}</b></div><div class="fcard"><span>Calls</span><b>${calls.length}</b></div>
+      <div class="fcard"><span>Best call</span><b class="${best && best.x >= 1 ? 'pos' : ''}">${best ? `${best.x.toFixed(1)}x ${esc(best.symbol)}` : '-'}</b></div></div>
+    ${calls.length ? `<div class="fsec"><h3>📣 Their calls</h3>${callsTable(calls)}</div>` : ''}`;
+}
+function fileToImage(input, w, h) {
+  return new Promise((resolve, reject) => {
+    const f = input.files?.[0];
+    if (!f) return resolve(undefined);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const s = Math.max(w / img.width, h / img.height), dw = img.width * s, dh = img.height * s;
+      c.getContext('2d').drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+      resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => reject(new Error("That file isn't a picture."));
+    img.src = URL.createObjectURL(f);
+  });
+}
+function showEdit(first = false) {
+  setView('edit', first ? 'Set up your profile' : 'Edit profile', false);
+  if (C.members.length) renderSide(); else { $('clubMe').innerHTML = ''; $('clubNav').innerHTML = ''; }
+  const m = C.me;
+  $('clubBody').innerHTML = `<form class="cform" id="cEdit">
+    ${first ? '<p style="margin:0;color:var(--ink-2)">Pick the name your friends see in the club.</p>' : ''}
+    <label>Username<input type="text" id="cName" maxlength="20" value="${esc(m.name === 'host' ? '' : m.name)}" placeholder="e.g. solking"></label>
+    <label>Profile picture <small>Square works best.</small><input type="file" id="cAvatar" accept="image/png,image/jpeg,image/webp"></label>
+    <label>Banner <small>A wide picture across the top of your profile.</small><input type="file" id="cBanner" accept="image/png,image/jpeg,image/webp"></label>
+    <label>Bio <small>Up to 300 characters.</small><textarea id="cBio" rows="3" maxlength="300">${esc(m.bio)}</textarea></label>
+    <label>Profile color <small>Used for your banner when you don't upload one.</small><span class="swatches" id="cColors">${['#ff2d95', '#5ce1ff', '#ffd23f', '#a98bff', '#4ade80', '#ff6bcb', '#ffb020', '#7dd3fc'].map((c) => `<button type="button" data-ccolor="${c}" class="${c === m.color ? 'on' : ''}" style="background:${c}"></button>`).join('')}</span></label>
+    <div class="err" id="cErr"></div>
+    <div class="fbtns"><button class="btn primary" type="submit">Save</button>${m.avatar || m.banner ? '<button class="btn" type="button" data-cclearpics>Remove pictures</button>' : ''}${!CLUB.host ? '<button class="btn danger" type="button" data-clogout>Log out</button>' : ''}</div></form>`;
+  let color = m.color;
+  $('cColors').onclick = (e) => { const b = e.target.closest('[data-ccolor]'); if (!b) return; color = b.dataset.ccolor; $('cColors').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); };
+  $('cEdit').onsubmit = async (e) => {
+    e.preventDefault(); $('cErr').textContent = '';
+    try {
+      const body = { name: $('cName').value.trim(), bio: $('cBio').value, color };
+      const av = await fileToImage($('cAvatar'), 256, 256), bn = await fileToImage($('cBanner'), 1200, 400);
+      if (av) body.avatar = av; if (bn) body.banner = bn;
+      C.me = await CLUB.api('/profile', body);
+      toast('info', 'Profile saved', 'Looking good.');
+      await refreshSide(); showProfile(C.me.id);
+    } catch (err) { $('cErr').textContent = err.message; }
+  };
+}
+
+// ---- calls ----
+function callsTable(list) {
+  return `<div class="fscroll"><table><tr><th>Coin</th><th>Called by</th><th>MC at call</th><th>MC now</th><th>Since call</th><th>When</th><th></th></tr>${list.map((c) => `<tr><td>${coinCell(c)}</td><td><span class="who" data-cprofile="${esc(c.by)}" style="color:${esc(memberOf(c.by).color)};cursor:pointer">${esc(c.byName)}</span>${c.note ? `<br><small class="addr">${esc(c.note)}</small>` : ''}</td><td class="num">${usdC(c.mcAt)}</td><td class="num">${usdC(c.mcNow)}</td><td class="num ${c.x == null ? '' : c.x >= 1 ? 'pos' : 'neg'}">${c.x == null ? '-' : `${c.x >= 10 ? Math.round(c.x) : c.x.toFixed(2)}x`}</td><td>${esc(ago(c.at))}</td><td><button class="btn" data-fgo="${esc(c.mint)}">Buyers</button></td></tr>`).join('')}</table></div>`;
+}
+async function showCalls() {
+  setView('calls', '📣 Calls board', false);
+  renderSide();
+  $('clubBody').innerHTML = loading('Loading calls…');
+  let list = [];
+  try { list = await CLUB.api('/calls'); } catch (e) { $('clubBody').innerHTML = `<div class="empty-msg">${esc(e.message)}</div>`; return; }
+  const sorted = C.callsSort === 'x' ? [...list].sort((a, b) => (b.x ?? 0) - (a.x ?? 0)) : list;
+  $('clubBody').innerHTML = `<form class="fbar" id="cCall"><input type="text" id="cMint" placeholder="Coin address you think will run" spellcheck="false" style="flex:2 1 260px;background:var(--panel-2);color:var(--ink);border:2px solid var(--edge);border-radius:12px;padding:10px;font-family:var(--mono);font-size:13px">
+      <input type="text" id="cNote" maxlength="200" placeholder="Why? (optional)" style="flex:1 1 160px;background:var(--panel-2);color:var(--ink);border:2px solid var(--edge);border-radius:12px;padding:10px"><button class="btn primary" type="submit">Call it</button></form>
+    <div class="err" id="cCallErr"></div>
+    <div class="fsec"><h3>Leaderboard <span class="ftabs"><button data-csort="x" class="${C.callsSort === 'x' ? 'on' : ''}">Best</button><button data-csort="new" class="${C.callsSort === 'new' ? 'on' : ''}">Latest</button></span><span class="count">how much each coin moved since it was called</span></h3>
+    ${list.length ? callsTable(sorted) : '<div class="empty-msg">No calls yet. Post a coin above and SolBoy tracks how it does from that moment.</div>'}</div>`;
+  $('cCall').onsubmit = async (e) => {
+    e.preventDefault(); $('cCallErr').textContent = '';
+    try { await CLUB.api('/call', { mint: $('cMint').value.trim(), note: $('cNote').value }); toast('buy', 'Called it 📣', 'Posted to the Lounge too. Good luck.'); showCalls(); }
+    catch (err) { $('cCallErr').textContent = err.message; }
+  };
+}
+
+// ---- joining (friends on the share link) ----
+function showJoin() {
+  clubDom();
+  setView('join', 'Join the Social Lobby', false);
+  $('clubMe').innerHTML = ''; $('clubNav').innerHTML = '<div class="addr" style="padding:12px">Make a profile to chat, call coins and see who\'s here.</div>';
+  $('clubBody').innerHTML = `<div class="joinGrid">
+    <div><h3 style="margin-top:0">New here</h3><form class="cform" id="cSignup"><label>Username<input type="text" id="sName" maxlength="20" autocomplete="username" placeholder="e.g. solking"></label><label>Password <small>So you can log back in when the link changes.</small><input type="password" id="sPass" autocomplete="new-password"></label><div class="err" id="sErr"></div><button class="btn primary" type="submit">Join</button></form></div>
+    <div><h3 style="margin-top:0">Been here before</h3><form class="cform" id="cLogin"><label>Username<input type="text" id="lName" maxlength="20" autocomplete="username"></label><label>Password<input type="password" id="lPass" autocomplete="current-password"></label><div class="err" id="lErr"></div><button class="btn" type="submit">Log in</button></form></div></div>`;
+  const go = (path, nameEl, passEl, errEl) => async (e) => {
+    e.preventDefault(); $(errEl).textContent = '';
+    try { const r = await CLUB.api(path, { name: $(nameEl).value.trim(), password: $(passEl).value }); CLUB.setSession(r.session); C.me = r.me; openClub(path === '/signup' ? 'edit' : undefined); }
+    catch (err) { $(errEl).textContent = err.message; }
+  };
+  $('cSignup').onsubmit = go('/signup', 'sName', 'sPass', 'sErr');
+  $('cLogin').onsubmit = go('/login', 'lName', 'lPass', 'lErr');
+}
+
+async function clubClick(e) {
+  const t = (sel) => e.target.closest(sel);
+  let x;
+  if (t('[data-cclose]') || e.target.id === 'club') return closeClub();
+  if (t('[data-cside]')) return $('clubWin').classList.toggle('showSide');
+  if ((x = t('[data-croom]'))) return showRoom(x.dataset.croom);
+  if (t('[data-ccalls]')) return showCalls();
+  if ((x = t('[data-csort]'))) { C.callsSort = x.dataset.csort; return showCalls(); }
+  if (t('[data-cedit]')) return showEdit();
+  if ((x = t('[data-cprofile]'))) return showProfile(x.dataset.cprofile);
+  if ((x = t('[data-cdm]'))) { try { const { room } = await CLUB.api('/dm', { with: x.dataset.cdm }); await refreshSide(); return showRoom(room); } catch (err) { return toast('loss', 'Error', err.message); } }
+  if ((x = t('[data-creact]'))) { try { replaceMsg(await CLUB.api('/react', { room: C.room, id: Number(x.dataset.mid), emoji: x.dataset.creact })); } catch (err) { toast('loss', 'Error', err.message); } return; }
+  if ((x = t('[data-cdel]'))) { if (!confirm('Delete this message?')) return; try { await CLUB.api('/remove', { room: C.room, id: Number(x.dataset.cdel) }); document.querySelector(`#clubBody .msg-row[data-mid="${x.dataset.cdel}"]`)?.remove(); } catch (err) { toast('loss', 'Error', err.message); } return; }
+  if ((x = t('[data-ckick]'))) { if (!confirm(`Remove ${memberOf(x.dataset.ckick).name} from the Social Lobby? They won't be able to log in again.`)) return; try { await CLUB.api('/kick', { id: x.dataset.ckick }); toast('info', 'Removed', 'They are out of the Social Lobby.'); await refreshSide(); return showRoom('lounge'); } catch (err) { return toast('loss', 'Error', err.message); } }
+  if (t('[data-cflex]')) { try { await CLUB.api('/send', { room: C.room, text: '', card: { type: 'pnl' } }); pullMessages(false); } catch (err) { toast('loss', 'Error', err.message); } return; }
+  if (t('[data-cclearpics]')) { try { C.me = await CLUB.api('/profile', { avatar: null, banner: null }); await refreshSide(); return showEdit(); } catch (err) { return toast('loss', 'Error', err.message); } }
+  if (t('[data-clogout]')) { try { await CLUB.api('/logout', {}); } catch {} CLUB.setSession(''); C.me = null; return showJoin(); }
+  if ((x = t('[data-fgo]'))) { closeClub(); if (typeof openTab === 'function') openTab('finder'); $('tab-finder').scrollIntoView({ behavior: 'smooth' }); return finderGo(x.dataset.fgo); }
+}
+// Unread count on the Club button while the club is closed.
+setInterval(async () => {
+  if ($('club')?.classList.contains('on') || !C.me) return;
+  try { C.unread = await CLUB.api(`/unread?since=${encodeURIComponent(JSON.stringify(C.seen))}`); clubBadge(); } catch {}
+}, 10_000);
+(async () => { try { C.me = await CLUB.api('/me'); C.unread = await CLUB.api(`/unread?since=${encodeURIComponent(JSON.stringify(C.seen))}`); clubBadge(); } catch {} })();
+$('clubBtn').onclick = () => openClub();
+
 /* ---------- keyboard ---------- */
 const TABS = { 1: 'history', 2: 'board', 3: 'loadout', 4: 'account', 5: 'finder' };
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closeModal(); closeChat(); return; }
+  if (e.key === 'Escape') { closeModal(); closeChat(); closeClub(); return; }
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === '/') { e.preventDefault(); openChat(); return; }
   else if (e.key === 'p' || e.key === 'P') togglePause();

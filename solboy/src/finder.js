@@ -39,6 +39,21 @@ const median = (list) => {
   return s[Math.floor(s.length / 2)];
 };
 
+/** Remember the details of each copied buy (tokens received, source wallet) for Hypothetical PnL. */
+export function recordCopy(row) {
+  try {
+    fs.mkdirSync(file('data'), { recursive: true });
+    fs.appendFileSync(file('data/copies.jsonl'), JSON.stringify({ at: Date.now(), ...row }) + '\n');
+  } catch {}
+}
+function readCopies() {
+  try {
+    return fs.readFileSync(file('data/copies.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  } catch {
+    return [];
+  }
+}
+
 export function createFinder({ cfg, connection, bot }) {
   const dir = file('data/finder');
   const jobs = new Map(); // key -> { state, step, result, error, at }
@@ -496,6 +511,61 @@ export function createFinder({ cfg, connection, bot }) {
     return { address, days, size, copied: done.length, open: open.size, pnlSol: pnl, winRate: done.length ? wins / done.length : null, skipped, calendar: byDay, settings: { tp: cfg.takeProfitPct, sl: cfg.stopLossPct, onlyFirstBuy: cfg.onlyFirstBuy, maxOpen: cfg.maxOpenPositions } };
   }
 
+  // ---- Hypothetical PnL: for every copied buy, what you made, what following their sells would have made, and holding ----
+  async function buildHypo(trades, step) {
+    const copies = readCopies();
+    const buys = trades.map((t, i) => ({ ...t, i, at: Date.parse(t.time) })).filter((t) => /buy$/.test(t.action) && t.token && Number(t.sol) > 0).slice(-150);
+    const addressOf = (label) => cfg.wallets.find((w) => w.label === label)?.address ?? null;
+    const sources = new Map();
+    for (const b of buys) {
+      b.copy = copies.find((c) => c.mint === b.token && Math.abs(c.at - b.at) < 120_000) ?? null;
+      b.source = b.copy?.source ?? addressOf(b.copied_wallet);
+      if (b.source) sources.set(b.source, null);
+    }
+    let n = 0;
+    for (const a of sources.keys()) {
+      n++;
+      sources.set(a, await history(a, (s) => step(`Wallet ${n} of ${sources.size}: ${s}`)).catch(() => null));
+    }
+    step('Pricing the coins…');
+    const mints = [...new Set(buys.map((b) => b.token))];
+    const info = await coinInfo(mints);
+    for (const m of mints.filter((x) => !info.get(x)?.priceSol).slice(0, 15)) {
+      const v = await bot.valueOf(m, 1_000_000_000n).catch(() => null);
+      if (v) info.set(m, { ...(info.get(m) ?? {}), priceSol: Number(v) / LAMPORTS / 1000 });
+    }
+    const rows = buys.map((b) => {
+      const price = info.get(b.token)?.priceSol ?? null;
+      // what actually happened: the sells of this coin after this buy (until the next buy of it)
+      const next = trades.findIndex((t, k) => k > b.i && t.token === b.token && /buy$/.test(t.action));
+      const sells = trades.slice(b.i + 1, next < 0 ? undefined : next).filter((t) => t.token === b.token && /sell$/.test(t.action));
+      const ev = (sources.get(b.source)?.events ?? []).filter((e) => e.k === 't' && e.mint === b.token).sort((x, y) => x.time - y.time);
+      const t0 = b.at / 1000;
+      const theirBuy = ev.filter((e) => e.side === 'buy' && e.time <= t0 + 5).at(-1) ?? ev.find((e) => e.side === 'buy') ?? null;
+      const theirBuyPrice = theirBuy && theirBuy.tok ? theirBuy.sol / theirBuy.tok : null;
+      const tokens = b.copy?.tokens ? Number(b.copy.tokens) / 1e6 : theirBuyPrice ? Number(b.sol) / theirBuyPrice : null;
+      const sol = Number(b.sol);
+      const open = !sells.length;
+      const actual = open ? (tokens != null && price != null ? tokens * price - sol : null) : sells.reduce((s, t) => s + Number(t.pnl_sol || 0), 0);
+      let withThem = null, theirStatus = 'unknown';
+      if (theirBuy && tokens != null) {
+        const theirSells = ev.filter((e) => e.side === 'sell' && e.time >= theirBuy.time);
+        const theirTok = ev.filter((e) => e.side === 'buy' && e.time <= (theirSells[0]?.time ?? Infinity)).reduce((s, e) => s + e.tok, 0) || theirBuy.tok;
+        const soldTok = theirSells.reduce((s, e) => s + e.tok, 0), soldSol = theirSells.reduce((s, e) => s + e.sol, 0);
+        const frac = Math.min(1, soldTok / theirTok);
+        if (soldTok > 0) withThem = tokens * frac * (soldSol / soldTok) + tokens * (1 - frac) * (price ?? 0) - sol;
+        else if (price != null) withThem = tokens * price - sol;
+        theirStatus = frac >= 0.9 ? 'sold all' : frac > 0 ? 'sold some' : 'still holding';
+      }
+      return {
+        time: b.time, mint: b.token, symbol: info.get(b.token)?.symbol ?? null, image: info.get(b.token)?.image ?? null, wallet: b.copied_wallet, paper: /paper/.test(b.action),
+        sol, open, actual, withThem, held: tokens != null && price != null ? tokens * price - sol : null, theirStatus, estimated: !b.copy,
+      };
+    }).reverse();
+    const sum = (f) => rows.reduce((s, r) => s + (r[f] ?? 0), 0);
+    return { rows, totals: { actual: sum('actual'), withThem: sum('withThem'), held: sum('held'), spent: sum('sol') }, at: Date.now() };
+  }
+
   // ---- jobs: scans take a while, so they run in the background and the page asks how far along they are ----
   const queue = [];
   let running = false;
@@ -541,6 +611,8 @@ export function createFinder({ cfg, connection, bot }) {
     wallet: (a, refresh) => { const x = check(a); if (refresh) jobs.delete(`w:${x}`); return view(start(`w:${x}`, (s) => buildProfile(x, s))); },
     linked: (a) => { const x = check(a); return view(start(`l:${x}`, (s) => buildLinked(x, s))); },
     coin: (a) => { const x = check(a); return view(start(`c:${x}`, (s) => buildCoin(x, s))); },
+    coinInfo,
+    hypothetical: (trades, refresh) => { if (refresh && jobs.get('h')?.state === 'done') jobs.delete('h'); return view(start('h', (s) => buildHypo(trades, s))); },
     replay: (a, days) => { const x = check(a); const d = [7, 30].includes(Number(days)) ? Number(days) : 7; return view(start(`r:${x}:${d}`, (s) => buildReplay(x, d, s))); },
   };
 }

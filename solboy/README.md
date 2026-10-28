@@ -126,6 +126,22 @@ same funder, same-block buys; exchanges ignored) and **What if I'd copied it?** 
 your settings. **Copy this wallet** adds it to your copy list. Scans use your Helius key in the background, so
 they never slow down copy trading; a busy wallet's first scan can take a minute, after that it's quick.
 
+## Hypothetical PnL
+
+**🧮 Hypothetical PnL** at the top of the dashboard lists every copy with three numbers: what you actually made,
+what you'd have made selling exactly when the copied wallet sold, and what you'd have if you still held it
+(at today's price). "What if every copy was __ SOL" rescales everything. Copies made before 1.10.0 are
+estimated from the wallet's own buy price (marked ≈).
+
+## Social Lobby
+
+**💬 Social Lobby** at the top is a chat for you and your friends: profiles (picture, banner, bio, name color),
+a group Lounge, private messages, reactions, a **📣 Calls board** that tracks how coins did since someone
+called them, wallet and coin cards shared from the Finder, and **📈 Flex PnL** for your results. You're the
+host 👑 and can remove members or delete messages. Friends join through your share link (🔗 Share Finder)
+with a username and password; everything is stored in `data/club.json` on your computer, so the Lobby is
+open while your SolBoy runs.
+
 ## Copy speed
 
 For Pump.fun coins, SolBoy reads the watched wallet's trade straight from the notification at the earliest moment the network reports it ("processed"), checks the coin and prepares the order at the same time, and buys straight on the bonding curve. The dashboard shows ⚡ how long each copy took, from their trade to your order going out. Trades on other exchanges are downloaded first, which adds about half a second. How fast the order then lands is up to the network: Axiom and similar terminals pay for priority landing services; SolBoy uses your normal Helius connection and priority fee.

@@ -18,6 +18,9 @@ casual messages; explain results in plain English, no jargon.
 - `src/share.js` Share Finder link: a Cloudflare quick tunnel (cloudflared downloaded into `tools/`, ssh to
   localhost.run as backup). `server.js` serves only `/g/<token>` (the guest Finder page, `src/guest.html`, assembled
   by `npm run embed` from the dashboard's Finder code) to anything arriving through a tunnel.
+- `src/club.js` Social Lobby (profiles, Lounge + DMs, reactions, calls board, host moderation) in `data/club.json`;
+  owner uses `/api/club/*`, friends `/g/<token>/api/club/*` with an `x-club-session` header. Its UI is in the
+  dashboard's Finder region, so the guest page gets it too. Hypothetical PnL: `finder.hypothetical()` + `data/copies.jsonl`.
 - `src/assistant.js` Ask SolBoy (tools only *propose* changes; the owner clicks Do it).
 - `src/settings.js` settings that can change while running (Quick settings, assistant, terminal `tp`/`sl`).
 - `src/server.js` dashboard HTTP server and API. `src/dashboard.html` the whole dashboard (one file),
