@@ -1,7 +1,8 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
-import DASHBOARD_HTML from './dashboard-html.js';
+import DASHBOARD_HTML, { GUEST_HTML } from './dashboard-html.js';
+import { createShare } from './share.js';
 import { log, onLog, readTrades } from './log.js';
 import { summarize, scoreboard } from './stats.js';
 import { tokenNames, positionWorth } from './tokens.js';
@@ -165,8 +166,31 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
     res.end(type === 'application/json' ? JSON.stringify(data) : data);
   };
 
+  let share = null; // the Finder share link, made once the port is known
+
+  // A friend's browser, through the share link: only the guest Finder page and its read-only scans.
+  async function guest(req, res, url) {
+    const m = url.pathname.match(/^\/g\/([\w-]{8,})(\/api\/finder\/(\w+))?$/);
+    const t = share?.guestToken();
+    if (!m || !t || m[1].length !== t.length || !crypto.timingSafeEqual(Buffer.from(m[1]), Buffer.from(t))) return send(res, 404, 'This link is off. Ask your friend for a new one.', 'text/plain; charset=utf-8');
+    if (!m[2]) return send(res, 200, GUEST_HTML, 'text/html; charset=utf-8');
+    if (req.method !== 'GET' || !finder) return send(res, 404, { error: 'not found' });
+    const a = url.searchParams.get('a');
+    try {
+      if (m[3] === 'kind') return send(res, 200, await finder.kind(a));
+      if (m[3] === 'wallet') return send(res, 200, finder.wallet(a, false));
+      if (m[3] === 'linked') return send(res, 200, finder.linked(a));
+      if (m[3] === 'coin') return send(res, 200, finder.coin(a));
+      if (m[3] === 'replay') return send(res, 200, finder.replay(a, url.searchParams.get('days')));
+    } catch {
+      return send(res, 400, { error: "That isn't a valid Solana address." });
+    }
+    return send(res, 404, { error: 'not found' });
+  }
+
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
+    if (!serverMode && url.pathname.startsWith('/g/')) return guest(req, res, url);
     if (serverMode) {
       // Online: everything sits behind the password login.
       if (url.pathname === '/login') {
@@ -193,7 +217,8 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
     } else {
       // On your own computer: only pages opened on this computer may talk to SolBoy.
       const host = (req.headers.host ?? '').replace(/:\d+$/, '');
-      if (host !== 'localhost' && host !== '127.0.0.1') return send(res, 403, { error: 'forbidden' });
+      const viaTunnel = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.headers['x-forwarded-host'];
+      if ((host !== 'localhost' && host !== '127.0.0.1') || viaTunnel) return send(res, 403, { error: 'forbidden' });
     }
     if (url.pathname === '/') return send(res, 200, page, 'text/html; charset=utf-8');
     if (!url.pathname.startsWith('/api/')) return send(res, 404, { error: 'not found' });
@@ -238,6 +263,12 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         } catch {
           return send(res, 400, { error: "That isn't a valid Solana address." });
         }
+      }
+
+      if (url.pathname.startsWith('/api/share/') && !serverMode) {
+        if (req.method === 'POST' && url.pathname === '/api/share/start') return send(res, 200, await share.start());
+        if (req.method === 'POST' && url.pathname === '/api/share/stop') return send(res, 200, share.stop());
+        return send(res, 200, share.status());
       }
 
       if (req.method === 'POST' && url.pathname === '/api/sell') {
@@ -353,6 +384,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
     }
   }
 
+  share = createShare({ port });
   const url = `http://localhost:${port}`;
   log(`Dashboard ready at ${url}`);
   if (cfg.dashboard.openBrowser && !serverMode) openInBrowser(url);

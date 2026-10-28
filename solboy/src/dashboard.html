@@ -383,6 +383,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
     <button class="btn primary" id="addWalletBtn">+ Add wallet <kbd>A</kbd></button>
     <span class="speed" id="copySpeed" hidden></span>
     <button class="btn" id="pauseBtn" title="Stop copying new buys. Sells keep following.">Pause copying <kbd>P</kbd></button>
+    <button class="btn" id="shareBtn" title="Send a friend a link to the Wallet Finder">🔗 Share Finder</button>
     <button class="btn" id="sfxBtn">Sound off <kbd>S</kbd></button>
     <button class="btn" id="logoutBtn" hidden>Log out</button>
   </header>
@@ -738,6 +739,7 @@ function openAddWallet() {
   };
 }
 $('addWalletBtn').onclick = openAddWallet;
+function copyWallet(address) { openAddWallet(); $('wAddr').value = address; $('wName').focus(); }
 
 /* ---------- loadout: quick settings (saved instantly, no restart) + everything else ---------- */
 const QUICK_FIELDS = [
@@ -1126,7 +1128,29 @@ function connect() {
   es.onerror = () => online(false);
 }
 
+/* ---------- share link: the Wallet Finder for a friend, as a web address ---------- */
+async function openShare() {
+  const show = (st, busy) => {
+    $('modalBody').innerHTML = `<h3>Share the Wallet Finder</h3>
+      <p>Your friend opens a link in any browser (Windows, Mac or phone) and gets the <strong>Wallet Finder only</strong>. They can't see or touch your trades, wallet, keys or settings. Their scans use your Helius key.</p>
+      <p>The link works while SolBoy is running on this computer. Close SolBoy or turn the computer off and it stops. A new link is made each time you share.</p>
+      ${st.state === 'on' && st.url ? `<div class="fbar" style="margin:14px 0"><input id="shareUrl" readonly value="${esc(st.url)}" style="flex:1;min-width:0;font-family:var(--mono);font-size:13px;background:var(--panel-2);color:var(--ink);border:2px solid var(--accent);border-radius:12px;padding:10px"><button class="btn primary" id="shareCopy">Copy link</button></div>
+        <button class="btn danger" id="shareStop">Stop sharing</button>`
+      : busy ? '<div class="fload"><span class="spin"></span><span>Making your link… the first time it downloads a small free tool from Cloudflare, so give it up to a minute.</span></div>'
+      : `${st.error ? `<div class="err">${esc(st.error)}</div>` : ''}<button class="btn primary" id="shareStart">Make a link</button>`}`;
+    $('shareStart')?.addEventListener('click', go);
+    $('shareCopy')?.addEventListener('click', async () => { $('shareUrl').select(); try { await navigator.clipboard.writeText(st.url); } catch { document.execCommand('copy'); } toast('info', 'Link copied', 'Send it to your friend.'); });
+    $('shareStop')?.addEventListener('click', async () => { show(await api('/api/share/stop', {})); toast('info', 'Sharing stopped', 'The old link no longer works.'); });
+  };
+  async function go() { show({}, true); try { show(await api('/api/share/start', {})); } catch (e) { show({ error: e.message }); } }
+  $('modal').classList.add('on');
+  try { const st = await api('/api/share/status'); show(st, st.state === 'starting'); if (st.state === 'starting') go(); } catch (e) { show({ error: e.message }); }
+}
+$('shareBtn').onclick = openShare;
+if (SERVER_MODE) $('shareBtn').hidden = true;
+
 /* ---------- wallet finder ---------- */
+// (everything from here to the keyboard section is also the friend's Finder page: see scripts/embed-dashboard.js)
 const F = { view: 0, profile: null, cal: {}, recent: JSON.parse(store.get('finderRecent', '[]') || '[]') };
 const shortA = (a) => `${String(a).slice(0, 4)}…${String(a).slice(-4)}`;
 const sol2 = (n, d = 2) => (n == null || !Number.isFinite(n) ? '-' : `${n > 0 ? '+' : ''}${n.toFixed(d)}`);
@@ -1328,7 +1352,7 @@ $('finderView').addEventListener('click', (e) => {
   const prof = e.target.closest('[data-fprofile]');
   if (prof) { $('finderInput').value = prof.dataset.fprofile; rememberFinder(prof.dataset.fprofile); openProfile(prof.dataset.fprofile); $('tab-finder').scrollIntoView({ behavior: 'smooth' }); return; }
   const cp = e.target.closest('[data-fcopy]');
-  if (cp) { openAddWallet(); $('wAddr').value = cp.dataset.fcopy; $('wName').focus(); return; }
+  if (cp) { copyWallet(cp.dataset.fcopy); return; }
   const rf = e.target.closest('[data-frefresh]');
   if (rf) { api(`/api/finder/wallet?a=${encodeURIComponent(rf.dataset.frefresh)}&refresh=1`).then(() => openProfile(rf.dataset.frefresh)).catch((err) => toast('loss', 'Error', err.message)); return; }
   const rp = e.target.closest('[data-freplay]');
@@ -1341,6 +1365,7 @@ $('finderView').addEventListener('click', (e) => {
   }
 });
 renderRecent();
+
 
 /* ---------- keyboard ---------- */
 const TABS = { 1: 'history', 2: 'board', 3: 'loadout', 4: 'account', 5: 'finder' };

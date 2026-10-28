@@ -15,6 +15,9 @@ casual messages; explain results in plain English, no jargon.
   `src/detect.js` turns a transaction (or a Pump.fun trade event in its logs) into buys and sells; `bot.js` reads Pump.fun bonding curves from the chain to price coins Jupiter can't route yet. `src/jupiter.js` swaps. `src/rpc.js` rate limiter.
 - `src/finder.js` Wallet Finder (Finder tab): a coin's early buyers, a wallet's profile + PnL calendar, linked wallets,
   and a copy replay. Reads the chain on `rpc.js`'s background lane so copy trading always goes first; saves scans in `data/finder`.
+- `src/share.js` Share Finder link: a Cloudflare quick tunnel (cloudflared downloaded into `tools/`, ssh to
+  localhost.run as backup). `server.js` serves only `/g/<token>` (the guest Finder page, `src/guest.html`, assembled
+  by `npm run embed` from the dashboard's Finder code) to anything arriving through a tunnel.
 - `src/assistant.js` Ask SolBoy (tools only *propose* changes; the owner clicks Do it).
 - `src/settings.js` settings that can change while running (Quick settings, assistant, terminal `tp`/`sl`).
 - `src/server.js` dashboard HTTP server and API. `src/dashboard.html` the whole dashboard (one file),

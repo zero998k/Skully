@@ -98,6 +98,8 @@ check('finder', 'linked wallet found with high confidence and reasons', fl.finde
 check('finder', 'what-if-I-copied replay', typeof fl.finderReplay === 'string', fl.finderReplay);
 check('finder', 'copy this wallet', fl.finderCopyPrefilled === true && fl.finderCopied === true, fl.finderCopied);
 check('finder', 'bad address explained', /valid/.test(fl.finderBadAddress ?? ''), fl.finderBadAddress);
+check('share', 'Share Finder makes a link; the friend\'s page is the Finder only and works', /\/g\/[\w-]+$/.test(fl.shareUrl ?? '') && fl.guestOnlyFinder === true && fl.guestCoin === true && fl.guestProfile === true, fl.shareUrl);
+check('share', 'nothing else is reachable through the link, and stopping turns it off', JSON.stringify(fl.shareBlocks) === JSON.stringify({ ownerPageViaTunnel: 403, ownerPageOtherHost: 403, ownerApiViaTunnel: 403, wrongToken: 404, otherGuestPath: 404, guestApi: 200 }) && fl.shareStopped === 404, JSON.stringify(fl.shareBlocks) + ' stopped ' + fl.shareStopped);
 check('finder', 'fits a phone', fl.finderPhoneOverflow === false, fl.finderPhoneOverflow);
 
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');

@@ -1,3 +1,6 @@
+**New in 1.9.2**
+- **Share the Wallet Finder with a link:** click **🔗 Share Finder**, then **Make a link**, and send it to a friend. They open it in any browser, Windows included, with nothing to download, and get the Wallet Finder only (none of your trades, wallet, keys or settings). It works while SolBoy is running on your computer; **Stop sharing** or closing SolBoy turns it off.
+
 **New in 1.9.1**
 - **Coin scans in under 15 seconds:** the Finder reads a coin's early trades in parallel and checks every buyer's holdings in one go. On a very busy coin it stops going back after a few seconds and shows the earliest trades it reached (it tells you when that happens). If your Helius plan has the "oldest first" lookup, SolBoy uses it and jumps straight to the launch. The time each scan took shows next to the coin.
 

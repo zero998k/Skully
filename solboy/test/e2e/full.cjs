@@ -227,6 +227,25 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await p.evaluate(() => api('/api/wallets/remove', { key: 'finderpick' }));
   await p.fill('#finderInput', 'not-an-address'); await p.click('#finderForm button[type=submit]'); await sleep(1500);
   R.finderBadAddress = await p.locator('#finderView').innerText();
+  // ---- Share the Finder with a friend: a link to a Finder-only page; nothing else is reachable through it ----
+  await p.click('#shareBtn'); await sleep(300); await p.click('#shareStart');
+  R.shareUrl = await until(async () => (await p.locator('#shareUrl').count()) && p.inputValue('#shareUrl'), 10000);
+  const gp = await b.newPage({ viewport: { width: 1280, height: 900 } });
+  gp.on('pageerror', (e) => errors.push(`guest: ${e}`)); gp.on('dialog', (d) => d.accept());
+  await gp.goto(R.shareUrl); await sleep(800);
+  R.guestOnlyFinder = (await gp.locator('#finderForm').count()) === 1 && (await gp.locator('#pauseBtn, #addWalletBtn, #tabs, #balChip, #askFab').count()) === 0;
+  await gp.fill('#finderInput', FA.COIN_A); await gp.click('#finderForm button[type=submit]');
+  R.guestCoin = await until(async () => (await gp.locator('#finderView').innerText()).includes('Early buyers'), 30000);
+  await gp.locator(`[data-fprofile="${FA.SMART}"]`).first().click();
+  R.guestProfile = await until(async () => gp.locator('#finderView .cal').count().then((n) => n > 0), 30000);
+  await gp.screenshot({ path: `${E}/9-guest-finder.png`, fullPage: true });
+  const tok = new URL(R.shareUrl).pathname.split('/')[2];
+  const st = (path, headers = {}) => new Promise((ok) => require('http').get({ host: '127.0.0.1', port: 7777, path, headers }, (r) => { r.resume(); ok(r.statusCode); }).on('error', () => ok(0)));
+  R.shareBlocks = { ownerPageViaTunnel: await st('/', { 'cf-connecting-ip': '1.2.3.4' }), ownerPageOtherHost: await st('/', { host: 'abc.trycloudflare.com' }), ownerApiViaTunnel: await st('/api/state?t=x', { 'x-forwarded-for': '1.2.3.4' }),
+    wrongToken: await st('/g/AAAAAAAAAAAAAAAA'), otherGuestPath: await st(`/g/${tok}/api/state`), guestApi: await st(`/g/${tok}/api/finder/kind?a=${FA.SMART}`, { 'cf-connecting-ip': '1.2.3.4' }) };
+  await p.click('#shareStop'); await sleep(500);
+  R.shareStopped = await st(`/g/${tok}`);
+  await gp.close(); await key('Escape');
   await p.setViewportSize({ width: 390, height: 900 }); await p.click(`#finderRecent [data-frecent="${FA.SMART}"]`);
   await until(async () => p.locator('#finderView .cal').count().then((n) => n > 0), 15000);
   R.finderPhoneOverflow = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth);

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="__MASCOT__">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SolBoy Wallet Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Mono:wght@500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>/*DASHBOARD_STYLE*/
+.guest-note { color: var(--ink-3); font-size: 13px; }
+</style>
+</head>
+<body>
+<!-- The friend's page: the Wallet Finder only (no trading, wallet or settings). Built by scripts/embed-dashboard.js
+     from src/dashboard.html's styles and Finder code. -->
+<div class="bg"></div>
+<div class="wrap">
+  <header class="hud">
+    <div class="brand"><img class="mascot" src="__MASCOT__" alt="SolBoy mascot"><div class="logo" data-text="SOLBOY">SOL<b>BOY</b></div></div>
+    <span class="chip" style="background:var(--grape);color:#0a0a0a">Wallet Finder</span>
+    <span class="spacer"></span>
+    <span class="guest-note">Shared by a friend · works while their SolBoy is running</span>
+  </header>
+  <!--FINDER_SECTION-->
+</div>
+<div class="modal" id="modal"><div class="box"><div id="modalBody"></div></div></div>
+<div class="toasts" id="toasts"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+const cls = (n) => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
+const ago = (t) => { const m = Math.round((Date.now() - new Date(t)) / 60000); return m < 60 ? `${m}m ago` : m < 2880 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
+const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const BASE = location.pathname.replace(/\/+$/, '');
+async function api(path) {
+  const res = await fetch(BASE + path);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(res.status === 404 ? 'This link is off. Ask your friend for a new one.' : data.error || `error ${res.status}`);
+  return data;
+}
+function toast(kind, head, text) {
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`; el.innerHTML = `<div class="h">${esc(head)}</div>${esc(text)}`;
+  $('toasts').prepend(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 250); }, 4000);
+}
+// No copy trading here: "Copy" puts the wallet address on the clipboard to paste into your own app.
+async function copyWallet(address) {
+  try { await navigator.clipboard.writeText(address); toast('info', 'Address copied', 'Paste it into your copy-trading app.'); }
+  catch { prompt('Copy this wallet address:', address); }
+}
+/*FINDER_JS*/
+</script>
+</body>
+</html>

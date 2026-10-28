@@ -191,6 +191,16 @@ Online, SolBoy asks for your password to log in, and again for withdrawals, show
 
 ## Sharing SolBoy with friends
 
+**Just the Wallet Finder, as a link (nothing to download):** click **🔗 Share Finder** at the top of the
+dashboard, then **Make a link** and **Copy link**, and send it. Your friend opens it in any browser (Windows,
+Mac or phone) and gets the Wallet Finder only: no trading, wallet, keys or settings. Their scans use your
+Helius key. The link works while SolBoy runs on your computer and stops when you close SolBoy, turn the
+computer off, or click **Stop sharing**; each share makes a new link. It uses a free Cloudflare quick tunnel
+(a small tool downloaded once into `tools/`), or localhost.run if Cloudflare can't be reached.
+
+**Their own SolBoy, for copy trading:**
+
+
 SolBoy is free to share. Each friend runs their own copy, with their own free keys and their own SolBoy wallet. Nobody ever holds anyone else's money.
 
 1. Send them the download for their computer: **SolBoy-Windows.zip** for Windows, or the Mac zip. The files are 40–55 MB, too big for a free Discord upload, so share them through Google Drive, Dropbox, WeTransfer or a GitHub release.
