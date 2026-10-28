@@ -1,11 +1,11 @@
 // Jupiter finds the best route for a swap on any Solana exchange.
-// Without a key this uses Jupiter's free public endpoint; with JUPITER_API_KEY it uses api.jup.ag.
+// The current api.jup.ag endpoint supports keyless access; a free JUPITER_API_KEY raises its rate limit.
 
 function settings() {
   const key = process.env.JUPITER_API_KEY?.trim();
   const base =
     process.env.JUPITER_API_URL?.trim() ||
-    (key ? 'https://api.jup.ag/swap/v1' : 'https://lite-api.jup.ag/swap/v1');
+    'https://api.jup.ag/swap/v1';
   const headers = { 'Content-Type': 'application/json', ...(key ? { 'x-api-key': key } : {}) };
   return { base, headers };
 }

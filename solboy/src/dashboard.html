@@ -641,14 +641,24 @@ function countTo(el, value, decimals = 4) {
 }
 
 /* ---------- state ---------- */
-let S = null;
-async function refresh() {
-  try { S = await api('/api/state'); online(true); render(); }
-  catch (e) {
-    online(false);
-    if (e.status === 403) location.reload(); // SolBoy restarted (after an update): load the new page
-  }
+let S = null, refreshTask = null, latestPortfolio = null;
+function refresh() {
+  if (refreshTask) return refreshTask;
+  refreshTask = (async () => {
+    try {
+      const state = await api('/api/state');
+      // A slow price/balance request must never overwrite a newer trade received over the stream.
+      S = latestPortfolio && (state.portfolioRevision ?? 0) < latestPortfolio.portfolioRevision
+        ? { ...state, ...latestPortfolio } : state;
+      online(true); render();
+    } catch (e) {
+      online(false);
+      if (e.status === 403) location.reload();
+    } finally { refreshTask = null; }
+  })();
+  return refreshTask;
 }
+
 function online(on) { $('dot').className = on ? 'dot' : 'dot off'; $('conn').textContent = on ? 'ONLINE' : 'BOT OFFLINE'; }
 
 function render() {
@@ -659,7 +669,17 @@ function render() {
   pb.className = S.paused ? 'btn paused' : 'btn';
   pb.innerHTML = S.paused ? 'Paused · resume <kbd>P</kbd>' : 'Pause copying <kbd>P</kbd>';
   const sp = $('copySpeed');
-  if (sp) { const c = S.copySpeed; sp.hidden = !c; if (c) { sp.textContent = `⚡ ${c.last.toFixed(2)}s`; sp.title = `Time from a watched wallet's trade to your copy being sent. Last ${c.last.toFixed(2)}s, average ${c.avg.toFixed(2)}s over ${c.n} copies.`; sp.className = `speed ${c.last <= 2 ? 'fast' : 'slow'}`; } }
+  if (sp) {
+    const c = S.copySpeed; sp.hidden = !c;
+    if (c) {
+      const elapsed = c.confirmed ?? c.last, label = c.paper ? 'paper' : c.confirmed == null ? 'sent' : 'confirmed';
+      sp.textContent = `⚡ ${c.side === 'sell' ? 'Sell' : 'Buy'} ${elapsed.toFixed(2)}s ${label}`;
+      sp.title = `Measured from SolBoy receiving the trigger. Sent: ${c.last.toFixed(2)}s.`
+        + (c.confirmed == null ? ' Paper simulation: no on-chain execution.' : ` Confirmation observed: ${c.confirmed.toFixed(2)}s. Position recorded: ${c.complete.toFixed(2)}s.`)
+        + ' This excludes the time before the trigger reached SolBoy.';
+      sp.className = `speed ${elapsed < 1 ? 'fast' : 'slow'}`;
+    }
+  }
 
   countTo($('score'), s.totalPnl);
   $('today').innerHTML = `today <span class="${cls(S.todayPnl)}">${fmt(S.todayPnl)} SOL</span> <button class="mini inline" data-reset-pnl title="Reset your profit/loss to 0">↺ reset</button>`;
@@ -1233,6 +1253,12 @@ function connect() {
   const es = new EventSource(`/api/events?t=${TOKEN}`);
   es.onopen = () => { online(true); refresh(); };
   es.onmessage = (m) => { const ev = JSON.parse(m.data); addFeed(ev); if (!ev.backlog) react(ev); };
+  es.addEventListener('portfolio', (m) => {
+    const state = JSON.parse(m.data);
+    if (latestPortfolio && state.portfolioRevision <= latestPortfolio.portfolioRevision) return;
+    latestPortfolio = state;
+    if (S) { S = { ...S, ...state }; render(); }
+  });
   es.onerror = () => online(false);
 }
 

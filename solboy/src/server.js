@@ -53,12 +53,19 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
   const auth = serverMode ? createAuth(() => process.env.DASHBOARD_PASSWORD_HASH, file('data/sessions.json')) : null;
   const backlog = [];
   const clients = new Set();
+  let lastState = null;
+  let portfolioRevision = 0;
 
   onLog((e) => {
     const ev = { ...e, kind: classify(e.text) };
     backlog.push(ev);
     if (backlog.length > 80) backlog.shift();
     for (const res of clients) res.write(`data: ${JSON.stringify(ev)}\n\n`);
+    if (ev.kind === 'buy' || ev.kind === 'sell') {
+      portfolioRevision++;
+      const data = JSON.stringify(portfolioSnapshot());
+      for (const res of clients) res.write(`event: portfolio\ndata: ${data}\n\n`);
+    }
   });
   setInterval(() => {
     for (const res of clients) res.write(': ping\n\n');
@@ -80,6 +87,23 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
       .sort((a, b) => b.pnl - a.pnl);
   }
 
+  // Completed trades are already recorded locally. Publish that state immediately; prices,
+  // token names and account balances can arrive on the normal refresh without delaying it.
+  function portfolioSnapshot() {
+    const trades = readTrades(book.tradeLogFile), counted = positions.counted(trades);
+    const names = new Map([...(lastState?.inventory ?? []).map(p => [p.mint, p.name]), ...(lastState?.trades ?? []).map(t => [t.token, t.name])]);
+    return {
+      portfolioRevision, mode: book.mode, paused: bot.isBuyingPaused(), copySpeed: bot.copySpeed(),
+      summary: summarize(counted, positions.dayStart()), todayPnl: positions.todayPnl(),
+      dayResetAt: positions.resetToday(), dailyLossLimit: cfg.dailyLossLimitSol, maxSlots: cfg.maxOpenPositions,
+      inventory: positions.entries().map(([mint, pos]) => ({ mint, name: names.get(mint) ?? mint,
+        from: pos.sourceLabel, paid: pos.solSpent, openedAt: pos.openedAt, tokens: pos.tokens,
+        worth: lastState?.inventory.find(p => p.mint === mint && p.tokens === pos.tokens && p.paid === pos.solSpent)?.worth ?? null })),
+      trades: trades.slice(-50).reverse().map(t => ({ ...t, name: names.get(t.token) ?? t.token })),
+      wallets: walletRows(counted),
+    };
+  }
+
   async function worthFallback(mint, pos) {
     try {
       const v = await bot.valueOf(mint, pos.tokens);
@@ -98,6 +122,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
   }
 
   async function state() {
+    const revision = portfolioRevision;
     const trades = readTrades(book.tradeLogFile);
     const open = positions.entries();
     const recent = trades.slice(-50).reverse();
@@ -108,11 +133,13 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         name: name(mint),
         from: pos.sourceLabel,
         paid: pos.solSpent,
+        tokens: pos.tokens,
         openedAt: pos.openedAt,
         worth: (await positionWorth(mint, pos, cfg.sellSlippageBps)) ?? (await worthFallback(mint, pos)),
       })),
     );
-    return {
+    const next = {
+      portfolioRevision: revision,
       mode: book.mode,
       account: await accountState(),
       paused: bot.isBuyingPaused(),
@@ -132,6 +159,8 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
       quick: Object.fromEntries(QUICK.map((k) => [k, settingValue(cfg, k) ?? null])),
       tradeLogFile: book.tradeLogFile,
     };
+    lastState = next;
+    return next;
   }
 
   const assistant = createAssistant({ cfg, bot, book, getState: state });

@@ -20,7 +20,8 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
   const locks = new Map();
   let ignored = 0;
   let buyingPaused = false;
-  const speeds = []; // seconds from seeing a watched wallet's trade to sending the copy, for the dashboard
+  const speeds = []; // Sent and confirmation-observed times, measured from this bot receiving the trigger.
+  const noRoutes = new Map();
   let buysInFlight = 0; // copy buys still being sent, so several at once can't go past maxOpenPositions
   const tag = () => (cfg.dryRun ? 'PAPER ' : '');
 
@@ -139,6 +140,20 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
     }
   }
 
+  async function quoteFor(args) {
+    try {
+      const quote = await getQuote(args);
+      noRoutes.delete(args.inputMint === WSOL ? args.outputMint : args.inputMint);
+      return quote;
+    } catch (e) {
+      if (/no route|could not find any route/i.test(e.message)) {
+        noRoutes.set(args.inputMint === WSOL ? args.outputMint : args.inputMint, Date.now());
+        if (noRoutes.size > 500) noRoutes.delete(noRoutes.keys().next().value);
+      }
+      throw e;
+    }
+  }
+
   async function executeSwap(quote, prioLamports = null) {
     const { swapTransaction, lastValidBlockHeight } = await buildSwap(
       quote,
@@ -154,7 +169,7 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
       'confirmed',
     );
     if (value.err) throw new Error(`transaction ${signature} failed on-chain (often slippage): ${JSON.stringify(value.err)}`);
-    return { signature, sentAt };
+    return { signature, sentAt, confirmedAt: Date.now() };
   }
 
   /**
@@ -164,25 +179,31 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
    */
   async function swap(side, mint, amountRaw, slippageBps, prefetched = null, prioLamports = null) {
     const [inputMint, outputMint] = side === 'buy' ? [WSOL, mint] : [mint, WSOL];
+    // Only bypass a quote when it just explicitly said there is no route AND a fresh Pump event
+    // tells us the curve is active. Routed coins keep their existing path and settings.
+    const activeCurve = curves.get(mint);
+    if (side === 'sell' && Date.now() - (noRoutes.get(mint) ?? 0) < 2000 && activeCurve && Date.now() - activeCurve.at < 2000) {
+      return curveSwap(side, mint, amountRaw, slippageBps, activeCurve.curve, prioLamports);
+    }
     let quote;
     try {
-      quote = prefetched ? await prefetched : await getQuote({ inputMint, outputMint, amount: amountRaw.toString(), slippageBps });
+      quote = prefetched ? await prefetched : await quoteFor({ inputMint, outputMint, amount: amountRaw.toString(), slippageBps });
       if (quote instanceof Error) throw quote;
     } catch (e) {
       const c = await curveOf(mint);
       if (!c) throw e;
-      if (cfg.dryRun) return { outRaw: curveOut(side, c, amountRaw), sig: null, via: 'curve', sentAt: Date.now() };
+      if (cfg.dryRun) return { outRaw: curveOut(side, c, amountRaw), sig: null, via: 'curve', sentAt: Date.now(), confirmedAt: null };
       return pumpPortalSwap(side, mint, amountRaw, slippageBps, prioLamports);
     }
-    if (cfg.dryRun) return { outRaw: BigInt(quote.outAmount), sig: null, via: 'jupiter', sentAt: Date.now() };
-    const { signature, sentAt } = await executeSwap(quote, prioLamports);
-    return { outRaw: BigInt(quote.outAmount), sig: signature, via: 'jupiter', sentAt };
+    if (cfg.dryRun) return { outRaw: BigInt(quote.outAmount), sig: null, via: 'jupiter', sentAt: Date.now(), confirmedAt: null };
+    const { signature, sentAt, confirmedAt } = await executeSwap(quote, prioLamports);
+    return { outRaw: BigInt(quote.outAmount), sig: signature, via: 'jupiter', sentAt, confirmedAt };
   }
 
   /** Trade straight on a Pump.fun curve: priced from the curve in paper mode, built by PumpPortal with real money. */
-  async function curveSwap(side, mint, amountRaw, slippageBps, curve) {
-    if (cfg.dryRun) return { outRaw: curveOut(side, curve, amountRaw), sig: null, via: 'curve', sentAt: Date.now() };
-    return pumpPortalSwap(side, mint, amountRaw, slippageBps);
+  async function curveSwap(side, mint, amountRaw, slippageBps, curve, prioLamports = null) {
+    if (cfg.dryRun) return { outRaw: curveOut(side, curve, amountRaw), sig: null, via: 'curve', sentAt: Date.now(), confirmedAt: null };
+    return pumpPortalSwap(side, mint, amountRaw, slippageBps, prioLamports);
   }
 
   // A Pump.fun coin's bonding curve, read straight from the chain (or from the last trade seen in the logs), so
@@ -237,8 +258,11 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
     const before = (await beforeP) ?? 0n; // read while PumpPortal built the trade, so this costs no time
     const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true, maxRetries: 2 });
     const sentAt = Date.now();
-    const { lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed'); // only needed to wait for the result
-    const { value } = await connection.confirmTransaction({ signature: sig, blockhash: tx.message.recentBlockhash, lastValidBlockHeight }, 'confirmed');
+    // PumpPortal supplies a signed-able transaction, not its exact expiry height. Observe this
+    // signature at the SAME confirmed commitment without fetching an unrelated latest blockhash
+    // first. web3's signature strategy subscribes immediately and has a bounded timeout.
+    const { value } = await connection.confirmTransaction(sig, 'confirmed');
+    const confirmedAt = Date.now();
     if (value.err) throw new Error(`transaction ${sig} failed on-chain (often slippage): ${JSON.stringify(value.err)}`);
     // the RPC can take a moment to show the new balance after the trade confirms
     let after = before;
@@ -246,13 +270,13 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
       if (i) await sleep(500);
       after = side === 'buy' ? await tokenBalance(mint) : BigInt(await connection.getBalance(owner));
     }
-    return { outRaw: after > before ? after - before : 0n, sig, via: 'pumpportal', sentAt };
+    return { outRaw: after > before ? after - before : 0n, sig, via: 'pumpportal', sentAt, confirmedAt };
   }
 
   /** What selling `tokensRaw` would return right now, in lamports (null if no price). */
   async function valueOf(mint, tokensRaw) {
     try {
-      const q = await getQuote({ inputMint: mint, outputMint: WSOL, amount: String(tokensRaw), slippageBps: cfg.sellSlippageBps });
+      const q = await quoteFor({ inputMint: mint, outputMint: WSOL, amount: String(tokensRaw), slippageBps: cfg.sellSlippageBps });
       return BigInt(q.outAmount);
     } catch {
       const c = await curveOf(mint);
@@ -270,7 +294,7 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
       const lamports = Math.round((w.buyAmountSol ?? cfg.buyAmountSol) * LAMPORTS);
       // A coin still on its Pump.fun curve is bought straight on the curve (like the fast terminals do), without
       // waiting for a Jupiter quote; anything else gets its Jupiter quote fetched while the checks run.
-      const quote = t.curve ? null : getQuote({ inputMint: WSOL, outputMint: t.mint, amount: String(lamports), slippageBps: cfg.buySlippageBps }).catch((e) => e);
+      const quote = t.curve ? null : quoteFor({ inputMint: WSOL, outputMint: t.mint, amount: String(lamports), slippageBps: cfg.buySlippageBps }).catch((e) => e);
       const [unsafe, heldBefore] = await Promise.all([
         failsSafetyCheck(t.mint),
         t.heldBefore ?? (cfg.onlyFirstBuy ? heldBeforeBuy(w, t).catch(() => false) : false),
@@ -292,17 +316,20 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
     const before = (await walletBalance(w.address, t.mint)) - t.tokenAmount;
     return before * 10n > t.tokenAmount; // dust left from an old trade doesn't count
   }
-  function noteSpeed(t, sentAt) {
-    if (!t.seenAt) return '';
-    const sec = Math.max(0, (sentAt - t.seenAt) / 1000);
-    speeds.push(sec);
+  function noteSpeed(t, timing) {
+    if (!t?.seenAt) return '';
+    const sent = Math.max(0, (timing.sentAt - t.seenAt) / 1000);
+    const confirmed = timing.confirmedAt == null ? null : Math.max(sent, (timing.confirmedAt - t.seenAt) / 1000);
+    const complete = Math.max(sent, (Date.now() - t.seenAt) / 1000);
+    speeds.push({ sent, confirmed, complete, side: t.side, paper: cfg.dryRun });
     if (speeds.length > 20) speeds.shift();
-    return ` ⚡ copied in ${sec.toFixed(2)}s`;
+    return ` ⚡ sent in ${sent.toFixed(2)}s` + (confirmed == null ? ' (paper)' : `, confirmation observed in ${confirmed.toFixed(2)}s`);
   }
 
   async function sendCopyBuy(w, t, lamports, quote) {
     try {
-      const { outRaw, sig, sentAt } = t.curve ? await curveSwap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, t.curve) : await swap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, quote);
+      const timing = t.curve ? await curveSwap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, t.curve) : await swap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, quote);
+      const { outRaw, sig } = timing;
       const sol = lamports / LAMPORTS;
       positions.open(t.mint, {
         source: w.address,
@@ -313,9 +340,9 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
         tokens: outRaw.toString(),
         openedAt: new Date().toISOString(),
       });
-      log(c.green(`  ${tag()}BOUGHT ${sol} SOL of ${short(t.mint)}`) + noteSpeed(t, sentAt) + (sig ? `  tx: ${sig}` : ''));
       recordTrade(book.tradeLogFile, { action: `${tag()}buy`, mint: t.mint, wallet: w.label, sol, reason: `copied ${w.label}`, tx: sig });
       recordCopy({ mint: t.mint, wallet: w.label, source: w.address, sol, tokens: outRaw.toString() });
+      log(c.green(`  ${tag()}BOUGHT ${sol} SOL of ${short(t.mint)}`) + noteSpeed(t, timing) + (sig ? `  tx: ${sig}` : ''));
       notify(`${tag()}BUY ${sol} SOL of ${t.mint}\ncopied ${w.label}\nhttps://dexscreener.com/solana/${t.mint}`);
     } catch (e) {
       log(`  buy failed: ${e.message}`);
@@ -335,10 +362,10 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
     const out = t.fractionSold >= 0.9;
     if (cfg.sellOnlyOnFullExit) {
       if (!out) return log(`  not selling yet: ${w.label} sold ${Math.round(t.fractionSold * 100)}% and still holds most of it. SolBoy sells when they sell 90% or more`);
-      return sellPosition(t.mint, 1, `${w.label} sold out`);
+      return sellPosition(t.mint, 1, `${w.label} sold out`, null, false, null, t);
     }
     const fraction = cfg.sellMode === 'all' ? 1 : t.fractionSold;
-    await sellPosition(t.mint, fraction, `${w.label} sold ${Math.round(t.fractionSold * 100)}%`);
+    await sellPosition(t.mint, fraction, `${w.label} sold ${Math.round(t.fractionSold * 100)}%`, null, false, null, t);
   }
 
   async function tokenBalance(mint) {
@@ -346,7 +373,8 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
     return res.value.reduce((sum, a) => sum + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
   }
 
-  async function sellPosition(mint, fraction, reason, slippageBps = null, throwErrors = false, prioLamports = null) {
+  async function sellPosition(mint, fraction, reason, slippageBps = null, throwErrors = false, prioLamports = null, trigger = null) {
+    trigger ??= { seenAt: Date.now(), side: 'sell' };
     const pos = positions.get(mint);
     if (!pos) return;
     try {
@@ -360,7 +388,8 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
       const amount = full ? held : (held * BigInt(Math.round(fraction * 10_000))) / 10_000n;
       if (amount === 0n) return;
 
-      const { outRaw, sig } = await swap('sell', mint, amount, slippageBps ?? cfg.sellSlippageBps, null, prioLamports);
+      const timing = await swap('sell', mint, amount, slippageBps ?? cfg.sellSlippageBps, null, prioLamports);
+      const { outRaw, sig } = timing;
       const solOut = Number(outRaw) / LAMPORTS;
       const cost = pos.solSpent * (full ? 1 : Number(amount) / Number(held));
       const pnl = solOut - cost;
@@ -372,8 +401,8 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
       else positions.update(mint, { solSpent: pos.solSpent - cost, tokens: (held - amount).toString(), boughtTotal: pos.boughtTotal ?? pos.solSpent, soldTotal: (pos.soldTotal ?? 0) + solOut });
 
       const pnlText = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL`;
-      log(c.yellow(`  ${tag()}SOLD ${full ? 'all' : `${Math.round(fraction * 100)}%`} of ${short(mint)} for ${solOut.toFixed(4)} SOL`) + ` (${(pnl >= 0 ? c.green : c.red)(pnlText)}) - ${reason}${sig ? `  tx: ${sig}` : ''}`);
       recordTrade(book.tradeLogFile, { action: `${tag()}sell`, mint, wallet: pos.sourceLabel, sol: solOut.toFixed(6), pnl: pnl.toFixed(6), reason, tx: sig });
+      log(c.yellow(`  ${tag()}SOLD ${full ? 'all' : `${Math.round(fraction * 100)}%`} of ${short(mint)} for ${solOut.toFixed(4)} SOL`) + ` (${(pnl >= 0 ? c.green : c.red)(pnlText)}) - ${reason}` + noteSpeed(trigger, timing) + (sig ? `  tx: ${sig}` : ''));
       notify(`${tag()}SELL ${short(mint)} for ${solOut.toFixed(4)} SOL (${pnlText})\n${reason}`);
       return { ok: true, side: 'sell', sol: solOut, pnl, sig };
     } catch (e) {
@@ -533,7 +562,13 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
       log(value ? 'Copying PAUSED. Sells still follow the copied wallets.' : 'Copying RESUMED.');
     },
     isBuyingPaused: () => buyingPaused,
-    copySpeed: () => (speeds.length ? { last: speeds.at(-1), avg: speeds.reduce((a, b) => a + b, 0) / speeds.length, n: speeds.length } : null),
+    copySpeed: () => {
+      if (!speeds.length) return null;
+      const last = speeds.at(-1), confirmed = speeds.filter(s => s.confirmed != null);
+      return { last: last.sent, avg: speeds.reduce((a, b) => a + b.sent, 0) / speeds.length, n: speeds.length,
+        side: last.side, paper: last.paper, confirmed: last.confirmed, complete: last.complete,
+        confirmedAvg: confirmed.length ? confirmed.reduce((a, b) => a + b.confirmed, 0) / confirmed.length : null };
+    },
     setWalletPaused(key, paused) {
       const k = String(key ?? '').trim().toLowerCase();
       const w = cfg.wallets.find((x) => x.address.toLowerCase() === k || x.label.toLowerCase() === k);
