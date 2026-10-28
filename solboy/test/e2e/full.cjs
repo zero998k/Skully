@@ -159,7 +159,31 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.walletsListed = await p.locator('#board tr').count() - 1;
   await p.click('[data-remove="friendpick"]'); await sleep(800);
   R.walletsAfterRemove = await p.locator('#board tr').count() - 1;
-  await key('p'); await sleep(600); await emit('buy'); await sleep(2500);
+  // switch copying off for one wallet: its buys are skipped; then back on
+  const whale = await p.locator('[data-wtoggle]').first().getAttribute('data-wtoggle');
+  await p.click(`[data-wtoggle="${whale}"]`); await sleep(900);
+  R.walletSwitchedOff = (await p.locator(`[data-wtoggle="${whale}"]`).getAttribute('data-paused')) === '1';
+  await emit('buy'); await sleep(2500);
+  R.walletOffSkip = await p.locator('.feed li', { hasText: 'switched off' }).count();
+  await p.click(`[data-wtoggle="${whale}"]`); await sleep(900);
+  R.walletBackOn = (await p.locator(`[data-wtoggle="${whale}"]`).getAttribute('data-paused')) === '0';
+
+  // fast path: a Pump.fun trade read straight from the notification's logs, bought on the curve, timed
+  if ((await S()).inventory.length) { await p.evaluate(() => api('/api/sell-all', {})); await sleep(500); }
+  const fp = await F('/emit-pump?side=buy&sol=1.5');
+  R.fastBought = await until(async () => (await S()).inventory.some((x) => x.mint === fp.mint), 5000);
+  R.fastSpeed = (await S()).copySpeed;
+  await F(`/emit-pump?side=sell&mint=${fp.mint}&tokens=900000000000000000`);
+  R.fastSold = await until(async () => !(await S()).inventory.some((x) => x.mint === fp.mint), 6000);
+
+  // pause with coins open: choose "pause and sell everything"
+  await F('/set?mult=1'); await emit('buy'); await until(async () => (await S()).inventory.length >= 1, 6000);
+  await key('p'); await sleep(500);
+  R.pauseChoiceShown = await p.isVisible('#pauseSell');
+  await p.click('#pauseSell');
+  R.pauseSoldAll = await until(async () => { const st = await S(); return st.paused === true && st.inventory.length === 0; }, 10000);
+
+  await sleep(600); await emit('buy'); await sleep(2500);
   R.pausedSkip = await p.locator('.feed li', { hasText: 'copying is paused' }).count();
   await key('p');
   await p.setViewportSize({ width: 390, height: 900 }); await key('3'); await sleep(500);

@@ -683,10 +683,16 @@ export function createPulse({ cfg, connection }) {
   function board(limit = 40) {
     const f = filters.presets[filters.active] ?? blankCols();
     const cols = { new: [], stretch: [], migrated: [] };
+    const nameless = [];
     for (const t of tokens.values()) {
-      if (!t.name && !t.dex) continue;
+      if (!t.name && !t.dex) {
+        // a coin seen only through its migration (or late trades) has no name yet: DexScreener has it
+        if (t.migrated || (progressOf(t) ?? 0) >= (cfg.pulse?.stretchPct ?? 45)) nameless.push(t);
+        continue;
+      }
       cols[column(t)].push(t);
     }
+    if (nameless.length) enrich(nameless.slice(0, 30));
     cols.new.sort((a, b) => (b.createdAt ?? b.seenAt) - (a.createdAt ?? a.seenAt));
     cols.stretch.sort((a, b) => (progressOf(b) ?? 0) - (progressOf(a) ?? 0));
     cols.migrated.sort((a, b) => (b.migratedAt ?? 0) - (a.migratedAt ?? 0));
@@ -1040,6 +1046,49 @@ export function createPulse({ cfg, connection }) {
     stats.seed = n;
     stats.seedError = results.find((r) => r.status === 'rejected')?.reason?.message ?? null;
     if (n) log(`Pulse loaded ${n} coins from Pump.fun to fill the columns.`);
+    if (n < 40) await seedFromGecko().catch(() => {});
+  }
+  // GeckoTerminal lists Pump.fun curve pools and PumpSwap pools for free: a second way to fill the columns.
+  const PUMP_K = 30 * PUMP_START_VTOKENS; // constant product of a Pump.fun curve (SOL x tokens, virtual)
+  async function seedFromGecko() {
+    if (!solUsd) await refreshSolPrice();
+    if (!solUsd) return;
+    const lists = [
+      'networks/solana/new_pools?page=1&include=base_token,dex',
+      'networks/solana/dexes/pump-fun/pools?page=1&sort=h24_volume_usd_desc&include=base_token,dex',
+      'networks/solana/dexes/pumpswap/pools?page=1&sort=h24_volume_usd_desc&include=base_token,dex',
+    ];
+    const results = await Promise.allSettled(lists.map((q) => getJson(`${GECKO_API()}/${q}`, 8000)));
+    let n = 0;
+    for (const r of results) {
+      if (r.status !== 'fulfilled') continue;
+      const tokensById = new Map((r.value.included ?? []).filter((x) => x.type === 'token').map((x) => [x.id, x.attributes ?? {}]));
+      for (const pool of r.value.data ?? []) {
+        const a = pool.attributes ?? {};
+        const dexId = pool.relationships?.dex?.data?.id ?? '';
+        const baseId = pool.relationships?.base_token?.data?.id ?? '';
+        const mint = baseId.replace(/^solana_/, '');
+        const curve = dexId === 'pump-fun';
+        const migrated = /pumpswap|pump-swap/.test(dexId);
+        if (!mint || (!curve && !migrated)) continue;
+        const tk = tokensById.get(baseId) ?? {};
+        const mcSol = (num(a.market_cap_usd) ?? num(a.fdv_usd) ?? 0) / solUsd;
+        if (!(mcSol > 0)) continue;
+        const created = Date.parse(a.pool_created_at) || null;
+        const c = { mint, name: tk.name ?? String(a.name ?? '').split(' / ')[0], symbol: tk.symbol ?? String(a.name ?? '').split(' / ')[0], market_cap: mcSol, last_trade_timestamp: Date.now(), complete: migrated };
+        if (tk.image_url && !/missing/.test(tk.image_url)) c.image_uri = tk.image_url;
+        if (curve) {
+          const vTokens = Math.sqrt((PUMP_K * SUPPLY) / mcSol); // where on the curve this market cap sits
+          c.virtual_token_reserves = vTokens * 1e6;
+          c.virtual_sol_reserves = (PUMP_K / vTokens) * 1e9;
+          c.created_timestamp = created;
+        } else c.last_trade_timestamp = created ?? Date.now(); // used as the migration time
+        seedCoin(c);
+        n++;
+      }
+    }
+    stats.gecko = n;
+    if (n) log(`Pulse loaded ${n} coins from GeckoTerminal to fill the columns.`);
   }
   function saveCache() {
     const keep = [...tokens.values()].filter((t) => t.name && (t.mcSol != null || t.migrated)).sort((a, b) => (b.lastTradeAt ?? b.seenAt) - (a.lastTradeAt ?? a.seenAt)).slice(0, 400);

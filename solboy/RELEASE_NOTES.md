@@ -1,3 +1,10 @@
+**New in 1.5.0: faster copying, wallet switches, fuller Pulse**
+- **Copies Pump.fun trades much faster:** SolBoy now hears a wallet's trade at the earliest moment the network reports it, reads Pump.fun trades straight from the notification (no download), buys straight on the coin's curve, and runs its checks at the same time instead of one by one. The dashboard shows **⚡ how long each copy took**, from their trade to your order going out.
+- **Switch copying on or off per wallet:** Wallets tab → click **Copying / Off** next to any wallet. Switched-off wallets aren't copied, but their sells still follow for coins you already hold from them.
+- **Pause and sell everything:** pausing with coins open asks whether to just pause or **pause and sell everything**. Dead coins nobody will buy any more are cleared from your slots.
+- **Final Stretch and Migrated fill up:** coins that graduate now always get their name and show up, and if Pump.fun's lists don't answer, SolBoy fills the columns from GeckoTerminal's free lists.
+- **Slim story line like Axiom:** a coin's story is now one line under its header (✨ one-sentence story, the X post and website as small chips). Click **more** for the full X post and details.
+
 **New in 1.4.3**
 - **📡 Live data check:** in Pulse, click ⚙ (top right) → **Check now**. SolBoy tests every source it uses on real coins from your computer (live feed, Pump.fun, coin pictures, X posts, charts, prices, your Solana connection and the AI story) and shows a ✓ or ✗ for each.
 - **Tidier coin cards:** the X handle no longer shows twice, and the X post's picture on a coin page is a neat thumbnail.

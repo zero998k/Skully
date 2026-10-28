@@ -75,7 +75,7 @@ export function loadConfig(file = basePath('config.json')) {
  * Validate one wallet entry against the ones already added, and fill in a nickname.
  * Throws a plain-English error the dashboard and terminal can show as-is.
  */
-export function checkWallet({ address, label, buyAmountSol, retiring }, existing) {
+export function checkWallet({ address, label, buyAmountSol, retiring, paused }, existing) {
   address = String(address ?? '').trim();
   if (!address || address.startsWith('PASTE_')) throw new Error('Paste a wallet address.');
   try {
@@ -96,6 +96,7 @@ export function checkWallet({ address, label, buyAmountSol, retiring }, existing
     entry.buyAmountSol = n;
   }
   if (retiring) entry.retiring = true;
+  if (paused) entry.paused = true;
   return entry;
 }
 
@@ -110,7 +111,7 @@ export function saveConfigValue(key, value, file = basePath('config.json')) {
 /** Write the wallet list back to config.json, leaving every other setting untouched. */
 export function saveWallets(wallets, file = basePath('config.json')) {
   const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-  raw.wallets = wallets.map(({ label, address, buyAmountSol, retiring }) => ({ label, address, ...(buyAmountSol ? { buyAmountSol } : {}), ...(retiring ? { retiring } : {}) }));
+  raw.wallets = wallets.map(({ label, address, buyAmountSol, retiring, paused }) => ({ label, address, ...(buyAmountSol ? { buyAmountSol } : {}), ...(retiring ? { retiring } : {}), ...(paused ? { paused } : {}) }));
   fs.writeFileSync(`${file}.tmp`, JSON.stringify(raw, null, 2) + '\n');
   fs.renameSync(`${file}.tmp`, file);
 }

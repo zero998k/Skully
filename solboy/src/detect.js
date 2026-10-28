@@ -1,3 +1,5 @@
+import { PublicKey } from '@solana/web3.js';
+
 export const WSOL = 'So11111111111111111111111111111111111111112';
 
 // Tokens treated as "money" rather than something being bought.
@@ -86,4 +88,42 @@ const SWAP_LOG = /Instruction: (Buy|Sell|Swap|\w*Route)|ray_log|Log truncated/i;
  */
 export function looksLikeSwap(lines = []) {
   return lines.some((line) => SWAP_LOG.test(line) || DEX_PROGRAMS.some((p) => line.includes(p)));
+}
+
+// Pump.fun writes every trade into the transaction's logs as an event ("Program data: ..."): the coin, the SOL and
+// token amounts, buy or sell, and the trader. Reading it there needs no download, so a copy can start the moment the
+// notification arrives. Layout: 8-byte event id, mint (32), sol (u64), tokens (u64), is_buy (u8), user (32), ...
+const PUMP_TRADE_EVENT = Buffer.from([189, 219, 127, 211, 78, 230, 97, 238]); // sha256("event:TradeEvent")[0..8]
+
+/** Pump.fun trades made by `wallet`, straight from a notification's log lines. [] when there are none. */
+export function pumpTradesFromLogs(lines = [], wallet) {
+  const byKey = new Map();
+  for (const line of lines) {
+    if (!line.startsWith('Program data: ')) continue;
+    const b = Buffer.from(line.slice(14), 'base64');
+    if (b.length < 89 || !b.subarray(0, 8).equals(PUMP_TRADE_EVENT)) continue;
+    let mint, user;
+    try {
+      mint = new PublicKey(b.subarray(8, 40)).toBase58();
+      user = new PublicKey(b.subarray(57, 89)).toBase58();
+    } catch {
+      continue;
+    }
+    if (user !== wallet) continue; // only the watched wallet's own trades (also guards against a misread event)
+    const sol = b.readBigUInt64LE(40);
+    const tokens = b.readBigUInt64LE(48);
+    const side = b[56] === 1 ? 'buy' : b[56] === 0 ? 'sell' : null;
+    if (!side || sol === 0n || tokens === 0n || sol > 100_000n * 1_000_000_000n) continue;
+    const k = `${side}:${mint}`;
+    const t = byKey.get(k) ?? { side, mint, solAmount: 0, tokenAmount: 0n, fast: true };
+    t.solAmount += Number(sol) / 1e9;
+    t.tokenAmount += tokens;
+    // the bonding curve right after the trade (timestamp i64 at 89, then virtual SOL and virtual tokens)
+    if (b.length >= 113) {
+      const vSol = Number(b.readBigUInt64LE(97)) / 1e9, vTokens = Number(b.readBigUInt64LE(105)) / 1e6;
+      if (vSol > 0 && vTokens > 0) t.curve = { vSol, vTokens };
+    }
+    byKey.set(k, t);
+  }
+  return [...byKey.values()];
 }

@@ -83,6 +83,10 @@ U('keys, settings and positions untouched', u.settingsUntouched === true && u.po
 U('still trades after updating', u.sellAfterUpdate === true && u.buttonGone === true, 'sellAfterUpdate');
 U('no page errors', Array.isArray(u.errors) && u.errors.length === 0, 'errors');
 
+const fl = json('full.json');
+check('dashboard', 'switch copying off and on for one wallet', fl.walletSwitchedOff === true && fl.walletOffSkip >= 1 && fl.walletBackOn === true, fl.walletOffSkip);
+check('dashboard', 'Pump.fun trades copied straight from the logs, under 2 seconds', fl.fastBought === true && fl.fastSold === true && fl.fastSpeed?.last < 2, JSON.stringify(fl.fastSpeed));
+check('dashboard', 'pause and sell everything', fl.pauseChoiceShown === true && fl.pauseSoldAll === true, fl.pauseSoldAll);
 const pp = json('pulse.json');
 const PP = (name, ok, key) => check('pulse', name, ok, pp[key] ?? pp.crashed);
 PP('dashboard links to Pulse', pp.dashboardHasPulseLink === true, 'dashboardHasPulseLink');
@@ -90,7 +94,7 @@ PP('live feed connects', pp.feedLive === true && pp.subs?.[0]?.newToken === true
 PP('new coins land in New Pairs', ['MCAT', 'BPUP', 'RUG'].every((x) => pp.newCol?.includes(x)), 'newCol');
 PP('a coin past 45% bonding curve is in Final Stretch', pp.stretchCol?.includes('FROG') && !pp.newCol?.includes('FROG'), 'stretchCol');
 PP('migrated coins land in Migrated, with Dex paid', pp.migratedCol?.includes('BIRD') && pp.migratedPaid === true, 'migratedCol');
-PP('columns fill straight away from Pump.fun', pp.seededStretch === true && pp.seededMigrated === true, 'seededStretch');
+PP('columns fill straight away from Pump.fun and GeckoTerminal', pp.seededStretch === true && pp.seededMigrated === true && pp.geckoSeeded === true, 'geckoSeeded');
 PP('coin pictures load through SolBoy', /^200 image\/png/.test(pp.imgEndpoint ?? '') && pp.imagesShown === true, 'imgEndpoint');
 PP('coin page opens fast with recent trades and a chart', pp.seedHeadMs < 2500 && pp.seedTradesRows >= 20 && pp.seedChart === true, 'seedHeadMs');
 PP('board updates smoothly (cards and pictures stay, new coins slide in)', pp.smooth?.removed === 0 && pp.smooth?.sameImg === true && pp.smooth?.entered === true, 'smooth');
@@ -114,7 +118,7 @@ PP('real money: buy and sell through PumpPortal when Jupiter has no route', pp.l
 PP('quick trade box opens and drags', pp.floatVisible === true && pp.dragged === true && /MCAT/.test(pp.floatCoin ?? ''), 'dragged');
 PP('quick trade box pops out into its own window', pp.popupQuickMode === true && /MCAT/.test(pp.popupCoin ?? '') && pp.popupHasBuy === true, 'popupQuickMode');
 PP('cards show the X post a coin came from, and a bigger look on hover', pp.cardStory === true && pp.peek === true, 'cardStory');
-PP('coin page story: X post, website and AI one-liner', pp.storyBar === true && /✨ Story\s*[^\sR]/.test(pp.storyText ?? ''), 'storyText');
+PP('coin page story: one slim line (AI story, X post, website) with details on demand', pp.storyBar === true && pp.storyHeight <= 36 && pp.storyMore === true, 'storyText');
 PP('live data check tests every source', pp.health?.length === 9 && pp.health.every((x) => x.startsWith('OK')), 'health');
 PP('back to the board', pp.backOnBoard === true, 'backOnBoard');
 PP('no page errors', Array.isArray(pp.errors) && pp.errors.length === 0, 'errors');

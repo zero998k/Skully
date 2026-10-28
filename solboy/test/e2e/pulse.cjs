@@ -21,6 +21,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   // columns are filled straight away from Pump.fun's lists, before any coin launches
   R.seededStretch = await until(async () => (await p.locator('#list-stretch .card .name b').allInnerTexts()).includes('SEED'), 10000);
   R.seededMigrated = (await p.locator('#list-migrated .card .name b').allInnerTexts()).includes('GRAD');
+  R.geckoSeeded = await until(async () => (await p.locator('#list-stretch .card .name b').allInnerTexts()).includes('GKO') && (await p.locator('#list-migrated .card .name b').allInnerTexts()).includes('GKM'), 8000);
 
   // launches: a bundled + sniped coin, a coin to exclude, one that reaches Final Stretch, one that migrates
   const a = await F('/pp/create?name=Moon%20Cat&symbol=MCAT&dev=dev1&initial=1');
@@ -182,8 +183,11 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.peek = (await p.locator('#peek').isVisible()) && /copy trade whales/.test(await p.locator('#peek').innerText());
   await p.mouse.move(800, 20);
   await p.locator(`.card[data-mint="${twt.mint}"] .name b`).click();
-  R.storyBar = await until(async () => { const t = await p.locator('#storyBar').innerText(); return /copy trade whales/.test(t) && /BOYZ - the copy cat/.test(t) && /What it is|Story/.test(t) && !/Reading the X post/.test(t) && (await p.locator('#storyBar .sb-site').count()) === 1; }, 12000);
+  R.storyBar = await until(async () => { const t = await p.locator('#storyBar').innerText(); return /@catguy/.test(t) && /BOYZ - the copy cat/.test(t) && /What it is/.test(t) && !/Reading the X post/.test(t); }, 12000);
   R.storyText = (await p.locator('#storyBar').innerText()).replace(/\s+/g, ' ').slice(0, 300);
+  R.storyHeight = Math.round((await p.locator('#storyBar').boundingBox()).height);
+  await p.click('[data-sbmore]'); await sleep(300);
+  R.storyMore = await until(async () => /copy trade whales/.test(await p.locator('#storyBar .sb-drop').innerText()) && (await p.locator('#storyBar .sb-drop .sb-site').count()) === 1, 6000);
   await p.screenshot({ path: `${E}/p5-story.png` });
 
   // live data check from the ⚙ window

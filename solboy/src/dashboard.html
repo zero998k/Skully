@@ -176,6 +176,13 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 5px; border: 1.5px
 .addr:hover { color: var(--sky); }
 .state { font-family: var(--display); font-weight: 800; font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1.5px solid #000; color: #0a0a0a; background: var(--win); white-space: nowrap; }
 .state.retiring { background: var(--warn); }
+.switch { display: inline-flex; align-items: center; gap: 7px; font-family: var(--display); font-weight: 800; font-size: 12px; padding: 4px 11px 4px 5px; border-radius: 999px; border: 1.5px solid #000; background: #2b2b2b; color: var(--ink-2); cursor: pointer; white-space: nowrap; }
+.switch i { width: 26px; height: 15px; border-radius: 999px; background: #555; position: relative; transition: background .15s; }
+.switch i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.switch.on { background: var(--win); color: #0a0a0a; } .switch.on i { background: #0a0a0a; } .switch.on i::after { transform: translateX(11px); background: var(--win); }
+.pause-choice { display: grid; gap: 10px; margin-top: 12px; } .pause-choice .btn { text-align: left; display: grid; gap: 4px; padding: 12px 14px; }
+.pause-choice small { font-family: var(--body); font-weight: 500; font-size: 12px; color: var(--ink-3); }
+.speed { font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px; border: 1.5px solid #2b2b2b; } .speed.fast { color: var(--win); border-color: rgba(74,222,128,.4); } .speed.slow { color: var(--warn); border-color: rgba(255,176,32,.4); }
 td .btn { padding: 6px 10px; font-size: 12px; }
 .form { display: grid; gap: 14px; }
 .form label { font-family: var(--display); font-weight: 800; font-size: 14px; display: grid; gap: 6px; }
@@ -314,6 +321,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
     <a class="btn" id="pulseLink" href="/pulse" title="Trading terminal: new pairs, final stretch, migrated">📈 Pulse</a>
     <button class="btn update" id="updateBtn" hidden>⬆ Update</button>
     <button class="btn primary" id="addWalletBtn">+ Add wallet <kbd>A</kbd></button>
+    <span class="speed" id="copySpeed" hidden></span>
     <button class="btn" id="pauseBtn" title="Stop copying new buys. Sells keep following.">Pause copying <kbd>P</kbd></button>
     <button class="btn" id="sfxBtn">Sound off <kbd>S</kbd></button>
     <button class="btn" id="logoutBtn" hidden>Log out</button>
@@ -474,6 +482,8 @@ function render() {
   const pb = $('pauseBtn');
   pb.className = S.paused ? 'btn paused' : 'btn';
   pb.innerHTML = S.paused ? 'Paused · resume <kbd>P</kbd>' : 'Pause copying <kbd>P</kbd>';
+  const sp = $('copySpeed');
+  if (sp) { const c = S.copySpeed; sp.hidden = !c; if (c) { sp.textContent = `⚡ ${c.last.toFixed(2)}s`; sp.title = `Time from a watched wallet's trade to your copy being sent. Last ${c.last.toFixed(2)}s, average ${c.avg.toFixed(2)}s over ${c.n} copies.`; sp.className = `speed ${c.last <= 2 ? 'fast' : 'slow'}`; } }
 
   countTo($('score'), s.totalPnl);
   $('today').innerHTML = `today <span class="${cls(S.todayPnl)}">${fmt(S.todayPnl)} SOL</span> <button class="mini inline" data-reset-pnl title="Reset your profit/loss to 0">↺ reset</button>`;
@@ -606,7 +616,7 @@ function renderBoard() {
       <td class="num">${w.copies}</td><td class="num">${w.closed}</td>
       <td class="num">${w.closed ? Math.round((w.wins / w.closed) * 100) + '%' : '-'}</td>
       <td class="num ${cls(w.pnl)}">${fmt(w.pnl)} SOL</td>
-      <td>${w.retiring ? `<span class="state retiring">Sells only (${w.holding} held)</span>` : '<span class="state">Copying</span>'}</td>
+      <td>${w.retiring ? `<span class="state retiring">Sells only (${w.holding} held)</span>` : `<button class="switch${w.paused ? '' : ' on'}" data-wtoggle="${esc(w.label)}" data-paused="${w.paused ? 1 : 0}" title="${w.paused ? 'Copying is off for this wallet: click to turn it on' : 'Click to stop copying this wallet\'s buys (its sells still follow for coins you hold)'}"><i></i>${w.paused ? 'Off' : 'Copying'}</button>`}</td>
       <td>${w.retiring ? `<button class="btn" data-readd="${esc(w.address)}">Undo</button>` : `<button class="btn danger" data-remove="${esc(w.label)}" data-holding="${w.holding}">Remove</button>`}</td>
     </tr>`).join('');
   $('board').innerHTML = `<div class="wallet-bar"><button class="btn primary" data-add>+ Add wallet</button>
@@ -617,6 +627,14 @@ function renderBoard() {
 }
 $('board').addEventListener('click', async (e) => {
   if (e.target.closest('[data-add]')) return openAddWallet();
+  const tg = e.target.closest('[data-wtoggle]');
+  if (tg) {
+    const turnOff = tg.dataset.paused !== '1';
+    tg.disabled = true;
+    try { await api('/api/wallets/toggle', { key: tg.dataset.wtoggle, paused: turnOff }); toast('info', turnOff ? `${tg.dataset.wtoggle} switched off` : `${tg.dataset.wtoggle} switched on`, turnOff ? 'No new buys from this wallet. Sells of coins you hold from it still follow.' : 'Copying its buys again.'); }
+    catch (err) { toast('loss', 'Error', err.message); }
+    refresh(); return;
+  }
   const rm = e.target.closest('[data-remove]');
   if (rm) {
     const held = Number(rm.dataset.holding);
@@ -953,8 +971,34 @@ $('chatInput').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.pr
 
 /* ---------- pause ---------- */
 async function togglePause() {
-  try { await api('/api/pause', { paused: !S.paused }); toast('info', S.paused ? 'Resumed' : 'Paused', S.paused ? 'Copying new buys again.' : 'No new buys. Sells still follow the copied wallets.'); refresh(); }
+  // pausing with coins still open: ask whether to sell them too
+  if (!S.paused && S.inventory.length) return openPauseChoice();
+  return setPaused(!S.paused);
+}
+async function setPaused(paused) {
+  try { await api('/api/pause', { paused }); toast('info', paused ? 'Paused' : 'Resumed', paused ? 'No new buys. Sells still follow the copied wallets.' : 'Copying new buys again.'); refresh(); }
   catch (err) { toast('loss', 'Error', err.message); }
+}
+function openPauseChoice() {
+  const n = S.inventory.length, real = S.mode === 'live';
+  $('modalBody').innerHTML = `<h3>Pause copying</h3>
+    <p class="note">You have ${n} open position${n === 1 ? '' : 's'}. What should happen to ${n === 1 ? 'it' : 'them'}?</p>
+    <div class="pause-choice">
+      <button class="btn" id="pauseOnly">⏸ Just pause<small>Keep ${n === 1 ? 'it' : 'them'}. Take profit, stop loss and the wallets' sells still apply.</small></button>
+      <button class="btn danger" id="pauseSell">⏸ Pause and sell everything<small>Sells all ${n} now${real ? ' with REAL SOL' : ''}. Dead coins nobody will buy are cleared from your slots.</small></button>
+    </div>`;
+  $('modal').classList.add('on');
+  $('pauseOnly').focus();
+  $('pauseOnly').onclick = () => { closeModal(); setPaused(true); };
+  $('pauseSell').onclick = async () => {
+    $('pauseSell').disabled = true; $('pauseSell').firstChild.textContent = 'Selling everything… ';
+    await setPaused(true);
+    try {
+      const r = await api('/api/sell-all', {});
+      toast(r.failed.length ? 'loss' : 'info', 'Positions cleared', `${r.sold} sold${r.writtenOff ? `, ${r.writtenOff} dead coin(s) cleared` : ''}${r.failed.length ? `, ${r.failed.length} couldn't sell right now: try Sell now on ${r.failed.length === 1 ? 'it' : 'them'}` : ''}.`);
+    } catch (err) { toast('loss', 'Sell all failed', err.message); }
+    closeModal(); refresh();
+  };
 }
 $('pauseBtn').onclick = togglePause;
 

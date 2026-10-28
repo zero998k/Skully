@@ -78,6 +78,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
         buyAmountSol: w.buyAmountSol ?? cfg.buyAmountSol,
         customAmount: Boolean(w.buyAmountSol),
         retiring: Boolean(w.retiring),
+        paused: Boolean(w.paused),
         holding: positions.entries().filter(([, p]) => p.source === w.address).length,
         ...stats.get(w.label),
       }))
@@ -133,6 +134,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
       mode: book.mode,
       account: await accountState(),
       paused: bot.isBuyingPaused(),
+      copySpeed: bot.copySpeed(),
       summary: summarize(positions.counted(trades), positions.dayStart()),
       dayResetAt: positions.resetToday(),
       todayPnl: positions.todayPnl(),
@@ -233,6 +235,16 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
         const { paused } = await readBody(req);
         bot.setBuyingPaused(Boolean(paused));
         return send(res, 200, { ok: true });
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/sell-all') {
+        return send(res, 200, await bot.sellAll());
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/wallets/toggle') {
+        const { key, paused } = await readBody(req);
+        const w = bot.setWalletPaused(key, Boolean(paused));
+        return send(res, 200, { label: w.label, paused: Boolean(w.paused) });
       }
 
       if (req.method === 'POST' && url.pathname === '/api/sell') {

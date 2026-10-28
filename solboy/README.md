@@ -112,6 +112,10 @@ Edit `config.json` in the app's folder with any text editor (Notepad or TextEdit
 
 ---
 
+## Copy speed
+
+For Pump.fun coins, SolBoy reads the watched wallet's trade straight from the notification at the earliest moment the network reports it ("processed"), checks the coin and prepares the order at the same time, and buys straight on the bonding curve. The dashboard shows ⚡ how long each copy took, from their trade to your order going out. Trades on other exchanges are downloaded first, which adds about half a second. How fast the order then lands is up to the network: Axiom and similar terminals pay for priority landing services; SolBoy uses your normal Helius connection and priority fee.
+
 ## Pulse: the trading terminal
 
 Click **📈 Pulse** at the top of the dashboard (or go to `http://localhost:7777/pulse`). It works like Axiom's Pulse page, for free:

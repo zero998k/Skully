@@ -1,5 +1,5 @@
 import { PublicKey, VersionedTransaction } from '@solana/web3.js';
-import { parseTrades, looksLikeSwap, WSOL } from './detect.js';
+import { parseTrades, looksLikeSwap, pumpTradesFromLogs, WSOL } from './detect.js';
 import { getQuote, buildSwap } from './jupiter.js';
 import { log, short, recordTrade, notify, c } from './log.js';
 import { checkWallet, saveWallets } from './config.js';
@@ -17,6 +17,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
   const locks = new Map();
   let ignored = 0;
   let buyingPaused = false;
+  const speeds = []; // seconds from seeing a watched wallet's trade to sending the copy, for the dashboard
   let buysInFlight = 0; // copy buys still being sent, so several at once can't go past maxOpenPositions
   const tag = () => (cfg.dryRun ? 'PAPER ' : '');
 
@@ -59,23 +60,36 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     return body.result;
   }
 
+  // Trades are seen at "processed", a moment before the network serves them as "confirmed": ask again every 250ms.
   async function fetchTx(signature) {
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 12; i++) {
       try {
         const tx = await getTransaction(signature);
         if (tx) return tx;
       } catch (e) {
-        if (i === 3) log(`Couldn't load transaction ${short(signature)}: ${e.message}`);
+        if (i === 11) log(`Couldn't load transaction ${short(signature)}: ${e.message}`);
       }
-      await sleep(400 * (i + 1));
+      await sleep(250);
     }
     return null;
   }
 
-  async function handleSignature(w, signature, seenAt = Date.now()) {
+  async function handleSignature(w, signature, seenAt = Date.now(), logLines = null) {
     if (seen.has(signature)) return;
     seen.add(signature);
     if (seen.size > 5000) seen.delete(seen.values().next().value);
+
+    // Fast path: Pump.fun trades are read straight from the notification's logs, no download needed.
+    const fast = logLines ? pumpTradesFromLogs(logLines, w.address) : [];
+    if (fast.length) {
+      for (const t of fast) {
+        t.seenAt = seenAt;
+        log(`${w.label} ${t.side.toUpperCase()} ${short(t.mint)} for ${t.solAmount.toFixed(3)} SOL (seen live)`);
+        if (t.side === 'buy') await withLock(t.mint, () => copyBuy(w, t));
+        else await withLock(t.mint, () => copySell(w, t));
+      }
+      return;
+    }
 
     const tx = await fetchTx(signature);
     if (!tx) return;
@@ -83,6 +97,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
 
     const late = Date.now() - seenAt > cfg.maxCopyDelaySeconds * 1000;
     for (const t of parseTrades(tx, w.address)) {
+      t.seenAt = seenAt;
       log(`${w.label} ${t.side.toUpperCase()} ${short(t.mint)} for ${t.solAmount.toFixed(3)} SOL ${delay}`);
       if (t.side === 'buy' && late) {
         log(`  skip: took over ${cfg.maxCopyDelaySeconds}s to load, too late to copy this buy`);
@@ -96,6 +111,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
   function buySkipReason(w, t) {
     if (w.retiring) return `${w.label} was removed, so SolBoy only follows its sells for tokens you still hold`;
     if (buyingPaused) return 'copying is paused (from the dashboard)';
+    if (w.paused) return `copying is switched off for ${w.label} (Wallets tab)`;
     if (cfg.onlyFirstBuy && t.heldBefore) return `${w.label} already held this coin and is adding more; SolBoy only copies their first buy`;
     if (positions.has(t.mint)) return 'already holding this token';
     if (cfg.blocklist.includes(t.mint)) return 'token is on your blocklist';
@@ -128,12 +144,13 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     const tx = VersionedTransaction.deserialize(Buffer.from(swapTransaction, 'base64'));
     tx.sign([book.keypair]);
     const signature = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true, maxRetries: 2 });
+    const sentAt = Date.now();
     const { value } = await connection.confirmTransaction(
       { signature, blockhash: tx.message.recentBlockhash, lastValidBlockHeight },
       'confirmed',
     );
     if (value.err) throw new Error(`transaction ${signature} failed on-chain (often slippage): ${JSON.stringify(value.err)}`);
-    return signature;
+    return { signature, sentAt };
   }
 
   /**
@@ -141,19 +158,27 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
    * when Jupiter can't quote: paper mode prices from the coin's live bonding curve, and real-money mode has
    * PumpPortal build the transaction. A trade that was sent is never retried another way.
    */
-  async function swap(side, mint, amountRaw, slippageBps) {
+  async function swap(side, mint, amountRaw, slippageBps, prefetched = null) {
     const [inputMint, outputMint] = side === 'buy' ? [WSOL, mint] : [mint, WSOL];
     let quote;
     try {
-      quote = await getQuote({ inputMint, outputMint, amount: amountRaw.toString(), slippageBps });
+      quote = prefetched ? await prefetched : await getQuote({ inputMint, outputMint, amount: amountRaw.toString(), slippageBps });
+      if (quote instanceof Error) throw quote;
     } catch (e) {
       const c = pulse?.curveOf(mint);
       if (!c) throw e;
-      if (cfg.dryRun) return { outRaw: curveOut(side, c, amountRaw), sig: null, via: 'curve' };
+      if (cfg.dryRun) return { outRaw: curveOut(side, c, amountRaw), sig: null, via: 'curve', sentAt: Date.now() };
       return pumpPortalSwap(side, mint, amountRaw, slippageBps);
     }
-    const sig = cfg.dryRun ? null : await executeSwap(quote);
-    return { outRaw: BigInt(quote.outAmount), sig, via: 'jupiter' };
+    if (cfg.dryRun) return { outRaw: BigInt(quote.outAmount), sig: null, via: 'jupiter', sentAt: Date.now() };
+    const { signature, sentAt } = await executeSwap(quote);
+    return { outRaw: BigInt(quote.outAmount), sig: signature, via: 'jupiter', sentAt };
+  }
+
+  /** Trade straight on a Pump.fun curve: priced from the curve in paper mode, built by PumpPortal with real money. */
+  async function curveSwap(side, mint, amountRaw, slippageBps, curve) {
+    if (cfg.dryRun) return { outRaw: curveOut(side, curve, amountRaw), sig: null, via: 'curve', sentAt: Date.now() };
+    return pumpPortalSwap(side, mint, amountRaw, slippageBps);
   }
 
   // Pump.fun curve maths (constant product on virtual reserves, ~1% fee). Tokens have 6 decimals.
@@ -165,7 +190,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
 
   async function pumpPortalSwap(side, mint, amountRaw, slippageBps) {
     const owner = book.keypair.publicKey;
-    const before = side === 'buy' ? await tokenBalance(mint) : BigInt(await connection.getBalance(owner));
+    const beforeP = (side === 'buy' ? tokenBalance(mint) : connection.getBalance(owner).then(BigInt)).catch(() => null);
     const res = await fetch(`${process.env.PUMPPORTAL_API_URL || 'https://pumpportal.fun/api'}/trade-local`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -180,8 +205,10 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     if (!res.ok) throw new Error(`PumpPortal couldn't build the trade (${res.status}): ${(await res.text()).slice(0, 200)}`);
     const tx = VersionedTransaction.deserialize(new Uint8Array(await res.arrayBuffer()));
     tx.sign([book.keypair]);
-    const { lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
     const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true, maxRetries: 2 });
+    const sentAt = Date.now();
+    const { lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed'); // only needed to wait for the result
+    const before = (await beforeP) ?? 0n;
     const { value } = await connection.confirmTransaction({ signature: sig, blockhash: tx.message.recentBlockhash, lastValidBlockHeight }, 'confirmed');
     if (value.err) throw new Error(`transaction ${sig} failed on-chain (often slippage): ${JSON.stringify(value.err)}`);
     // the RPC can take a moment to show the new balance after the trade confirms
@@ -190,7 +217,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
       if (i) await sleep(500);
       after = side === 'buy' ? await tokenBalance(mint) : BigInt(await connection.getBalance(owner));
     }
-    return { outRaw: after > before ? after - before : 0n, sig, via: 'pumpportal' };
+    return { outRaw: after > before ? after - before : 0n, sig, via: 'pumpportal', sentAt };
   }
 
   /** What selling `tokensRaw` would return right now, in lamports (null if no price). */
@@ -235,17 +262,44 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     if (why) return log(`  skip: ${why}`);
     buysInFlight++;
     try {
-      if (await failsSafetyCheck(t.mint)) return;
-      await sendCopyBuy(w, t);
+      // Everything that doesn't depend on each other runs at once: the price quote, the token safety check and
+      // (for trades read from the logs) whether the wallet already held this coin.
+      const lamports = Math.round((w.buyAmountSol ?? cfg.buyAmountSol) * LAMPORTS);
+      // A coin still on its Pump.fun curve is bought straight on the curve (like the fast terminals do), without
+      // waiting for a Jupiter quote; anything else gets its Jupiter quote fetched while the checks run.
+      const quote = t.curve ? null : getQuote({ inputMint: WSOL, outputMint: t.mint, amount: String(lamports), slippageBps: cfg.buySlippageBps }).catch((e) => e);
+      const [unsafe, heldBefore] = await Promise.all([
+        failsSafetyCheck(t.mint),
+        t.heldBefore ?? (cfg.onlyFirstBuy ? heldBeforeBuy(w, t).catch(() => false) : false),
+      ]);
+      if (unsafe) return;
+      if (cfg.onlyFirstBuy && heldBefore) return log(`  skip: ${w.label} already held this coin and is adding more; SolBoy only copies their first buy`);
+      await sendCopyBuy(w, t, lamports, quote);
     } finally {
       buysInFlight--;
     }
   }
 
-  async function sendCopyBuy(w, t) {
-    const lamports = Math.round((w.buyAmountSol ?? cfg.buyAmountSol) * LAMPORTS);
+  // The watched wallet's balance of a coin right now ("processed": includes the trade just seen).
+  async function walletBalance(owner, mint) {
+    const res = await connection.getParsedTokenAccountsByOwner(new PublicKey(owner), { mint: new PublicKey(mint) }, 'processed');
+    return res.value.reduce((sum, a) => sum + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
+  }
+  async function heldBeforeBuy(w, t) {
+    const before = (await walletBalance(w.address, t.mint)) - t.tokenAmount;
+    return before * 10n > t.tokenAmount; // dust left from an old trade doesn't count
+  }
+  function noteSpeed(t, sentAt) {
+    if (!t.seenAt) return '';
+    const sec = Math.max(0, (sentAt - t.seenAt) / 1000);
+    speeds.push(sec);
+    if (speeds.length > 20) speeds.shift();
+    return ` ⚡ copied in ${sec.toFixed(2)}s`;
+  }
+
+  async function sendCopyBuy(w, t, lamports, quote) {
     try {
-      const { outRaw, sig } = await swap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps);
+      const { outRaw, sig, sentAt } = t.curve ? await curveSwap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, t.curve) : await swap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, quote);
       const sol = lamports / LAMPORTS;
       positions.open(t.mint, {
         source: w.address,
@@ -254,7 +308,7 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
         tokens: outRaw.toString(),
         openedAt: new Date().toISOString(),
       });
-      log(c.green(`  ${tag()}BOUGHT ${sol} SOL of ${short(t.mint)}`) + (sig ? `  tx: ${sig}` : ''));
+      log(c.green(`  ${tag()}BOUGHT ${sol} SOL of ${short(t.mint)}`) + noteSpeed(t, sentAt) + (sig ? `  tx: ${sig}` : ''));
       recordTrade(book.tradeLogFile, { action: `${tag()}buy`, mint: t.mint, wallet: w.label, sol, reason: `copied ${w.label}`, tx: sig });
       notify(`${tag()}BUY ${sol} SOL of ${t.mint}\ncopied ${w.label}\nhttps://dexscreener.com/solana/${t.mint}`);
     } catch (e) {
@@ -266,6 +320,11 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     const pos = positions.get(t.mint);
     if (!pos || !cfg.followSells) return;
     if (pos.source !== w.address) return log(`  not selling: this position was copied from ${pos.sourceLabel}`);
+    if (t.fractionSold == null) {
+      // read from the logs: what's left in their wallet right after the sell tells how much they sold
+      const left = await walletBalance(w.address, t.mint).catch(() => null);
+      t.fractionSold = left == null ? 1 : Math.min(1, Number(t.tokenAmount) / Number(left + t.tokenAmount));
+    }
     // Selling 90%+ counts as out: many traders keep a tiny "moon bag" forever, which would never free the slot.
     const out = t.fractionSold >= 0.9;
     if (cfg.sellOnlyOnFullExit) {
@@ -317,6 +376,25 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
     }
   }
 
+  /** Sell every open position (e.g. when pausing). Coins nobody will buy any more are written off so they stop taking a slot. */
+  async function sellAll() {
+    const out = { sold: 0, writtenOff: 0, failed: [] };
+    for (const [mint, pos] of positions.entries()) {
+      const r = await withLock(mint, () => sellPosition(mint, 1, 'sold all (from the dashboard)', null, true)).catch((e) => ({ error: e }));
+      if (r?.ok || !positions.has(mint)) { out.sold++; continue; }
+      const value = await valueOf(mint, pos.tokens).catch(() => null);
+      if (!value) {
+        positions.recordPnl(-pos.solSpent);
+        positions.close(mint);
+        finishRetiring(pos.source);
+        log(c.yellow(`  ${short(mint)}: no buyers left, written off (-${pos.solSpent.toFixed(4)} SOL)`));
+        recordTrade(book.tradeLogFile, { action: `${tag()}sell`, mint, wallet: pos.sourceLabel, sol: '0', pnl: (-pos.solSpent).toFixed(6), reason: 'written off: no buyers left', tx: null });
+        out.writtenOff++;
+      } else out.failed.push(short(mint));
+    }
+    return out;
+  }
+
   let checking = false;
   async function checkExits() {
     if (checking || !(cfg.takeProfitPct || cfg.stopLossPct)) return;
@@ -361,9 +439,9 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
           return;
         }
         const seenAt = Date.now();
-        handleSignature(w, logs.signature, seenAt).catch((e) => log(`Error handling ${short(logs.signature)}: ${e.message}`));
+        handleSignature(w, logs.signature, seenAt, logs.logs).catch((e) => log(`Error handling ${short(logs.signature)}: ${e.message}`));
       },
-      'confirmed',
+      'processed', // the earliest the network reports a trade: about half a second before "confirmed"
     );
     subscriptions.set(w.address, id);
     log(`Watching ${w.label} (${w.address})${w.retiring ? ', for sells only' : ''}`);
@@ -449,6 +527,18 @@ export function createBot({ cfg, connection, book, rpcFetch, pulse = null }) {
       log(value ? 'Copying PAUSED. Sells still follow the copied wallets.' : 'Copying RESUMED.');
     },
     isBuyingPaused: () => buyingPaused,
+    copySpeed: () => (speeds.length ? { last: speeds.at(-1), avg: speeds.reduce((a, b) => a + b, 0) / speeds.length, n: speeds.length } : null),
+    setWalletPaused(key, paused) {
+      const k = String(key ?? '').trim().toLowerCase();
+      const w = cfg.wallets.find((x) => x.address.toLowerCase() === k || x.label.toLowerCase() === k);
+      if (!w) throw new Error(`No wallet called "${String(key).slice(0, 44)}".`);
+      if (paused) w.paused = true;
+      else delete w.paused;
+      saveWallets(cfg.wallets);
+      log(paused ? `Copying switched OFF for ${w.label}. Sells of coins you hold from it still follow.` : `Copying switched ON for ${w.label}.`);
+      return w;
+    },
+    sellAll,
     sellNow: (mint) => withLock(mint, () => sellPosition(mint, 1, 'sold by you from the dashboard')),
     manualTrade,
     valueOf,
