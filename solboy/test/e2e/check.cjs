@@ -113,6 +113,8 @@ PP('sell from the trade panel', /^Sold for/.test(pp.sellToast ?? ''), 'sellToast
 PP('real money: buy and sell through PumpPortal when Jupiter has no route', pp.liveBuy?.mode === 200 && pp.liveBuy?.buy?.ok === true && pp.liveBuy?.sell?.ok === true && pp.tradeLocal?.join() === 'buy:true:auto,sell:false:auto', 'liveBuy');
 PP('quick trade box opens and drags', pp.floatVisible === true && pp.dragged === true && /MCAT/.test(pp.floatCoin ?? ''), 'dragged');
 PP('quick trade box pops out into its own window', pp.popupQuickMode === true && /MCAT/.test(pp.popupCoin ?? '') && pp.popupHasBuy === true, 'popupQuickMode');
+PP('cards show the X post a coin came from, and a bigger look on hover', pp.cardStory === true && pp.peek === true, 'cardStory');
+PP('coin page story: X post, website and AI one-liner', pp.storyBar === true && /✨ Story\s*[^\sR]/.test(pp.storyText ?? ''), 'storyText');
 PP('back to the board', pp.backOnBoard === true, 'backOnBoard');
 PP('no page errors', Array.isArray(pp.errors) && pp.errors.length === 0, 'errors');
 

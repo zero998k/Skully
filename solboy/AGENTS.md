@@ -3,7 +3,7 @@
 SolBoy is a Solana meme coin copy-trading app for a non-technical owner. It runs on the owner's Mac (and a
 friend's Windows PC, and optionally a Linux server). It copies the buys and sells of wallets the owner picks,
 in paper (practice) or real-money mode, shows a game-style dashboard in the browser, and has a built-in
-assistant ("Ask SolBoy") on a free Groq key. (AI narrative research was removed in 1.3.0 at the owner's request.) The owner talks in short,
+assistant ("Ask SolBoy") on a free Groq key. (The old AI research reports were removed in 1.3.0; Pulse coin pages now have a short AI "Story" line, `src/narrative.js`, from the coin's X post, website and description.) The owner talks in short,
 casual messages; explain results in plain English, no jargon.
 
 ## Layout

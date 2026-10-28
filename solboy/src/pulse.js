@@ -44,7 +44,9 @@ export const PROTOCOLS = [
 ];
 const DEX_TO_PROTOCOL = { pumpswap: 'pump-amm', raydium: 'raydium', meteora: 'meteora', meteoradbc: 'meteora-v2', orca: 'orca' };
 
-const GATEWAYS = ['https://ipfs.io/ipfs/', 'https://dweb.link/ipfs/', 'https://gateway.pinata.cloud/ipfs/', 'https://w3s.link/ipfs/'];
+const TWEET_API = () => process.env.TWEET_API_URL || 'https://cdn.syndication.twimg.com';
+const clip = (x, n) => (x == null ? null : String(x).replace(/\s+/g, ' ').trim().slice(0, n) || null);
+const GATEWAYS = ['https://pump.mypinata.cloud/ipfs/', 'https://ipfs.io/ipfs/', 'https://dweb.link/ipfs/', 'https://gateway.pinata.cloud/ipfs/', 'https://w3s.link/ipfs/'];
 const PUMP_API = () => process.env.PUMP_API_URL || 'https://frontend-api-v3.pump.fun';
 const ipfsCid = (u) => /\/ipfs\/([^?#]+)/.exec(u ?? '')?.[1] ?? /^ipfs:\/\/(.+)$/.exec(u ?? '')?.[1] ?? null;
 // Coin creators choose these links, so only public https addresses are fetched, never this computer or the home network.
@@ -435,6 +437,53 @@ export function createPulse({ cfg, connection }) {
     tok.poolWatch = null;
   }
 
+  // ---- the story behind a coin: the X post it links to, and its website ----
+  async function fetchTweet(url) {
+    const id = /(?:x|twitter)\.com\/[^/]+\/status(?:es)?\/(\d+)/i.exec(url ?? '')?.[1];
+    if (!id) return null;
+    const token = ((Number(id) / 1e15) * Math.PI).toString(36).replace(/(0+|\.)/g, ''); // X's own embed token
+    const t = await getJson(`${TWEET_API()}/tweet-result?id=${id}&lang=en&token=${token}`, 5000);
+    const img = (u) => (typeof u === 'string' && (publicUrl(u) || allowLocal()) ? u : null);
+    return {
+      url, author: clip(t.user?.name, 60), handle: clip(t.user?.screen_name, 30), verified: Boolean(t.user?.is_blue_verified), avatar: img(t.user?.profile_image_url_https),
+      text: clip(t.text, 500), image: img(t.mediaDetails?.[0]?.media_url_https ?? t.photos?.[0]?.url), likes: num(t.favorite_count), replies: num(t.conversation_count),
+      at: Date.parse(t.created_at) || null, quote: t.quoted_tweet ? { handle: clip(t.quoted_tweet.user?.screen_name, 30), text: clip(t.quoted_tweet.text, 300) } : null,
+    };
+  }
+  const storyQueue = [];
+  let storyBusy = 0;
+  function wantStory(tok) {
+    if (!tok || tok.storyState || tok.metaState !== 'done' || !/\/status(?:es)?\/\d+/.test(tok.meta?.twitter ?? '')) return;
+    tok.storyState = 'queued';
+    storyQueue.push(tok);
+    pumpStories();
+  }
+  function pumpStories() {
+    while (storyBusy < 3 && storyQueue.length) {
+      const t = storyQueue.shift();
+      storyBusy++;
+      fetchTweet(t.meta.twitter)
+        .then((tw) => { t.tweet = tw; t.storyState = 'done'; })
+        .catch(() => { t.storyState = 'failed'; })
+        .finally(() => { storyBusy--; pumpStories(); });
+    }
+  }
+  async function siteSummary(url) {
+    if (!(publicUrl(url) || (allowLocal() && /^http:\/\/127\.0\.0\.1/.test(url ?? ''))) || /(?:^|\.)(?:x|twitter)\.com|t\.me|pump\.fun/i.test(new URL(url).hostname)) return null;
+    const res = await fetch(url, { redirect: 'follow', headers: { Accept: 'text/html' }, signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const html = (await res.text()).slice(0, 200_000);
+    const meta = (name) => new RegExp(`<meta[^>]+(?:name|property)=["']${name}["'][^>]+content=["']([^"']*)`, 'i').exec(html)?.[1];
+    return { url, title: clip(/<title[^>]*>([^<]*)/i.exec(html)?.[1], 120), description: clip(meta('og:description') ?? meta('description'), 300) };
+  }
+  function wantSite(tok) {
+    const url = tok.meta?.website;
+    if (!url || tok.siteState) return;
+    tok.siteState = 'loading';
+    siteSummary(url).then((x) => { tok.site = x; tok.siteState = 'done'; }).catch(() => { tok.siteState = 'failed'; });
+  }
+  const xKind = (u) => (!u ? null : /\/status(?:es)?\/\d+/.test(u) ? 'post' : /\/i\/communities\//.test(u) ? 'community' : /(?:x|twitter)\.com\/[A-Za-z0-9_]{1,15}\/?(?:[?#]|$)/i.test(u) ? 'profile' : 'link');
+
   // ---- housekeeping ----
   function prune(force = false) {
     const now = Date.now();
@@ -501,7 +550,10 @@ export function createPulse({ cfg, connection }) {
     const cid = ipfsCid(tok.uri);
     const urls = [...new Set([tok.uri, ...(cid ? GATEWAYS.map((g) => g + cid) : [])])].filter((u) => publicUrl(u) || (allowLocal() && /^http:\/\/127\.0\.0\.1/.test(u)));
     try {
-      const m = await Promise.any(urls.map((u) => getJson(u, 5000)));
+      // IPFS gateways and Pump.fun's own record for the coin, whichever answers first
+      const sources = urls.map((u) => getJson(u, 5000));
+      if (tok.protocol === 'pump') sources.push(getJson(`${PUMP_API()}/coins/${tok.mint}`, 5000).then((c) => (c?.image_uri ? { ...c, image: c.image_uri } : Promise.reject(new Error('no coin')))));
+      const m = await Promise.any(sources);
       const image = typeof m.image === 'string' ? m.image.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/') : null;
       tok.meta = {
         image: image && (publicUrl(image) || allowLocal()) ? image : null,
@@ -587,6 +639,7 @@ export function createPulse({ cfg, connection }) {
     return {
       mint: t.mint, name: t.name || t.dex?.name || '', symbol: t.symbol || '', protocol: t.migrated ? t.pool ?? 'pump-amm' : t.protocol,
       launchpad: t.protocol, image: m.image || t.dex?.image || null, description: m.description || '',
+      xKind: xKind(twitter), tweet: t.tweet ? { handle: t.tweet.handle, author: t.tweet.author, verified: t.tweet.verified, text: clip(t.tweet.text, 160), likes: t.tweet.likes, image: t.tweet.image } : null,
       createdAt: t.createdAt ?? t.dex?.pairCreatedAt ?? null,
       ageSec: Math.round((Date.now() - (t.createdAt ?? t.dex?.pairCreatedAt ?? t.seenAt)) / 1000),
       migrated: t.migrated, migratedAt: t.migratedAt, progress: progressOf(t),
@@ -642,7 +695,11 @@ export function createPulse({ cfg, connection }) {
         if (passes(r, f[name])) rows.push(r);
         if (rows.length >= limit) break;
       }
-      for (const r of rows) wantMeta(tokens.get(r.mint));
+      for (const r of rows) {
+        const tk = tokens.get(r.mint);
+        wantMeta(tk);
+        wantStory(tk);
+      }
       out[name] = rows;
     }
     enrich([...cols.migrated.slice(0, 30), ...cols.stretch.slice(0, 10)]);
@@ -699,6 +756,8 @@ export function createPulse({ cfg, connection }) {
     }
     if (!tok.fromBirth && tok.trades.length < 20) geckoTrades(tok);
     wantMeta(tok);
+    wantStory(tok);
+    wantSite(tok);
     wantBackfill(tok, true);
     if (focus.has(mint)) watchPool(tok);
     const r = row(tok);
@@ -739,6 +798,7 @@ export function createPulse({ cfg, connection }) {
     const devHist = tok.creator ? history.devs[tok.creator] : null;
     return {
       ...r,
+      story: { tweet: tok.tweet ?? null, site: tok.site ?? null, loading: (tok.uri && !['done', 'failed'].includes(tok.metaState)) || tok.storyState === 'queued' || tok.siteState === 'loading' || (Boolean(tok.meta?.website) && !tok.siteState) || (/\/status(?:es)?\/\d+/.test(tok.meta?.twitter ?? '') && !tok.storyState) },
       solUsd,
       trades: tok.trades.slice(-200).reverse().map((tr) => decorateTrade(tok, tr)),
       holdersList: holderRows,
@@ -1062,6 +1122,16 @@ export function createPulse({ cfg, connection }) {
     coin,
     analyze,
     history: history5m,
+    storyFacts(mint) {
+      const t = tokens.get(mint);
+      if (!t) return null;
+      const r = row(t);
+      return { name: r.name, symbol: r.symbol, description: r.description || null, ageMinutes: Math.round(r.ageSec / 60), marketCapUsd: r.mcUsd != null ? Math.round(r.mcUsd) : null,
+        xLink: t.meta?.twitter ?? null, xPost: t.tweet ? { by: `${t.tweet.author} (@${t.tweet.handle})${t.tweet.verified ? ', verified' : ''}`, text: t.tweet.text, likes: t.tweet.likes, quoting: t.tweet.quote } : null,
+        website: t.site ? { title: t.site.title, description: t.site.description } : t.meta?.website ?? null, telegram: Boolean(t.meta?.telegram), cacheKey: `${t.tweet?.text ?? ''}|${t.site?.title ?? ''}|${r.description}` };
+    },
+    setNarrative(mint, n) { const t = tokens.get(mint); if (t) t.narrative = n; },
+    getNarrative: (mint) => tokens.get(mint)?.narrative ?? null,
     image,
     priceSol,
     curveOf,

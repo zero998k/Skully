@@ -16,6 +16,7 @@ import { createAssistant } from './assistant.js';
 import { AiError } from './ai.js';
 import { createAuth } from './auth.js';
 import { RESTART_CODE } from './update.js';
+import { writeNarrative } from './narrative.js';
 
 // Settings the dashboard's Quick settings card can change while SolBoy runs.
 const QUICK = ['takeProfitPct', 'stopLossPct', 'buyAmountSol', 'dailyLossLimitSol', 'maxOpenPositions', 'onlyFirstBuy', 'sellOnlyOnFullExit'];
@@ -49,6 +50,7 @@ function openInBrowser(url) {
  * a secret made fresh each run and baked into the page, so other websites can't read or click anything.
  */
 export async function startDashboard({ cfg, bot, book, account, updater, pulse = null, serverMode = false }) {
+  const narrativeJobs = new Map(); // coin -> the AI story being written, so two viewers share one request
   const positions = book.positions;
   const secret = crypto.randomBytes(16).toString('hex');
   const page = DASHBOARD_HTML.replace('__TOKEN__', secret).replace('__SERVER_MODE__', serverMode ? 'true' : 'false');
@@ -338,6 +340,22 @@ export async function startDashboard({ cfg, bot, book, account, updater, pulse =
             return;
           }
           if (req.method === 'GET' && url.pathname === '/api/pulse/coin') return send(res, 200, { ...(await pulse.coin(checkMint(mintParam))), position: await positionFor(checkMint(mintParam)), mode: book.mode });
+          if (req.method === 'GET' && url.pathname === '/api/pulse/narrative') {
+            const mint = checkMint(mintParam);
+            const facts = pulse.storyFacts(mint);
+            if (!facts) return send(res, 404, { error: 'Unknown coin.' });
+            const cached = pulse.getNarrative(mint);
+            if (cached && cached.key === facts.cacheKey) return send(res, 200, cached.out);
+            const pending = narrativeJobs.get(mint) ?? writeNarrative(cfg, facts).finally(() => narrativeJobs.delete(mint));
+            narrativeJobs.set(mint, pending);
+            try {
+              const out = await pending;
+              if (out.text || out.needsKey) pulse.setNarrative(mint, { key: facts.cacheKey, out });
+              return send(res, 200, out);
+            } catch (e) {
+              return send(res, 200, { error: e.message });
+            }
+          }
           if (req.method === 'GET' && url.pathname === '/api/pulse/img') {
             const img = await pulse.image(checkMint(mintParam));
             if (!img) {

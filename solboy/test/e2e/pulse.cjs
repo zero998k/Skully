@@ -174,6 +174,18 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   }, live);
   R.tradeLocal = (await (await fetch('http://127.0.0.1:18903/pp/tradelocal')).json()).map((x) => `${x.action}:${x.denominatedInSol}:${x.pool}`);
 
+  // the story behind a coin: its X post on the card and a bigger look on hover; on its page the post, website and an AI one-liner
+  await p.click('#back').catch(() => {}); await sleep(600);
+  const twt = await F('/pp/create?name=Tweet%20Cat&symbol=TWT&dev=dev7&initial=0.4');
+  R.cardStory = await until(async () => /copy trade whales/.test(await p.locator(`.card[data-mint="${twt.mint}"] .story`).innerText().catch(() => '')), 10000);
+  await p.locator(`.card[data-mint="${twt.mint}"] .pic`).hover(); await sleep(400);
+  R.peek = (await p.locator('#peek').isVisible()) && /copy trade whales/.test(await p.locator('#peek').innerText());
+  await p.mouse.move(800, 20);
+  await p.locator(`.card[data-mint="${twt.mint}"] .name b`).click();
+  R.storyBar = await until(async () => { const t = await p.locator('#storyBar').innerText(); return /copy trade whales/.test(t) && /BOYZ - the copy cat/.test(t) && /What it is|Story/.test(t) && !/Reading the X post/.test(t) && (await p.locator('#storyBar .sb-site').count()) === 1; }, 12000);
+  R.storyText = (await p.locator('#storyBar').innerText()).replace(/\s+/g, ' ').slice(0, 300);
+  await p.screenshot({ path: `${E}/p5-story.png` });
+
   // back to the board
   await p.click('#back'); await sleep(1200);
   R.backOnBoard = await p.isVisible('#board');

@@ -1,3 +1,8 @@
+**New in 1.4.2: know what you're buying**
+- **The story behind every coin:** each card shows the X post the coin came from (or the creator's description) right under its name. Hover over a coin's picture for a big preview with its story.
+- **Story strip on every coin page:** the coin's picture, a one-line **✨ Story** of what the coin is about and where it comes from (written by your free Groq AI), the X post itself with who posted it, likes and its picture, the coin's website, and the creator's description.
+- **More pictures load:** if the IPFS servers are slow, SolBoy now also asks Pump.fun directly for the coin's picture.
+
 **New in 1.4.1: a smoother, fuller Pulse**
 - **Moves smoothly, like Axiom:** cards update in place instead of redrawing, new coins slide in at the top while the others glide down, pictures never blink, and the board refreshes about 3 times a second. Coin pages no longer jump, reset your typed amount or lose your scroll spot.
 - **Full columns straight away:** Final Stretch and Migrated fill as soon as SolBoy starts (from Pump.fun's own lists), and the board is saved so it's still full after a restart or update.

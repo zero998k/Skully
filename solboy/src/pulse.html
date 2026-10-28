@@ -241,6 +241,26 @@ td a:hover { color: var(--accent); }
 @keyframes life { to { transform: scaleX(0); } }
 .toast.bye { opacity: 0; transform: translateX(12px); transition: opacity .2s, transform .2s; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+/* story: what a coin is about */
+.story { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.story b { color: var(--grape); font-weight: 600; margin-right: 2px; } .story .xb { font-weight: 800; margin-right: 4px; color: var(--ink); } .vf { color: var(--sky); font-style: normal; font-size: 10px; margin-right: 3px; }
+.peek { position: fixed; z-index: 45; width: 300px; background: var(--panel); border: 1px solid var(--edge-2); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.7), 0 0 0 1px rgba(255,45,149,.15); padding: 10px; display: grid; gap: 8px; pointer-events: none; animation: pop .14s ease-out; }
+.peek .big { width: 100%; aspect-ratio: 1; border-radius: 10px; background: var(--panel-2); display: grid; place-items: center; font-size: 48px; font-weight: 900; color: var(--ink-3); position: relative; overflow: hidden; }
+.peek .big img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.peek h5 { margin: 0; font-size: 15px; } .peek h5 span { color: var(--ink-3); font-weight: 500; margin-left: 6px; }
+.peek p { margin: 0; font-size: 12px; color: var(--ink-2); line-height: 1.45; max-height: 7.5em; overflow: hidden; }
+.tw { display: grid; gap: 6px; border: 1px solid var(--edge-2); border-radius: 12px; padding: 9px 10px; background: var(--bg); font-size: 12px; line-height: 1.45; }
+.tw .who { display: flex; align-items: center; gap: 6px; color: var(--ink-3); } .tw .who img { width: 20px; height: 20px; border-radius: 50%; } .tw .who b { color: var(--ink); }
+.tw .t { color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; } .tw .media { width: 100%; max-height: 160px; object-fit: cover; border-radius: 8px; }
+.tw .q { border-left: 2px solid var(--edge-2); padding-left: 8px; color: var(--ink-2); }
+a.tw:hover { border-color: var(--accent); }
+.story-bar { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--edge); background: linear-gradient(90deg, rgba(255,45,149,.06), transparent 60%); max-height: 230px; overflow-y: auto; }
+.story-bar .pic { width: 88px; height: 88px; font-size: 26px; }
+.sb-main { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.sb-ai { font-size: 13.5px; line-height: 1.45; } .sb-ai .lbl { color: var(--accent); font-weight: 800; margin-right: 6px; } .sb-ai.dim { color: var(--ink-3); }
+.sb-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.sb-site { font-size: 12px; color: var(--ink-2); border: 1px solid var(--edge-2); border-radius: 12px; padding: 9px 10px; background: var(--bg); } .sb-site a { color: var(--ink); font-weight: 600; }
+.sb-desc { font-size: 12px; color: var(--ink-2); line-height: 1.45; }
 @media (max-width: 1100px) { .board { grid-template-columns: 1fr; overflow-y: auto; } .col { height: 80vh; border-right: 0; border-bottom: 1px solid var(--edge); } body { overflow: auto; } main { height: auto; } .coin { grid-template-columns: 1fr; } .coin-main { height: 120vh; } }
 </style>
 </head>
@@ -268,6 +288,7 @@ td a:hover { color: var(--accent); }
 <div class="modal-bg" id="filterModal" hidden></div>
 <div class="modal-bg" id="prefsModal" hidden></div>
 <div class="floating" id="floating" hidden></div>
+<div class="peek" id="peek" hidden></div>
 <div class="toasts" id="toasts"></div>
 
 <script>/*__CHART_LIB__*/</script>
@@ -328,6 +349,9 @@ function setHTML(el, html) {
   morphKids(el, t);
 }
 const htmlNode = (html) => { const t = document.createElement('div'); t.innerHTML = html.trim(); return t.firstChild; };
+// one line of "what is this": the X post it came from, or the creator's description
+const storyLine = (r) => r.tweet?.text ? `<div class="story"><span class="xb">𝕏</span><b>@${esc(r.tweet.handle)}</b>${r.tweet.verified ? '<i class="vf">✓</i>' : ''} ${esc(r.tweet.text)}</div>`
+  : r.description ? `<div class="story">${esc(r.description)}</div>` : r.xKind === 'community' ? '<div class="story dim">𝕏 community</div>' : '';
 const PROTO_SHORT = { pump: 'PUMP', bonk: 'BONK', 'pump-amm': 'P·AMM', raydium: 'RAY', meteora: 'MET', 'meteora-v2': 'MET2', orca: 'ORCA' };
 
 let STATUS = {}, MODE = 'paper', CFG = { quickBuy: [0.05, 0.1, 0.5, 1], quickSell: [25, 50, 100], kols: [] }, FILTERS = null, PROTOCOLS = [];
@@ -377,6 +401,7 @@ function card(r) {
     <div class="picw${r.progress >= 80 ? ' hot' : ''}"${r.progress != null && !r.migrated ? ` style="--p:${Math.round(r.progress)}"` : ''}><div class="pic">${esc((r.symbol || '?').slice(0, 2))}${picImg(r)}<span class="proto">${PROTO_SHORT[r.protocol] ?? esc(r.protocol)}</span></div><div class="ca">${short(r.mint)}</div></div>
     <div class="mid">
       <div class="name"><b>${esc(r.symbol || '???')}</b><span>${esc(r.name)}</span><button class="copy" data-copy="${esc(r.mint)}" title="Copy address">⧉</button></div>
+      ${storyLine(r)}
       <div class="meta"><span class="age${r.ageSec > 3600 ? ' old' : ''}" title="Age">${ageOf(r.ageSec)}</span>
         <span class="soc">${r.twitter ? `<a href="${esc(r.twitter)}" target="_blank" rel="noopener" title="X">𝕏</a> ` : ''}${r.website ? `<a href="${esc(r.website)}" target="_blank" rel="noopener" title="Website">🌐</a> ` : ''}${r.telegram ? `<a href="${esc(r.telegram)}" target="_blank" rel="noopener" title="Telegram">✈</a> ` : ''}<a href="https://x.com/search?q=${encodeURIComponent(r.mint)}" target="_blank" rel="noopener" title="Search the address on X">🔍</a></span>
         <span title="Holders">👥 ${r.holders ?? '-'}</span>
@@ -590,6 +615,7 @@ let COIN = null, chart = null, series = null, volSeries = null, interval = store
 function openCoin(mint) {
   $('board').hidden = true; $('coin').hidden = false;
   $('coin').innerHTML = `<div class="coin-main"><div class="coin-head" id="coinHead"><button class="icon-btn" id="back">← Pulse</button><span class="dim">Loading…</span></div>
+      <div class="story-bar" id="storyBar"><div class="pic"></div><div class="sb-main"><div class="sb-ai dim">Loading the story…</div></div></div>
       <div class="chart-bar">${[[1, '1s'], [15, '15s'], [60, '1m'], [300, '5m']].map(([s, l]) => `<button data-iv="${s}" class="${interval === s ? 'on' : ''}">${l}</button>`).join('')}<span style="flex:1"></span><button data-cm="mc" class="${chartMode === 'mc' ? 'on' : ''}">MarketCap</button><button data-cm="price" class="${chartMode === 'price' ? 'on' : ''}">Price</button></div>
       <div id="chart"><div class="chart-msg" id="chartMsg">Waiting for trades…</div></div>
       <div class="coin-tabs" id="coinTabs"></div><div class="table-wrap" id="coinTable"></div></div>
@@ -615,7 +641,7 @@ async function loadCoin(mint, first = false) {
     if (location.hash !== `#coin=${mint}`) return;
     COIN = c; MODE = c.mode ?? MODE; STATUS.solUsd = c.solUsd ?? STATUS.solUsd;
     if (QUICK?.mint === c.mint && QUICK.symbol !== c.symbol) setQuickMint(c.mint, c.symbol);
-    renderCoinHead(); renderSide(); renderCoinTable();
+    renderCoinHead(); renderStory(); renderSide(); renderCoinTable(); wantNarrative();
     if (first) {
       drawChart();
       if (!c.followedSinceLaunch && candlesFor?.mint === mint) candlesFor.p.then((cs) => { if (COIN?.mint === mint && cs.length) { extCandles = cs; drawChart(); } });
@@ -623,6 +649,58 @@ async function loadCoin(mint, first = false) {
     if (c.position !== undefined) renderPosition(c.position);
   } catch (err) { if (first) { $('coinHead').innerHTML = `<button class="icon-btn" id="back">← Pulse</button><span class="down">${esc(err.message)}</span>`; } }
 }
+/* the story strip on a coin page: AI one-liner, the X post, the website and the creator's description */
+let NARR = { mint: null, key: null, state: null, text: null };
+function storyKey(c) { return `${c.story?.tweet?.text ?? ''}|${c.story?.site?.title ?? ''}|${c.description ?? ''}`; }
+async function wantNarrative() {
+  const c = COIN; if (!c) return;
+  const key = storyKey(c);
+  if (NARR.mint === c.mint && (NARR.key === key || NARR.state === 'loading')) return;
+  if (NARR.mint === c.mint && c.story?.loading) return; // wait until the X post and website are in
+  NARR = { mint: c.mint, key, state: 'loading', text: null };
+  renderStory();
+  try {
+    const r = await api(`/api/pulse/narrative?mint=${encodeURIComponent(c.mint)}`);
+    if (NARR.mint !== c.mint) return;
+    NARR = { ...NARR, state: r.needsKey ? 'nokey' : r.text ? 'done' : 'error', text: r.text ?? r.error ?? null };
+  } catch (err) { if (NARR.mint === c.mint) NARR = { ...NARR, state: 'error', text: err.message }; }
+  renderStory();
+}
+const tweetHtml = (tw, full = true) => tw ? `<a class="tw" href="${esc(tw.url ?? '#')}" target="_blank" rel="noopener">
+    <div class="who">${tw.avatar ? `<img src="${esc(tw.avatar)}" alt="" onerror="this.remove()">` : '<b>𝕏</b>'}<b>${esc(tw.author ?? '')}</b>@${esc(tw.handle ?? '')}${tw.verified ? '<i class="vf">✓</i>' : ''}${tw.at ? ` · ${ago(tw.at)}` : ''}${tw.likes != null ? ` · ♥ ${tw.likes >= 1000 ? (tw.likes / 1000).toFixed(1) + 'K' : tw.likes}` : ''}</div>
+    <div class="t">${esc(tw.text ?? '')}</div>${tw.quote ? `<div class="q">@${esc(tw.quote.handle ?? '')}: ${esc(tw.quote.text ?? '')}</div>` : ''}${full && tw.image ? `<img class="media" src="${esc(tw.image)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</a>` : '';
+function renderStory() {
+  const c = COIN; const el = $('storyBar'); if (!c || !el) return;
+  const st = c.story ?? {};
+  const ai = NARR.mint !== c.mint || NARR.state === 'loading' ? '<div class="sb-ai dim"><span class="lbl">✨ Story</span>Reading the X post, website and description…</div>'
+    : NARR.state === 'done' ? `<div class="sb-ai"><span class="lbl">✨ Story</span>${esc(NARR.text)}</div>`
+    : NARR.state === 'nokey' ? '<div class="sb-ai dim"><span class="lbl">✨ Story</span>Add your free Groq key in Ask SolBoy (on the dashboard) and SolBoy writes a one-line story for every coin you open.</div>'
+    : `<div class="sb-ai dim"><span class="lbl">✨ Story</span>Couldn't write the story right now${NARR.text ? ` (${esc(NARR.text)})` : ''}.</div>`;
+  const site = st.site?.title || st.site?.description ? `<div class="sb-site">🌐 <a href="${esc(st.site.url)}" target="_blank" rel="noopener">${esc(st.site.title ?? st.site.url)}</a>${st.site.description ? `<div>${esc(st.site.description)}</div>` : ''}</div>` : '';
+  const xOnly = !st.tweet && c.twitter ? `<div class="sb-site">𝕏 <a href="${esc(c.twitter)}" target="_blank" rel="noopener">${c.xKind === 'community' ? 'X community' : c.xHandle ? '@' + esc(c.xHandle) : 'X link'}</a></div>` : '';
+  setHTML(el, `<div class="pic">${esc((c.symbol || '?').slice(0, 2))}${picImg(c)}</div><div class="sb-main">${ai}
+    ${st.tweet || site || xOnly ? `<div class="sb-row">${tweetHtml(st.tweet)}${site}${xOnly}</div>` : ''}
+    ${c.description ? `<div class="sb-desc"><b>From the creator:</b> ${esc(c.description)}</div>` : ''}</div>`);
+}
+/* hover a coin picture on the board for a bigger look and its story */
+document.addEventListener('mouseover', (e) => {
+  const pic = e.target.closest?.('.card .pic');
+  const peek = $('peek');
+  if (!pic) { if (!peek.hidden && !e.target.closest?.('.peek')) peek.hidden = true; return; }
+  const mint = pic.closest('.card').dataset.mint;
+  const r = Object.values(BOARD).flat().find((x) => x.mint === mint);
+  if (!r) return;
+  if (peek.dataset.mint !== mint) {
+    peek.dataset.mint = mint;
+    peek.innerHTML = `<div class="big">${esc((r.symbol || '?').slice(0, 2))}${r.image ? `<img src="/api/pulse/img?mint=${encodeURIComponent(r.mint)}&t=${TOKEN}" alt="" onerror="this.remove()">` : ''}</div>
+      <h5>${esc(r.symbol || '???')}<span>${esc(r.name)}</span></h5>${r.description ? `<p>${esc(r.description)}</p>` : ''}${tweetHtml(r.tweet ? { ...r.tweet, url: null } : null, false)}`;
+  }
+  const b = pic.getBoundingClientRect();
+  peek.hidden = false;
+  const h = peek.offsetHeight;
+  peek.style.left = `${Math.min(innerWidth - 316, b.right + 12)}px`;
+  peek.style.top = `${Math.max(8, Math.min(innerHeight - h - 8, b.top - 20))}px`;
+});
 function renderCoinHead() {
   const c = COIN;
   document.title = `${c.symbol ? '$' + c.symbol : short(c.mint)} ${money(c.mcUsd)} · SolBoy Pulse`;
