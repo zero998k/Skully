@@ -16,7 +16,7 @@ function page({ needPassword, needRpc, needWallets, needAi }) {
   const field = (label, hint, input) => `<label><b>${label}</b><small>${hint}</small>${input}</label>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SolBoy setup</title>
 <style>
-:root{--bg:#050505;--panel:#0d0d0d;--edge:#2b2b2b;--ink:#fafafa;--ink2:#b4b4b4;--ink3:#7a7a7a;--accent:#ff3355;--sun:#ffd23f}
+:root{--bg:#050505;--panel:#0d0d0d;--edge:#2b2b2b;--ink:#fafafa;--ink2:#b4b4b4;--ink3:#7a7a7a;--accent:#ff2d95;--sun:#ffd23f}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,sans-serif}
 main{max-width:620px;margin:40px auto;padding:0 16px}
 h1{font-size:34px;margin:0 0 4px;letter-spacing:-1px}h1 b{color:var(--accent)}

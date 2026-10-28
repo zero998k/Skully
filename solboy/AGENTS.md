@@ -56,4 +56,4 @@ Pushes without a version bump just check that the build works.
 - Settings, keys, wallets and trades live in files next to the app; updates must never touch them.
 - Keep it free: no paid APIs by default. Groq is the free AI.
 - Real money: the assistant must never switch real-money mode on, withdraw or reveal keys.
-- Keep the dashboard style: matte black, red (#ff3355), cartoony sticker look, works on a phone.
+- Keep the style: matte black with bright hot pink (#ff2d95) accents (losses and sells stay red), cartoony sticker look on the dashboard, dense Axiom-like Pulse; works on a phone.

@@ -31,9 +31,9 @@ function classify(text) {
 
 const LOGIN_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SolBoy login</title>
 <style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#050505;color:#fafafa;font:15px/1.5 system-ui,sans-serif;padding:16px}
-form{width:min(380px,100%);background:#0d0d0d;border:2px solid #2b2b2b;border-radius:22px;padding:24px;box-shadow:6px 6px 0 #ff3355;display:grid;gap:14px}
-h1{margin:0;font-size:30px;letter-spacing:-1px}h1 b{color:#ff3355}input{font:15px system-ui;color:#fafafa;background:#050505;border:2px solid #2b2b2b;border-radius:12px;padding:12px}
-button{font:800 16px system-ui;color:#fff;background:#ff3355;border:2px solid #000;border-radius:14px;padding:12px;cursor:pointer;box-shadow:4px 4px 0 #fafafa}.err{color:#ff5470;min-height:1em}</style></head>
+form{width:min(380px,100%);background:#0d0d0d;border:2px solid #2b2b2b;border-radius:22px;padding:24px;box-shadow:6px 6px 0 #ff2d95;display:grid;gap:14px}
+h1{margin:0;font-size:30px;letter-spacing:-1px}h1 b{color:#ff2d95}input{font:15px system-ui;color:#fafafa;background:#050505;border:2px solid #2b2b2b;border-radius:12px;padding:12px}
+button{font:800 16px system-ui;color:#fff;background:#ff2d95;border:2px solid #000;border-radius:14px;padding:12px;cursor:pointer;box-shadow:4px 4px 0 #fafafa}.err{color:#ff5470;min-height:1em}</style></head>
 <body><form id="f"><h1>SOL<b>BOY</b></h1><input id="pw" type="password" placeholder="Password" autocomplete="current-password" autofocus required><div class="err" id="err"></div><button>Log in</button></form>
 <script>document.getElementById('f').onsubmit=async(e)=>{e.preventDefault();const r=await fetch('/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:document.getElementById('pw').value})});
 if(r.ok)location.href='/';else document.getElementById('err').textContent=(await r.json()).error;};</script></body></html>`;
