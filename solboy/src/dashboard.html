@@ -486,6 +486,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
     <button class="balchip" id="balChip" title="Open your account">◎ Set up wallet</button>
     <span class="spacer"></span>
     <button class="btn update" id="updateBtn" hidden>⬆ Update</button>
+    <button class="btn" id="checkUpdBtn" title="Look for a newer SolBoy right now">⟳ Check for updates</button>
     <button class="btn primary" id="addWalletBtn">+ Add wallet <kbd>A</kbd></button>
     <span class="speed" id="copySpeed" hidden></span>
     <button class="btn" id="pauseBtn" title="Stop copying new buys. Sells keep following.">Pause copying <kbd>P</kbd></button>
@@ -939,6 +940,15 @@ function renderUpdate() {
   b.hidden = !(u?.available && u.canInstall) && !updating;
   if (!updating && u?.available) b.textContent = `⬆ Update to ${u.available.version}`;
 }
+$('checkUpdBtn').onclick = async () => {
+  const b = $('checkUpdBtn'); b.disabled = true; b.textContent = '⟳ Checking...';
+  try {
+    S.update = await api('/api/update/check', {}); renderUpdate();
+    if (S.update?.available && S.update.canInstall) $('updateBtn').click();
+    else toast('info', S.update?.error ? "Couldn't check" : 'You are up to date', S.update?.error ?? `SolBoy ${S.update?.version ?? ''} is the newest version.`);
+  } catch (err) { toast('loss', "Couldn't check", err.message); }
+  b.disabled = false; b.textContent = '⟳ Check for updates';
+};
 $('updateBtn').onclick = () => {
   const u = S.update; if (!u?.available || updating) return;
   $('modalBody').innerHTML = `<h3>SolBoy ${esc(u.available.version)} is out</h3>

@@ -159,6 +159,6 @@ export function createUpdater() {
   }
 
   check(true);
-  setInterval(() => check(true), 6 * 3600_000).unref();
+  setInterval(() => check(true), 15 * 60_000).unref(); // new versions show up within 15 minutes
   return { check, status, install };
 }

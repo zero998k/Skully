@@ -1,3 +1,6 @@
+**New in 1.10.2**
+- **⟳ Check for updates** button at the top: checks right away and, if there's a new version, opens the Update window. SolBoy also checks by itself every 15 minutes now (it used to be every 6 hours), so the yellow Update button shows up much sooner for you and your friends.
+
 **New in 1.10.1: faster trade updates and clearer speed readings**
 - Pump.fun confirmation checks start sooner, with fewer network requests. Recently unavailable sell routes avoid repeated quote requests while a fresh Pump.fun curve is available.
 - Completed buys and sells appear immediately while prices and balances refresh. Speed readings now cover buys and sells, distinguish sent from confirmed, and clearly label practice trades.

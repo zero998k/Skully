@@ -399,6 +399,11 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         return send(res, 200, { ok: true });
       }
 
+      if (req.method === 'POST' && url.pathname === '/api/update/check') {
+        await updater?.check(true);
+        return send(res, 200, updater?.status() ?? null);
+      }
+
       if (req.method === 'POST' && url.pathname === '/api/update') {
         try {
           const version = await updater.install();
