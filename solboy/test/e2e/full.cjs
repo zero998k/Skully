@@ -321,6 +321,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   R.phoneOverflow = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth);
   R.noPulseLink = (await p.locator('#pulseLink').count()) === 0 && (await fetch(BASE + '/pulse')).status === 404;
   Object.assign(R, await require('./wallet.cjs')(p, BASE, E));
+  Object.assign(R, await require('./prices.cjs')(p, F, E));
   R.errors = errors; R.fakeUnhandled = w2.log;
   console.log(JSON.stringify(R, null, 1));
   await b.close();

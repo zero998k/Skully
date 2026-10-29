@@ -10,6 +10,9 @@ const WHALE = 'AqzPs1UDhnK2Ga37PphobfMukGtN53erw5N3KhoR6qky';
 const MINT = 'CkVfySiwbXr8uosL9W9vtuiKSSd4WqhvBr2YjyQKv8u3';
 const DEV = '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU';
 const S = { groq413: 1, groqdown: 0, apidown: 0, release: 0, corrupt: 0, mult: 1, balanceLamports: 0, held: 0n, sent: [], groq: [], swaps: [], log: [] };
+const PRICE_CURVES=new Map();let priceSlot=100,priceHeartbeat=true,priceQuoteDelay=0;
+const curvePda=mint=>web3.PublicKey.findProgramAddressSync([Buffer.from('bonding-curve'),new web3.PublicKey(mint).toBuffer()],new web3.PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'))[0].toBase58();
+const priceCurveInfo=c=>{const b=Buffer.alloc(115);Buffer.from([23,183,248,55,96,216,172,96]).copy(b);b.writeBigUInt64LE(BigInt(c.tokens),8);b.writeBigUInt64LE(BigInt(c.sol),16);b[48]=Number(c.complete);return{data:[b.toString('base64'),'base64'],owner:'6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P',lamports:1,executable:false,rentEpoch:0};};
 // ---- fake Pump.fun world for Pulse (PumpPortal-style feed) ----
 const P0 = Date.now(); const slotNow = () => 1000 + Math.floor((Date.now() - P0) / 400);
 const P = { chainTx: new Map(), coins: new Map(), names: new Map(), accts: new Map(), funds: new Map(), fundSigs: new Map(), clients: new Set(), noroute: new Set(), vaults: new Map() };
@@ -38,6 +41,7 @@ function vaultAcct(c, key) { const d = Buffer.alloc(165); new web3.PublicKey(key
   d.writeBigUInt64LE(BigInt(Math.round(key === c.vaultQuote ? c.ammQuote * 1e9 : c.ammBase * 1e6)), 64); d[108] = 1;
   return { data: [d.toString('base64'), 'base64'], executable: false, lamports: 2039280, owner: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', rentEpoch: 0, space: 165 }; }
 function rpc(method, params) {
+  if(method==='getAccountInfo'&&PRICE_CURVES.has(params[0]))return{context:{slot:priceSlot},value:priceCurveInfo(PRICE_CURVES.get(params[0]))};
   const ff = FF.rpc(method, params); if (ff !== undefined) return ff;
   switch (method) {
     case 'getSlot': return 123;
@@ -80,6 +84,14 @@ function rpc(method, params) {
 const json = (res, x) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(x)); };
 const body = (r) => new Promise((ok) => { let b = ''; r.on('data', (d) => (b += d)); r.on('end', () => ok(b)); });
 const mainHttp = http.createServer(async (r, res) => { const b = await body(r); const u = new URL(r.url, 'http://x');
+  if(u.pathname==='/price/heartbeat'){priceHeartbeat=u.searchParams.get('enabled')!=='0';return json(res,{enabled:priceHeartbeat});}
+  if(u.pathname==='/price/quote-delay'){priceQuoteDelay=Number(u.searchParams.get('ms')??0);return json(res,{ms:priceQuoteDelay});}
+  if(u.pathname==='/price/curve'){
+    const mint=u.searchParams.get('mint')||pk(),key=curvePda(mint),c={sol:u.searchParams.get('sol')||'40000000000',tokens:u.searchParams.get('tokens')||'800000000000000',complete:u.searchParams.get('complete')==='1'};
+    PRICE_CURVES.set(key,c);priceSlot++;let sent=0;
+    for(const [id,s]of subs)if(s.kind==='account'&&s.key===key&&s.ws.readyState===1){sent++;s.ws.send(JSON.stringify({jsonrpc:'2.0',method:'accountNotification',params:{result:{context:{slot:priceSlot},value:priceCurveInfo(c)},subscription:id}}));}
+    return json(res,{mint,key,slot:priceSlot,sent});
+  }
   if (u.pathname === '/emit') { const side = u.searchParams.get('side'); const sig = makeTx(side, Number(u.searchParams.get('frac') ?? 1), Number(u.searchParams.get('held') ?? 0), u.searchParams.get('mint') === '2' ? MINT2 : MINT);
     for (const [id, s] of subs) if (s.ws.readyState === 1 && s.kind === 'logs') s.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'logsNotification', params: { result: { context: { slot: 1 }, value: { signature: sig, err: null, logs: ['Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [1]', `Program log: Instruction: ${side === 'buy' ? 'Buy' : 'Sell'}`] } }, subscription: id } }));
     return json(res, { sig, subs: [...subs.values()].filter((s) => s.kind === 'logs').length }); }
@@ -129,11 +141,14 @@ const onConn = (ws) => ws.on('message', (m) => { const r = JSON.parse(m);
   else if (r.method === 'signatureSubscribe') { const id = nextSub++; ws.send(JSON.stringify({ jsonrpc: '2.0', id: r.id, result: id }));
     setTimeout(() => ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'signatureNotification', params: { result: { context: { slot: 1 }, value: { err: null } }, subscription: id } })), 50); }
   else if (r.method === 'accountSubscribe') { const id = nextSub++; subs.set(id, { ws, kind: 'account', key: r.params[0] }); ws.send(JSON.stringify({ jsonrpc: '2.0', id: r.id, result: id })); }
+  else if (r.method === 'slotSubscribe') {const id=nextSub++;subs.set(id,{ws,kind:'slot'});ws.send(JSON.stringify({jsonrpc:'2.0',id:r.id,result:id}));}
+  else if (r.method === 'slotUnsubscribe') {subs.delete(r.params[0]);ws.send(JSON.stringify({jsonrpc:'2.0',id:r.id,result:true}));}
   else if (r.method === 'accountUnsubscribe') { subs.delete(r.params[0]); ws.send(JSON.stringify({ jsonrpc: '2.0', id: r.id, result: true })); }
   else ws.send(JSON.stringify({ jsonrpc: '2.0', id: r.id, result: true }));
 });
 new WebSocketServer({ server: mainHttp }).on('connection', onConn);
 new WebSocketServer({ port: 18901, host: '127.0.0.1' }).on('connection', onConn);
+setInterval(()=>{if(priceHeartbeat)for(const [id,s]of subs)if(s.kind==='slot'&&s.ws.readyState===1)s.ws.send(JSON.stringify({jsonrpc:'2.0',method:'slotNotification',params:{subscription:id,result:{slot:priceSlot,parent:priceSlot-1,root:priceSlot-2}}}));},250).unref();
 new WebSocketServer({ port: 18904, host: '127.0.0.1' }).on('connection', (ws) => {
   const c = { ws, newToken: false, migration: false, keys: new Set() }; P.clients.add(c);
   ws.on('close', () => P.clients.delete(c));
@@ -147,6 +162,7 @@ new WebSocketServer({ port: 18904, host: '127.0.0.1' }).on('connection', (ws) =>
 
 // Jupiter: 1 lamport buys 1 token; selling returns tokens * mult lamports. /swap returns a real v0 transaction.
 http.createServer(async (r, res) => { const b = await body(r); const u = new URL(r.url, 'http://x');
+  if(u.pathname.endsWith('/quote')&&priceQuoteDelay)await new Promise(r=>setTimeout(r,priceQuoteDelay));
   if (u.pathname.endsWith('/quote') && (P.noroute.has(u.searchParams.get('inputMint')) || P.noroute.has(u.searchParams.get('outputMint')))) { res.statusCode = 400; return res.end('{"error":"Could not find any route","errorCode":"COULD_NOT_FIND_ANY_ROUTE"}'); }
   if (u.pathname.endsWith('/quote')) { const amt = BigInt(u.searchParams.get('amount') ?? '0'); const buy = u.searchParams.get('inputMint').startsWith('So111');
     const out = buy ? amt : BigInt(Math.floor(Number(amt) * S.mult));
