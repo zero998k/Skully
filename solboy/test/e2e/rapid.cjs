@@ -1,0 +1,35 @@
+// Packaged dashboard: failed and stalled Sell requests must recover without freezing live PnL.
+module.exports=async(p,F,E)=>{
+ const R={},sleep=ms=>new Promise(r=>setTimeout(r,ms));
+ const until=async(fn,ms=5000)=>{const end=Date.now()+ms;while(Date.now()<end){if(await fn())return true;await sleep(25);}return false;};
+ await p.setViewportSize({width:1440,height:1050});await p.click('[data-tab=history]');
+ await p.evaluate(()=>api('/api/settings',{setting:'takeProfitPct',value:null}));
+ await p.evaluate(()=>api('/api/settings',{setting:'stopLossPct',value:null}));
+ const fixture=await F('/price/curve');await F('/pp/noroute?mint='+fixture.mint);await F('/emit-pump?side=buy&sol=1.5&mint='+fixture.mint);
+ const button=p.locator('[data-sell="'+fixture.mint+'"]'),card=p.locator('.slot').filter({has:button});
+ if(!await until(()=>button.count()))throw Error('Rapid sell recovery position missing');
+ const handler=async route=>route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({error:'Trade builder unavailable; no sell submitted'})});
+ await p.route('**/api/sell?*',handler);await button.click();
+ R.failedSellButtonRecovers=await until(async()=>await button.isEnabled()&&/Sell now|Check sell/.test(await button.innerText()));
+ R.failedSellExplained=await p.locator('#toasts').innerText().then(t=>t.includes('Trade builder unavailable'));
+ R.failedSellKeepsPosition=await p.evaluate(m=>S.inventory.some(x=>x.mint===m),fixture.mint);
+ await p.unroute('**/api/sell?*',handler);
+ let heldRoute,release;const gate=new Promise(r=>release=r);const stalled=async route=>{heldRoute=route;await gate;await route.abort().catch(()=>{});};
+ await p.route('**/api/sell?*',stalled);await button.click();if(!await until(()=>!!heldRoute))throw Error('Sell was not intercepted');
+ const topBefore=await p.locator('#openPnl').innerText();
+ const before=await p.evaluate(m=>S.inventory.find(x=>x.mint===m).marketWorth,fixture.mint),start=Date.now();
+ await F('/price/curve?mint='+fixture.mint+'&sol=80000000000');
+ R.pnlContinuesDuringSell=await until(()=>p.evaluate(({mint,before})=>S.inventory.find(x=>x.mint===mint)?.marketWorth>before*1.9,{mint:fixture.mint,before}));
+ R.pnlDuringSellMs=Date.now()-start;
+ R.liveTopPnlChangesWithTicks=await until(async()=>(await p.locator('#openPnl').innerText())!==topBefore);
+ R.pnlSolUsdTop=await p.locator('#score').innerText().then(t=>t.includes('SOL'))&&await p.locator('#scoreUsd').innerText().then(t=>t.includes('$'));
+ R.pnlSolUsdTrade=await card.innerText().then(t=>t.includes('Open profit')&&t.includes('$')&&t.includes('SOL')&&/\d+\.\d{2}%/.test(t));
+ R.copyReasonsVisible=await p.locator('#copyDecisions').innerText().then(t=>t.includes('Copied'));
+ R.stalledSellButtonRecovers=await until(()=>button.isEnabled(),17000);
+ R.stalledSellExplained=await p.locator('#toasts').innerText().then(t=>t.includes('original request'));
+ await p.screenshot({path:E+'/16-sell-recovery.png'});
+ release();await p.unroute('**/api/sell?*',stalled);await button.click();
+ R.recoveredButtonCanSell=await until(()=>p.evaluate(m=>!S.inventory.some(x=>x.mint===m),fixture.mint));
+ R.recoveredSellOnlyOnce=await p.evaluate(m=>S.trades.filter(t=>t.token===m&&t.action.includes('sell')).length===1,fixture.mint);
+ return R;
+};

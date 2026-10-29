@@ -55,6 +55,10 @@ fresh_app() { # $1 = folder; $2 = extra .env lines
 trap 'stop_all' EXIT
 if ! node speed-unit.mjs "$OUT/speed.json" > "$OUT/speed-unit.txt" 2>&1; then cat "$OUT/speed-unit.txt"; exit 1; fi
 
+if ! node rapid-unit.mjs "$OUT/rapid.json" > "$OUT/rapid-unit.txt" 2>&1; then cat "$OUT/rapid-unit.txt"; exit 1; fi
+
+if ! node fills-unit.mjs > "$OUT/fills.json" 2> "$OUT/fills-unit.txt"; then cat "$OUT/fills-unit.txt"; exit 1; fi
+
 echo "1/4 Dashboard: every feature..."
 fresh_app "$OUT/app"
 start_fake full

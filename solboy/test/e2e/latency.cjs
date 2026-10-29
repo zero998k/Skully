@@ -37,7 +37,7 @@ const summary = rows => { const a = [...rows].sort((x,y)=>x-y); return { medianM
    if(process.env.BENCH_STREAM_ONLY){report.stream=await require('./stream.cjs')(page,F);console.log(report.stream);await page.close();groupStop(app);app=null;await sleep(700);continue;}
    const rows={buy:[],sell:[],buyVisible:[],sellVisible:[]};
    const posFile=path.join(folder,'data',`positions-${live?'live':'paper'}.json`);
-   const count=()=>{try{return Object.keys(JSON.parse(fs.readFileSync(posFile)).open).length;}catch{return -1;}};
+   const count=()=>{try{return Object.values(JSON.parse(fs.readFileSync(posFile)).open).filter(p=>!p.pendingBuy).length;}catch{return -1;}};
    for(let i=0;i<rounds;i++){
     let start=performance.now();const trade=await F(fast?'/emit-pump?side=buy&sol=1.5':'/emit?side=buy');
     await until(()=>count()===1);rows.buy.push(performance.now()-start);

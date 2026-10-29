@@ -24,6 +24,8 @@ const ppSend = (msg, filter) => { let n = 0; for (const c of P.clients) if (c.ws
 function ppCurveBuy(c, solIn) { const k = c.vSol * c.vTokens; const out = c.vTokens - k / (c.vSol + solIn); c.vSol += solIn; c.vTokens -= out; return out; }
 function ppCurveSell(c, tok) { const k = c.vSol * c.vTokens; const out = c.vSol - k / (c.vTokens + tok); c.vTokens += tok; c.vSol -= out; return out; }
 const ppState = (c) => ({ bondingCurveKey: c.curve, vTokensInBondingCurve: c.vTokens, vSolInBondingCurve: c.vSol, marketCapSol: (c.vSol / c.vTokens) * 1e9 });
+const builtSwaps=new Map(),pumpMints=new Set();let buildNumber=0;
+const messageKey=tx=>Buffer.from(tx.message.serialize()).toString('base64');
 const txs = {}; const subs = new Map(); let nextSub = 1; let n = 0;
 const MINT2 = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
 const tb = (amt, mint = MINT) => ({ accountIndex: 1, mint, owner: WHALE, uiTokenAmount: { amount: String(amt), decimals: 6, uiAmount: amt / 1e6 } });
@@ -74,6 +76,13 @@ function rpc(method, params) {
       const raw = Buffer.from(params[0], 'base64'); const sig = bs58.encode(raw.subarray(1, 65));
       // A plain SOL transfer (withdraw): take the amount off the balance.
       try { const t = web3.Transaction.from(raw); const ix = t.instructions[0]; if (ix.programId.equals(web3.SystemProgram.programId)) { const lam = Number(ix.data.readBigUInt64LE(4)); S.balanceLamports -= lam + 5000; S.sent.push({ kind: 'transfer', to: ix.keys[1].pubkey.toBase58(), lamports: lam, sig }); return sig; } } catch {}
+      const tx=web3.VersionedTransaction.deserialize(raw),trade=builtSwaps.get(messageKey(tx));
+      if(trade){
+        const pre=S.held,solBefore=S.balanceLamports;
+        if(trade.buy){S.held+=trade.tokens;S.balanceLamports-=trade.sol+5000;}else{S.held-=trade.tokens;S.balanceLamports+=trade.sol-5000;}
+        const token=amount=>({accountIndex:1,mint:trade.mint,owner:trade.owner,uiTokenAmount:{amount:String(amount),decimals:6,uiAmount:Number(amount)/1e6,uiAmountString:String(Number(amount)/1e6)}});
+        txs[sig]={slot:1,blockTime:Math.floor(Date.now()/1000),transaction:{signatures:[sig],message:{accountKeys:[{pubkey:trade.owner,signer:true,writable:true}],instructions:[]}},meta:{err:null,fee:5000,preBalances:[solBefore],postBalances:[S.balanceLamports],preTokenBalances:pre?[token(pre)]:[],postTokenBalances:[token(S.held)],logMessages:[]}};
+      }
       S.sent.push({ kind: 'swap', sig }); return sig;
     }
     case 'getBlockTime': return Math.floor(Date.now() / 1000) - 1; // the fake feed runs about a second behind
@@ -100,6 +109,7 @@ const mainHttp = http.createServer(async (r, res) => { const b = await body(r); 
     const b = Buffer.alloc(129); Buffer.from([189, 219, 127, 211, 78, 230, 97, 238]).copy(b, 0); new web3.PublicKey(mint).toBuffer().copy(b, 8);
     b.writeBigUInt64LE(BigInt(Math.round(Number(q.get('sol') ?? 1) * 1e9)), 40); b.writeBigUInt64LE(BigInt(q.get('tokens') ?? '30000000000000'), 48); b[56] = buy ? 1 : 0;
     new web3.PublicKey(q.get('user') || WHALE).toBuffer().copy(b, 57); b.writeBigInt64LE(BigInt(Math.floor(Date.now() / 1000)), 89); b.writeBigUInt64LE(40_000_000_000n, 97); b.writeBigUInt64LE(800_000_000_000_000n, 105);
+    pumpMints.add(mint);
     const sig = bs58.encode(require('crypto').randomBytes(64)); let n = 0;
     for (const [id, s2] of subs) if (s2.ws.readyState === 1 && s2.kind === 'logs') { n++; s2.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'logsNotification', params: { result: { context: { slot: 1 }, value: { signature: sig, err: null, logs: ['Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [1]', `Program log: Instruction: ${buy ? 'Buy' : 'Sell'}`, `Program data: ${b.toString('base64')}`, 'Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success'] } }, subscription: id } })); }
     return json(res, { sig, mint, subs: n }); }
@@ -165,11 +175,13 @@ http.createServer(async (r, res) => { const b = await body(r); const u = new URL
   if(u.pathname.endsWith('/quote')&&priceQuoteDelay)await new Promise(r=>setTimeout(r,priceQuoteDelay));
   if (u.pathname.endsWith('/quote') && (P.noroute.has(u.searchParams.get('inputMint')) || P.noroute.has(u.searchParams.get('outputMint')))) { res.statusCode = 400; return res.end('{"error":"Could not find any route","errorCode":"COULD_NOT_FIND_ANY_ROUTE"}'); }
   if (u.pathname.endsWith('/quote')) { const amt = BigInt(u.searchParams.get('amount') ?? '0'); const buy = u.searchParams.get('inputMint').startsWith('So111');
-    const out = buy ? amt : BigInt(Math.floor(Number(amt) * S.mult));
+    const pump=pumpMints.has(u.searchParams.get(buy?'outputMint':'inputMint'));
+    const out = pump ? (buy?BigInt(Math.floor((800e6-40*800e6/(40+Number(amt)/1e9*.99))*1e6)):BigInt(Math.floor(40e9*Number(amt)/(800e12+Number(amt))*.99))) : buy ? amt : BigInt(Math.floor(Number(amt) * S.mult));
     return json(res, { inputMint: u.searchParams.get('inputMint'), outputMint: u.searchParams.get('outputMint'), inAmount: amt.toString(), outAmount: out.toString() }); }
   if (u.pathname.endsWith('/swap')) { const { quoteResponse: qr, userPublicKey } = JSON.parse(b); const user = new web3.PublicKey(userPublicKey);
-    const msg = new web3.TransactionMessage({ payerKey: user, recentBlockhash: '11111111111111111111111111111111', instructions: [new web3.TransactionInstruction({ programId: new web3.PublicKey('JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4'), keys: [{ pubkey: user, isSigner: true, isWritable: true }], data: Buffer.from([1]) })] }).compileToV0Message();
-    if (qr.inputMint.startsWith('So111')) { S.held += BigInt(qr.outAmount); S.balanceLamports -= Number(qr.inAmount); } else { S.held -= BigInt(qr.inAmount); S.balanceLamports += Number(qr.outAmount); }
+    const msg = new web3.TransactionMessage({ payerKey: user, recentBlockhash: '11111111111111111111111111111111', instructions: [new web3.TransactionInstruction({ programId: new web3.PublicKey('JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4'), keys: [{ pubkey: user, isSigner: true, isWritable: true }], data: Buffer.from([1,++buildNumber%255]) })] }).compileToV0Message();
+    const planned=new web3.VersionedTransaction(msg),buy=qr.inputMint.startsWith('So111');
+    builtSwaps.set(messageKey(planned),{owner:userPublicKey,mint:buy?qr.outputMint:qr.inputMint,buy,tokens:BigInt(buy?qr.outAmount:qr.inAmount),sol:Number(buy?qr.inAmount:qr.outAmount)});
     S.swaps.push({ in: qr.inputMint.slice(0, 4), inAmount: qr.inAmount, outAmount: qr.outAmount });
     return json(res, { swapTransaction: Buffer.from(new web3.VersionedTransaction(msg).serialize()).toString('base64'), lastValidBlockHeight: 100 }); }
   res.statusCode = 404; res.end('{}');
@@ -190,8 +202,9 @@ http.createServer(async (r, res) => { const b = await body(r); const u = new URL
   if (p === '/solprice') return json(res, { So11111111111111111111111111111111111111112: { usdPrice: 150 } });
   if (p.startsWith('/tokens/v1/solana/') && [...P.coins.values()].some((c) => c.migrated && p.includes(c.mint))) return json(res, [...P.coins.values()].filter((c) => c.migrated && p.includes(c.mint)).map((c) => ({ chainId: 'solana', dexId: 'pumpswap', pairAddress: c.pair, baseToken: { address: c.mint, name: c.name, symbol: c.symbol }, priceUsd: '0.00008', marketCap: 80000, liquidity: { usd: 30000 }, volume: { h24: 120000 }, txns: { h24: { buys: 900, sells: 400 } }, priceChange: { h1: 20 }, pairCreatedAt: Date.now() - 600000, info: { imageUrl: 'http://127.0.0.1:18903/img.png', websites: [{ url: 'https://example.com' }], socials: [{ type: 'twitter', url: 'https://x.com/dexpaid' }] } })));
   if (p === '/pp-api/trade-local') { const q = JSON.parse(b); P.tradeLocal = [...(P.tradeLocal ?? []), q]; const user = new web3.PublicKey(q.publicKey);
-    const msg = new web3.TransactionMessage({ payerKey: user, recentBlockhash: '11111111111111111111111111111111', instructions: [new web3.TransactionInstruction({ programId: new web3.PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'), keys: [{ pubkey: user, isSigner: true, isWritable: true }], data: Buffer.from([2]) })] }).compileToV0Message();
-    setTimeout(() => { if (q.action === 'buy') { S.held += BigInt(Math.round(q.amount * 3e10)); S.balanceLamports -= Math.round(q.amount * 1e9); } else { const t = BigInt(Math.round(q.amount * 1e6)); S.held -= t > S.held ? S.held : t; S.balanceLamports += 5e7; } }, 150); // balances change once the trade lands
+    const msg = new web3.TransactionMessage({ payerKey: user, recentBlockhash: '11111111111111111111111111111111', instructions: [new web3.TransactionInstruction({ programId: new web3.PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'), keys: [{ pubkey: user, isSigner: true, isWritable: true }], data: Buffer.from([2,++buildNumber%255]) })] }).compileToV0Message();
+    const buy=q.action==='buy',tokens=buy?BigInt(Math.floor((800e6-40*800e6/(40+q.amount*.99))*1e6)):BigInt(Math.round(q.amount*1e6));
+    builtSwaps.set(messageKey(new web3.VersionedTransaction(msg)),{owner:q.publicKey,mint:q.mint,buy,tokens,sol:buy?Math.round(q.amount*1e9):Math.floor(40e9*Number(tokens)/(800e12+Number(tokens))*.99)});
     res.setHeader('content-type', 'application/octet-stream'); return res.end(Buffer.from(new web3.VersionedTransaction(msg).serialize())); }
   if (p === '/pp/tradelocal') return json(res, P.tradeLocal ?? []);
   if (p === '/price') return json(res, { So11111111111111111111111111111111111111112: { usdPrice: 150 } });

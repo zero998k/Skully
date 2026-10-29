@@ -131,7 +131,7 @@ check('personal wallet','largest-asset allocation does not mistake grouped small
 for(const [name,ok]of Object.entries(fl.walletMath??{}))check('personal wallet',name,ok===true,ok);
 check('personal wallet','financial calculation tests ran',Object.keys(fl.walletMath??{}).length===11,fl.walletMath);
 for(const [name,ok]of Object.entries(fl.priceMath??{}))check('live prices',name,ok===true,ok);
-check('live prices','price calculation and lifecycle tests ran',Object.keys(fl.priceMath??{}).length===9,fl.priceMath);
+check('live prices','price calculation and lifecycle tests ran',Object.keys(fl.priceMath??{}).length===12,fl.priceMath);
 check('live prices','market and sell values update under one second while full state is stalled',fl.priceTickWhileStateStalled&&fl.priceTickMs<1000,[fl.priceTickWhileStateStalled,fl.priceTickMs]);
 check('live prices','late full state cannot rewind a streamed price',fl.oldStateCannotRewindPrice===true,fl.oldStateCannotRewindPrice);
 check('live prices','market versus sell PnL and two decimal precision are explicit',fl.marketAndSellClearlySeparated&&fl.twoDecimalPercent,[fl.marketAndSellClearlySeparated,fl.twoDecimalPercent]);
@@ -141,6 +141,19 @@ check('live prices','fresh price after resync triggers take profit promptly',fl.
 check('live prices','fresh stop loss sells promptly and each position sells only once',fl.liveStopLoss&&fl.stopLossMs<2000&&fl.oneSellPerPosition&&/stop-loss/.test(fl.stopLossReason??''),[fl.stopLossMs,fl.stopLossReason,fl.oneSellPerPosition]);
 check('live prices','a manual sell racing an automatic exit cannot sell the position twice',fl.manualAndAutoCannotDoubleSell===true,fl.manualAndAutoCannotDoubleSell);
 for (const name of ['paperIsNotConfirmed', 'noRouteCacheSkipsRedundantQuote', 'expiredRouteCacheRechecks', 'confirmedBuyWithoutExtraLookup', 'sellsAreTimed', 'failedConfirmationDoesNotOpenOrDuplicate', 'currentFreeJupiterEndpoint']) check('speed', name, speed[name] === true, speed[name] ?? speed.crashed);
+
+const fills=json('fills.json');
+for(const [name,ok]of Object.entries(fills))check('fill accuracy',name,ok===true,ok);
+check('fill accuracy','receipt and non-SOL accounting tests ran',Object.keys(fills).length===9,fills);
+const rapid=json('rapid.json');
+for(const [name,ok]of Object.entries(rapid.checks??{}))check('rapid copy',name,ok===true,ok);
+check('rapid copy','24 repeated cycles from 25ms to five seconds in paper and simulated live mode',rapid.cycles===24&&rapid.samples?.every(x=>x.sellSubmitMs<1000)&&Object.keys(rapid.checks??{}).length===28,rapid);
+check('PnL display','top and open trades show SOL, USD and percent',fl.pnlSolUsdTop&&fl.pnlSolUsdTrade&&fl.liveTopPnlChangesWithTicks,[fl.pnlSolUsdTop,fl.pnlSolUsdTrade,fl.liveTopPnlChangesWithTicks]);
+check('copy decisions','copy and skip explanations are visible',fl.copyReasonsVisible,fl.copyReasonsVisible);
+check('sell recovery','a failed sell reports its error and restores the button without losing the position',fl.failedSellButtonRecovers&&fl.failedSellExplained&&fl.failedSellKeepsPosition,[fl.failedSellButtonRecovers,fl.failedSellExplained]);
+check('sell recovery','live PnL keeps updating during a stalled sell',fl.pnlContinuesDuringSell&&fl.pnlDuringSellMs<1000,fl.pnlDuringSellMs);
+check('sell recovery','a stalled request shows an explanation and restores the button',fl.stalledSellButtonRecovers&&fl.stalledSellExplained,[fl.stalledSellButtonRecovers,fl.stalledSellExplained]);
+check('sell recovery','the recovered button completes exactly one sell',fl.recoveredButtonCanSell&&fl.recoveredSellOnlyOnce,[fl.recoveredButtonCanSell,fl.recoveredSellOnlyOnce]);
 
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

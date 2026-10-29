@@ -13,10 +13,10 @@ const usd=curve();Keypair.generate().publicKey.toBuffer().copy(usd.data,83);asse
 assert(decodePool(pool(),mint));const boosted=pool();boosted.data[245]=1;assert.equal(decodePool(boosted,mint),null);
 results.validatedOfficialLayoutsAndSolQuotes=true;
 
-let time=10000,mode='paper',current={tokens:'100000000000000',solSpent:1,openedAt:'2026-01-01T00:00:00Z'},curveData=curve(),poolData=null,quoteCalls=0,busy=false,slotCallback;
+let time=10000,mode='paper',current={tokens:'100000000000000',solSpent:1,openedAt:'2026-01-01T00:00:00Z'},curveData=curve(),poolData=null,quoteCalls=0,busy=false,slotCallback,routeCallback;
 const subscriptions=new Map(),removed=[],book={get mode(){return mode;},positions:{entries:()=>current?[[mint,current]]:[],has:m=>m===mint&&!!current,get:()=>current}};
 const conn={onAccountChange:(key,fn)=>{const id=subscriptions.size+1;subscriptions.set(id,{key:key.toBase58(),fn});return id;},removeAccountChangeListener:async id=>{removed.push(id);subscriptions.delete(id);},
- onSlotChange:fn=>{slotCallback=fn;return 200;},removeSlotChangeListener:async()=>{},onLogs:()=>300,removeOnLogsListener:async()=>{},
+ onSlotChange:fn=>{slotCallback=fn;return 200;},removeSlotChangeListener:async()=>{},onLogs:(_key,fn)=>{routeCallback=fn;return 300;},removeOnLogsListener:async()=>{},
  getAccountInfoAndContext:async()=>({context:{slot:10},value:curveData}),getAccountInfo:async()=>poolData,
  getMultipleAccountsInfoAndContext:async()=>({context:{slot:20},value:[vault(mint,1000000000000000n),vault(WSOL,100_000_000_000n)]})};
 const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
@@ -53,4 +53,20 @@ engine=createLivePrices({connection:lateConnection,book,now:()=>time,readQuote:a
 releaseBootstrap({context:{slot:50},value:curve()});await flush();assert.equal(engine.get(mint,current).marketWorth,10);engine.stop();results.streamBeatsLateBootstrapWithinSameSlot=true;
 current={...current,tokens:'0'};engine=createLivePrices({connection:conn,book,now:()=>time,readQuote:async()=>{throw Error('Must not price an unknown token balance');}});engine.start();await flush();assert.equal(engine.get(mint,current),null);engine.stop();
 results.slowQuotesUseRequestTimeAndCannotResurrectPositions=true;results.backgroundQuotesYieldToTradesAndAreRateBounded=true;results.unknownTokenBalancesAreNeverPricedAsTotalLoss=true;
+
+// Missing paired vault notifications recover from one consistent batched snapshot.
+current=old;mode='paper';curveData=null;poolData=pool();
+const recovering={...conn,getMultipleAccountsInfoAndContext:async()=>({context:{slot:30},value:[vault(mint,500000000000000n),vault(WSOL,200_000_000_000n)]})};
+engine=createLivePrices({connection:recovering,book,now:()=>time,readQuote:async()=>({outAmount:'3000000000'})});engine.start();await flush();
+push(baseVault,vault(mint,250000000000000n),31);push(quoteVault,vault(WSOL,200_000_000_000n),32);assert(engine.get(mint,current).marketStale);
+recovering.getMultipleAccountsInfoAndContext=async()=>({context:{slot:33},value:[vault(mint,500000000000000n),vault(WSOL,200_000_000_000n)]});
+time+=2200;slotCallback({slot:33});engine.tick();await flush();assert.equal(engine.get(mint,current).marketWorth,40);assert(!engine.get(mint,current).marketStale);engine.stop();results.missingVaultPairResyncsWithoutMixedPrices=true;
+// A busy routed venue must not discard every completed sell quote forever.
+poolData=null;let quoteNumber=0,finishBusyQuote;
+engine=createLivePrices({connection:conn,book,now:()=>time,readQuote:()=>++quoteNumber===1?Promise.resolve({outAmount:'3000000000',routePlan:[{swapInfo:{ammKey:mint}}]}):new Promise(r=>finishBusyQuote=r)});
+engine.start();await flush();engine.tick();await flush();time+=2200;slotCallback({slot:40});engine.tick();time+=1;routeCallback({err:null});finishBusyQuote({outAmount:'5000000000'});await flush();
+assert.equal(engine.get(mint,current).worth,5);assert(engine.get(mint,current).priceStale);engine.stop();results.busyRouteQuotesStayVisibleButCannotTriggerStaleExits=true;
+// A trade-event seed expires quickly, even if the WS connection itself remains alive.
+busy=true;engine=createLivePrices({connection:conn,book,now:()=>time,isTrading:()=>busy,readQuote:async()=>({outAmount:'1'})});engine.start();engine.seedCurve(mint,{vSol:40,vTokens:800000000},42,time);assert.equal(engine.get(mint,current).marketWorth,5);
+time+=1001;slotCallback({slot:43});assert(engine.get(mint,current).priceStale);engine.seedCurve(mint,{vSol:80,vTokens:800000000},41,time-2000);assert.equal(engine.get(mint,current).marketWorth,5);engine.stop();busy=false;results.entryPriceSeedIsImmediateAndExpiresWithoutARead=true;
 console.log(JSON.stringify(results));

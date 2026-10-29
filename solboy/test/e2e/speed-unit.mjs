@@ -19,20 +19,25 @@ const positions=new Positions(path.join(dir,'positions.json'));
 const owner=Keypair.generate();
 const source=cfg.wallets[0].address;
 Object.assign(cfg,{onlyFirstBuy:true,sellOnlyOnFullExit:true,dailyLossLimitSol:100});
+const receipts=new Map();let buildMint;
 let onLogs,quotes=0,sends=0,held=0n,balance=1_000_000_000n,route=false,fail=false,latestBlockhashCalls=0,lastConfirm=null,lastUrl;
 const connection={
  onLogs:(_key,fn)=>{onLogs=fn;return 1;},removeOnLogsListener:async()=>{},
  getParsedAccountInfo:async()=>({value:{data:{parsed:{info:{mintAuthority:null,freezeAuthority:null}}}}}),
  getParsedTokenAccountsByOwner:async(key)=>({value:key.toBase58()===source||!held?[]:[{account:{data:{parsed:{info:{tokenAmount:{amount:String(held)}}}}}}]}),
  getBalance:async()=>Number(balance),
+ getParsedTransaction:async sig=>receipts.get(sig)??null,
  getLatestBlockhash:async()=>{latestBlockhashCalls++;throw Error('Unnecessary blockhash lookup');},
- sendRawTransaction:async(raw)=>{sends++;const tx=VersionedTransaction.deserialize(raw);if(!fail){if(tx.message.compiledInstructions[0].data[0]===1)held+=1000n;else{held=0n;balance+=100_000_000n;}}return bs58.encode(tx.signatures[0]);},
+ sendRawTransaction:async(raw)=>{sends++;const tx=VersionedTransaction.deserialize(raw),sig=bs58.encode(tx.signatures[0]),buy=tx.message.compiledInstructions[0].data[0]===1,pre=held,preSol=balance;
+ if(!fail){if(buy){held+=1000n;balance-=50_005_000n;}else{held=0n;balance+=99_995_000n;}}
+ const tb=n=>({mint:buildMint,owner:owner.publicKey.toBase58(),uiTokenAmount:{amount:String(n),decimals:6}});
+ receipts.set(sig,{meta:{err:fail?{InstructionError:[0,'Custom']}:null,fee:5000,preBalances:[Number(preSol)],postBalances:[Number(balance)],preTokenBalances:[tb(pre)],postTokenBalances:[tb(held)]},transaction:{message:{accountKeys:[owner.publicKey.toBase58()]}}});return sig;},
  confirmTransaction:async(strategy,commitment)=>{lastConfirm={strategy,commitment};await new Promise(r=>setTimeout(r,10));return {context:{slot:1},value:{err:fail?{InstructionError:[0,'Custom']}:null}};},
 };
 globalThis.fetch=async(url,init)=>{
  lastUrl=String(url);
  if(lastUrl.endsWith('/trade-local')){
-  const body=JSON.parse(init.body),user=new PublicKey(body.publicKey);
+  const body=JSON.parse(init.body);buildMint=body.mint;const user=new PublicKey(body.publicKey);
   const message=new TransactionMessage({payerKey:user,recentBlockhash:'11111111111111111111111111111111',instructions:[new TransactionInstruction({programId:new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'),keys:[{pubkey:user,isSigner:true,isWritable:true}],data:Buffer.from([body.action==='buy'?1:2])})]}).compileToV0Message();
   return new Response(new VersionedTransaction(message).serialize());
  }
@@ -54,8 +59,8 @@ const mint=Keypair.generate().publicKey.toBase58();emit(mint,'buy');await wait((
 assert.equal(bot.copySpeed().paper,true);assert.equal(bot.copySpeed().confirmed,null);results.paperIsNotConfirmed=true;
 await bot.valueOf(mint,positions.get(mint).tokens);const count=quotes;emit(mint,'sell');await wait(()=>!positions.has(mint));assert.equal(quotes,count);results.noRouteCacheSkipsRedundantQuote=true;
 emit(mint,'buy');await wait(()=>positions.has(mint));await bot.valueOf(mint,positions.get(mint).tokens);
-await new Promise(r=>setTimeout(r,2100));route=true;const previous=quotes;emit(mint,'sell');await wait(()=>!positions.has(mint));assert.equal(quotes,previous+1);results.expiredRouteCacheRechecks=true;
-cfg.dryRun=false;route=false;const liveMint=Keypair.generate().publicKey.toBase58();emit(liveMint,'buy');await wait(()=>positions.has(liveMint));
+await new Promise(r=>setTimeout(r,2100));route=true;const previous=quotes;void bot.sellNow(mint);await wait(()=>!positions.has(mint));assert.equal(quotes,previous+1);results.expiredRouteCacheRechecks=true;
+cfg.dryRun=false;route=false;const liveMint=Keypair.generate().publicKey.toBase58();emit(liveMint,'buy');await wait(()=>positions.has(liveMint)&&!positions.get(liveMint).pendingBuy);
 let timing=bot.copySpeed();assert.equal(timing.side,'buy');assert.equal(timing.paper,false);assert(timing.confirmed>=timing.last&&timing.complete>=timing.confirmed);
 assert.equal(typeof lastConfirm.strategy,'string');assert.equal(lastConfirm.commitment,'confirmed');assert.equal(latestBlockhashCalls,0);results.confirmedBuyWithoutExtraLookup=true;
 emit(liveMint,'sell');await wait(()=>!positions.has(liveMint));timing=bot.copySpeed();assert.equal(timing.side,'sell');assert(timing.confirmed>=timing.last);results.sellsAreTimed=true;
