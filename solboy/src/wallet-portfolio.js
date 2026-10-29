@@ -10,12 +10,40 @@ const day = (time) => { const d = new Date(time); return `${d.getFullYear()}-${S
 const number = (n) => n !== null && n !== '' && Number.isFinite(Number(n)) ? Number(n) : null;
 const sum = (rows, key) => rows.reduce((n, r) => n + (r[key] ?? 0), 0);
 
+// These statistics use recorded real sells only; deposits and paper profits never enter them.
+export function walletPerformance(rows) {
+  const sells=rows.filter(t=>t.pnl!=null), winners=sells.filter(t=>t.pnl>0), losers=sells.filter(t=>t.pnl<0);
+  const grossProfit=sum(winners,'pnl'),grossLoss=-sum(losers,'pnl');
+  let running=0,peak=0,drawdown=0,winStreak=0,lossStreak=0,bestWinStreak=0,bestLossStreak=0;
+  const byDay=new Map(),sources=new Map();
+  for(const t of rows){
+    const key=t.day??day(t.time),d=byDay.get(key)??{date:key,pnl:0,buys:0,sells:0,wins:0,volume:0};
+    d.volume+=t.sol; d[t.side==='buy'?'buys':'sells']++;
+    if(t.pnl!=null){d.pnl+=t.pnl;if(t.pnl>0)d.wins++;running+=t.pnl;peak=Math.max(peak,running);drawdown=Math.max(drawdown,peak-running);
+      winStreak=t.pnl>0?winStreak+1:0;lossStreak=t.pnl<0?lossStreak+1:0;
+      bestWinStreak=Math.max(bestWinStreak,winStreak);bestLossStreak=Math.max(bestLossStreak,lossStreak);}
+    byDay.set(key,d);
+    const source=t.wallet||'unassigned',s=sources.get(source)??{wallet:t.wallet||null,buys:0,sells:0,pnl:0,volume:0,wins:0};
+    s[t.side==='buy'?'buys':'sells']++;s.pnl+=t.pnl??0;s.volume+=t.sol;if(t.pnl>0)s.wins++;sources.set(source,s);
+  }
+  const days=[...byDay.values()].sort((a,b)=>a.date.localeCompare(b.date)),closedDays=days.filter(d=>d.sells);
+  const soldCost=sells.reduce((n,t)=>n+Math.max(0,t.sol-t.pnl),0);
+  return {grossProfit,grossLoss,profitFactor:grossLoss>0?grossProfit/grossLoss:null,
+    averageWin:winners.length?grossProfit/winners.length:null,averageLoss:losers.length?-grossLoss/losers.length:null,
+    averagePnl:sells.length?sum(sells,'pnl')/sells.length:null,bestSell:sells.length?sells.reduce((n,t)=>Math.max(n,t.pnl),-Infinity):null,
+    worstSell:sells.length?sells.reduce((n,t)=>Math.min(n,t.pnl),Infinity):null,breakEven:sells.filter(t=>t.pnl===0).length,
+    soldCost,returnPct:soldCost>0?sum(sells,'pnl')/soldCost*100:null,drawdown:sells.length?drawdown:null,
+    bestWinStreak,bestLossStreak,activeDays:days.length,greenDays:closedDays.filter(d=>d.pnl>0).length,redDays:closedDays.filter(d=>d.pnl<0).length,
+    bestDay:closedDays.length?closedDays.reduce((a,b)=>a.pnl>b.pnl?a:b):null,worstDay:closedDays.length?closedDays.reduce((a,b)=>a.pnl<b.pnl?a:b):null,
+    days,sources:[...sources.values()].sort((a,b)=>b.volume-a.volume).slice(0,20)};
+}
+
 // Only the owner's LIVE book is supplied here. Practice profits never become wallet funds.
 export function personalPortfolio({ address, balance, positions = [], trades = [], chain = {}, knownValues = [], now = Date.now() }) {
-  const live = trades.filter(t => t.action === 'buy' || t.action === 'sell').map(t => ({
+  const live = trades.filter(t => (t.action === 'buy' || t.action === 'sell') && Number.isFinite(new Date(t.time).getTime()) && new Date(t.time).getTime()<=now).map(t => ({
     side: t.action, mint: t.token, time: t.time, sol: number(t.sol) ?? 0,
-    pnl: t.action === 'sell' ? number(t.pnl_sol) : null, wallet: t.copied_wallet, reason: t.reason, sig: t.tx || null,
-  }));
+    pnl: t.action === 'sell' ? number(t.pnl_sol) : null, wallet: t.copied_wallet, reason: t.reason, sig: t.tx || null, day:day(t.time),
+  })).sort((a,b)=>new Date(a.time)-new Date(b.time));
   const grouped = new Map(), pos = new Map(positions), held = new Map((chain.holdings ?? []).map(h => [h.mint, { ...h }]));
   for (const t of live) {
     const g = grouped.get(t.mint) ?? { mint:t.mint, bought:0, sold:0, realized:0, buys:0, sells:0, openedAt:t.time, lastAt:t.time };
@@ -27,7 +55,7 @@ export function personalPortfolio({ address, balance, positions = [], trades = [
       else held.set(t.mint, { ...(held.get(t.mint) ?? {}), mint:t.mint, raw:pos.get(t.mint).tokens });
     }
   }
-  for (const [mint,p] of positions) if (!held.has(mint) && (!chain.at || new Date(p.openedAt).getTime() > chain.at)) held.set(mint,{mint,raw:p.tokens});
+  for (const [mint,p] of pos) if (!held.has(mint) && (!chain.at || new Date(p.openedAt).getTime() > chain.at)) held.set(mint,{mint,raw:p.tokens});
   const prices = new Map((chain.prices ?? []).map(p => [p.mint,p]));
   const holdings = [...held.values()].map(h => {
     const p = pos.get(h.mint), info = prices.get(h.mint) ?? {}, raw = String(h.raw ?? '0');
@@ -51,8 +79,10 @@ export function personalPortfolio({ address, balance, positions = [], trades = [
     const stride=Math.max(1,Math.ceil(curve.length/150));
     periods[days||'all']={realized:sum(sells,'pnl'),buys:list.filter(t=>t.side==='buy').length,sells:sells.length,
       wins:sells.filter(t=>t.pnl>0).length,volume:sum(list,'sol'),bins,
-      curve:curve.filter((_,i)=>i%stride===0||i===curve.length-1)};
+      curve:curve.filter((_,i)=>i%stride===0||i===curve.length-1),insights:walletPerformance(list)};
   }
+  const calendarDays=periods.all.insights.days;
+  for(const p of Object.values(periods))delete p.insights.days;
   const history=[...grouped.values()].map(g=>{
     const h=holdings.find(h=>h.mint===g.mint),info=prices.get(g.mint)??{};
     return {...g,symbol:info.symbol??h?.symbol??null,name:info.name??h?.name??null,image:info.image??h?.image??null,
@@ -61,7 +91,8 @@ export function personalPortfolio({ address, balance, positions = [], trades = [
   return {address,balance,solUsd:chain.solUsd??null,chainAt:chain.at??null,scanning:Boolean(chain.scanning),error:chain.error??null,
     holdings,unknown,unknownCost,totalPartial:!chain.at||Boolean(chain.error)||unknown>0,totalSol:balance==null?null:balance+sum(holdings,'valueSol'),
     unrealized:holdings.some(h=>h.pnlSol!=null)?sum(holdings,'pnlSol'):holdings.length?null:0,
-    realized:periods.all.realized,periods,calendar,history:history.sort((a,b)=>b.lastAt.localeCompare(a.lastAt)).slice(0,500),
+    realized:periods.all.realized,periods,calendar,calendarDays,today:day(now),calendarTimezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
+    detailTrades:live.slice(-500).reverse(),history:history.sort((a,b)=>b.lastAt.localeCompare(a.lastAt)).slice(0,500),
     top:history.slice().sort((a,b)=>b.pnl-a.pnl).slice(0,100),activity:live.slice(-100).reverse(),
     transfers:chain.transfers??[],transferError:chain.transferError??null,transfersAt:chain.transfersAt??null,
     coverage:'Profit and cost figures cover real trades recorded by this SolBoy and may not include every network fee. External token costs are unknown; values are estimates before selling fees and price impact. Period filters apply to the chart and performance; holdings and history show all-time records.'};
