@@ -10,7 +10,7 @@ function settings() {
   return { base, headers };
 }
 
-export async function getQuote({ inputMint, outputMint, amount, slippageBps }) {
+export async function getQuote({ inputMint, outputMint, amount, slippageBps, signal }) {
   const { base, headers } = settings();
   const params = new URLSearchParams({
     inputMint,
@@ -18,7 +18,7 @@ export async function getQuote({ inputMint, outputMint, amount, slippageBps }) {
     amount: String(amount),
     slippageBps: String(slippageBps),
   });
-  const res = await fetch(`${base}/quote?${params}`, { headers });
+  const res = await fetch(`${base}/quote?${params}`, { headers, ...(signal?{signal}:{}) });
   if (!res.ok) throw new Error(`Jupiter quote failed (${res.status}): ${await res.text()}`);
   const quote = await res.json();
   if (!quote.outAmount) throw new Error(`Jupiter found no route: ${JSON.stringify(quote)}`);

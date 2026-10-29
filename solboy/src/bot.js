@@ -4,6 +4,7 @@ import { getQuote, buildSwap } from './jupiter.js';
 import { log, short, recordTrade, notify, c } from './log.js';
 import { checkWallet, saveWallets } from './config.js';
 import { recordCopy } from './finder.js';
+import { createLivePrices, positionPriceKey } from './live-prices.js';
 
 const LAMPORTS = 1e9;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -14,7 +15,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 const PUMP_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
 
-export function createBot({ cfg, connection, book, rpcFetch }) {
+export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) {
   const positions = book.positions;
   const seen = new Set();
   const locks = new Map();
@@ -23,6 +24,11 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
   const speeds = []; // Sent and confirmation-observed times, measured from this bot receiving the trigger.
   const noRoutes = new Map();
   let buysInFlight = 0; // copy buys still being sent, so several at once can't go past maxOpenPositions
+  const exitQueued=new Set();
+  const balanceRepairs=new Set(),lastBalanceRepair=new Map();
+  const prices=priceConnection?createLivePrices({connection:priceConnection,book,isTrading:()=>buysInFlight>0||locks.size>0,
+    readQuote:(mint,tokens,signal)=>quoteFor({inputMint:mint,outputMint:WSOL,amount:tokens,slippageBps:cfg.sellSlippageBps,signal}),
+    onCurve:(mint,curve)=>rememberCurve(mint,curve)}):null;
   const tag = () => (cfg.dryRun ? 'PAPER ' : '');
 
   // Run trades for the same token one at a time, so a fast buy-then-sell can't overlap.
@@ -433,6 +439,35 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
   let checking = false;
   async function checkExits() {
     if (checking || !(cfg.takeProfitPct || cfg.stopLossPct)) return;
+    if(prices){
+      for(const [mint,pos]of positions.entries()){
+        let tokens;try{tokens=BigInt(pos.tokens??0);}catch{continue;}
+        if(!cfg.dryRun&&tokens===0n){
+          const key=positionPriceKey(book.mode,mint,pos);
+          if(!balanceRepairs.has(key)&&Date.now()-(lastBalanceRepair.get(key)??0)>2000){
+            balanceRepairs.add(key);lastBalanceRepair.set(key,Date.now());
+            if(lastBalanceRepair.size>200)lastBalanceRepair.delete(lastBalanceRepair.keys().next().value);
+            void withLock(mint,async()=>{const current=positions.get(mint);if(!current||positionPriceKey(book.mode,mint,current)!==key)return;
+              const held=await tokenBalance(mint);if(held>0n)positions.update(mint,{tokens:held.toString()});
+            }).catch(()=>{}).finally(()=>balanceRepairs.delete(key));
+          }
+          continue;
+        }
+        const mark=prices.get(mint,pos);if(!mark||mark.priceStale||mark.worth==null||!(pos.solSpent>0))continue;
+        const pct=(mark.worth-pos.solSpent)/pos.solSpent*100;
+        if(!((cfg.takeProfitPct&&pct>=cfg.takeProfitPct)||(cfg.stopLossPct&&pct<=-cfg.stopLossPct)))continue;
+        const key=positionPriceKey(book.mode,mint,pos);if(exitQueued.has(key))continue;exitQueued.add(key);
+        // Recheck the CURRENT position and CURRENT price after acquiring the same lock as manual/copied sells.
+        void withLock(mint,async()=>{
+          const current=positions.get(mint);if(!current||positionPriceKey(book.mode,mint,current)!==key)return;
+          const latest=prices.get(mint,current);if(!latest||latest.priceStale||latest.worth==null||!(current.solSpent>0))return;
+          const value=(latest.worth-current.solSpent)/current.solSpent*100;
+          if(cfg.takeProfitPct&&value>=cfg.takeProfitPct)await sellPosition(mint,1,`take-profit hit (+${value.toFixed(1)}%)`);
+          else if(cfg.stopLossPct&&value<=-cfg.stopLossPct)await sellPosition(mint,1,`stop-loss hit (${value.toFixed(1)}%)`);
+        }).finally(()=>exitQueued.delete(key)).catch(()=>{});
+      }
+      return;
+    }
     checking = true;
     try {
       for (const [mint, pos] of positions.entries()) {
@@ -541,6 +576,8 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
     }
     // Always scheduled, so take-profit / stop-loss can be switched on while SolBoy is running.
     setInterval(checkExits, cfg.priceCheckSeconds * 1000);
+    prices?.subscribe(()=>{void checkExits();});
+    prices?.start();
     setInterval(() => {
       log(`Status: ${positions.count()} open position(s), today's P&L ${positions.todayPnl().toFixed(4)} SOL, ${ignored} non-trade transactions ignored`);
     }, 10 * 60 * 1000);
@@ -582,6 +619,8 @@ export function createBot({ cfg, connection, book, rpcFetch }) {
     sellAll,
     sellNow: (mint) => withLock(mint, () => sellPosition(mint, 1, 'sold by you from the dashboard')),
     valueOf,
+    priceOf:(mint,pos)=>prices?.get(mint,pos)??null,
+    onPrices:fn=>prices?.subscribe(fn)??(()=>{}),
     addWallet,
     removeWallet,
   };

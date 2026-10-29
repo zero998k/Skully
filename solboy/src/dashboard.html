@@ -618,7 +618,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
     <section class="panel cut">
       <h2><span class="ic" style="background:var(--accent)">🎒</span>Positions <span class="count" id="slotCount"></span></h2>
       <div class="slots" id="slots"></div>
-      <div class="hint">"Worth" is what selling right now would return, after price impact.</div>
+      <div class="hint">Market PnL follows your entry in SOL. Auto-exits use fresh estimated sell PnL; delayed data is flagged.</div>
     </section>
     <section class="panel cut">
       <h2><span class="ic" style="background:var(--sky)">⚡</span>Live feed
@@ -750,15 +750,20 @@ function countTo(el, value, decimals = 4) {
 }
 
 /* ---------- state ---------- */
-let S = null, refreshTask = null, latestPortfolio = null;
+let S = null, refreshTask = null, latestPortfolio = null, pricesConnected=false, latestPriceSequence=0;
+const latestPrices=new Map();
+const inventoryPriceKey=(mode,p)=>JSON.stringify([mode,p.mint,String(p.tokens),p.paid,p.openedAt]);
+function mergeLivePrices(state){
+  return {...state,inventory:state.inventory.map(p=>{const price=latestPrices.get(state.mode+':'+p.mint);return price?.key===inventoryPriceKey(state.mode,p)&&(price.priceSequence??0)>=(p.priceSequence??0)?{...p,...price}:p;})};
+}
 function refresh() {
   if (refreshTask) return refreshTask;
   refreshTask = (async () => {
     try {
       const state = await api('/api/state');
       // A slow price/balance request must never overwrite a newer trade received over the stream.
-      S = latestPortfolio && (state.portfolioRevision ?? 0) < latestPortfolio.portfolioRevision
-        ? { ...state, ...latestPortfolio } : state;
+      S = mergeLivePrices(latestPortfolio && (state.portfolioRevision ?? 0) < latestPortfolio.portfolioRevision
+        ? { ...state, ...latestPortfolio } : state);
       online(true); render();
     } catch (e) {
       online(false);
@@ -815,21 +820,46 @@ function render() {
 function renderInventory() {
   $('slotCount').textContent = `${S.inventory.length}/${S.maxSlots} slots`;
   const cards = S.inventory.map((p) => {
-    const pnl = p.worth == null ? null : p.worth - p.paid;
-    const pct = pnl == null ? '' : `${pnl > 0 ? '▲ +' : pnl < 0 ? '▼ ' : ''}${Math.round((pnl / p.paid) * 100)}%`;
+    const stale=p.priceStale||Date.now()>(p.priceValidUntil??0)||!pricesConnected;
+    const marketStale=p.marketStale||Date.now()>(p.marketValidUntil??0)||!pricesConnected;
+    const pnl = p.worth == null||!(p.paid>0) ? null : p.worth - p.paid;
+    const marketPnl=p.marketWorth==null||!(p.paid>0)?null:p.marketWorth-p.paid;
+    const percent=v=>v==null?'—':`${v>0?'▲ +':v<0?'▼ ':''}${(v/p.paid*100).toFixed(2)}%`;
+    const main=marketPnl!=null?marketPnl:pnl,mainStale=marketPnl!=null?marketStale:stale;
     return `<div class="slot cut">
       <div class="name">${esc(p.name)}</div>
       <div class="meta">copied from ${esc(p.from)} · ${ago(p.openedAt)}</div>
-      <div class="pnl ${cls(pnl)}">${pnl == null ? '...' : esc(pct)}</div>
+      <div class="meta">${marketPnl!=null?'Market PnL · your entry in SOL':'Estimated sell PnL · your entry in SOL'}</div>
+      <div class="pnl ${mainStale?'':cls(main)}" style="${mainStale?'opacity:.45':''}">${main==null?'...':esc(percent(main))}</div>
+      <div class="meta" data-price-status="${mainStale?'stale':'fresh'}" style="color:${mainStale?'var(--warn)':'var(--win)'}">${mainStale?'◷ Price delayed / reconnecting':'● '+(marketPnl!=null?'Streaming market':'Fresh sell quote')}</div>
       <div class="row"><span>Paid</span><span>${p.paid.toFixed(4)} SOL</span></div>
-      <div class="row"><span>Worth</span><span>${p.worth == null ? 'n/a' : p.worth.toFixed(4) + ' SOL'}</span></div>
+      <div class="row"><span>Est. sell return</span><span>${p.worth == null ? 'n/a' : p.worth.toFixed(4) + ' SOL'}${stale?' · delayed':''}</span></div>
+      <div class="row"><span>Sell PnL${marketPnl!=null?' (auto-exit)':''}</span><span class="${stale?'':cls(pnl)}">${percent(pnl)}${stale?' · delayed':''}</span></div>
+      <div class="meta">${esc(p.marketSource||p.priceSource||'Waiting for price')}<br>Auto-exits use fresh estimated sell returns, including price impact. Fees and fills can differ.</div>
       <div class="actions">
         <a class="btn" href="https://dexscreener.com/solana/${encodeURIComponent(p.mint)}" target="_blank" rel="noopener">Chart</a>
         <button class="btn danger" data-sell="${esc(p.mint)}" data-name="${esc(p.name)}">Sell now</button>
       </div></div>`;
   });
-  for (let i = S.inventory.length; i < S.maxSlots; i++) cards.push('<div class="slot empty">empty slot</div>');
-  $('slots').innerHTML = cards.join('');
+  // Keep each position and its Sell button mounted while ticks arrive. Rebuilding the whole grid
+  // would restart its fade-in animation and could replace a button between pointer-down and click.
+  const slots=$('slots'),existing=new Map([...slots.children].filter(n=>n.dataset.positionKey).map(n=>[n.dataset.positionKey,n])),desired=[];
+  cards.forEach((html,i)=>{
+    const key=inventoryPriceKey(S.mode,S.inventory[i]),template=document.createElement('template');template.innerHTML=html;
+    const fresh=template.content.firstElementChild,old=existing.get(key);
+    if(old){
+      [...fresh.children].forEach((child,j)=>{if(child.classList.contains('actions'))return;const target=old.children[j];
+        if(target.innerHTML!==child.innerHTML)target.innerHTML=child.innerHTML;
+        target.className=child.className;target.style.cssText=child.style.cssText;
+        if(child.hasAttribute('data-price-status'))target.setAttribute('data-price-status',child.getAttribute('data-price-status'));
+      });
+      old.querySelector('[data-sell]').dataset.name=S.inventory[i].name;desired.push(old);
+    }else{fresh.dataset.positionKey=key;desired.push(fresh);}
+  });
+  const empties=[...slots.querySelectorAll('.slot.empty')];
+  for(let i=S.inventory.length;i<S.maxSlots;i++){let empty=empties.shift();if(!empty){empty=document.createElement('div');empty.className='slot empty';empty.textContent='empty slot';}desired.push(empty);}
+  const keep=new Set(desired);for(const child of [...slots.children])if(!keep.has(child))child.remove();
+  desired.forEach((node,i)=>{if(slots.children[i]!==node)slots.insertBefore(node,slots.children[i]??null);});
 }
 $('slots').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-sell]'); if (!b) return;
@@ -1533,17 +1563,24 @@ function react(ev) {
 }
 function connect() {
   const es = new EventSource(`/api/events?t=${TOKEN}`);
-  es.onopen = () => { online(true); refresh(); };
+  es.onopen = () => { pricesConnected=true;online(true); refresh(); };
   es.onmessage = (m) => { const ev = JSON.parse(m.data); addFeed(ev); if (!ev.backlog) react(ev); };
   es.addEventListener('portfolio', (m) => {
     const state = JSON.parse(m.data);
     if (latestPortfolio && state.portfolioRevision <= latestPortfolio.portfolioRevision) return;
     latestPortfolio = state;
-    if (S) { S = { ...S, ...state }; render(); }
+    if (S) { S = mergeLivePrices({ ...S, ...state }); render(); }
     if(S?.mode==='live')loadPersonalWallet(false,true);
   });
-  es.onerror = () => online(false);
+  es.addEventListener('prices',m=>{
+    const data=JSON.parse(m.data);if(data.sequence<=latestPriceSequence)return;latestPriceSequence=data.sequence;
+    for(const p of data.prices)latestPrices.set(data.mode+':'+p.mint,p);
+    while(latestPrices.size>200)latestPrices.delete(latestPrices.keys().next().value);
+    if(S&&S.mode===data.mode){S=mergeLivePrices(S);renderInventory();}
+  });
+  es.onerror = () => {pricesConnected=false;online(false);if(S)renderInventory();};
 }
+setInterval(()=>{if(S?.inventory.length)renderInventory();},1000);
 
 /* ---------- hypothetical PnL: what each copy made vs following their sells vs holding ---------- */
 const H = { data: null, size: store.get('hypoSize', '') };

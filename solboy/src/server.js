@@ -6,7 +6,7 @@ import { createShare } from './share.js';
 import { createClub } from './club.js';
 import { log, onLog, readTrades } from './log.js';
 import { summarize, scoreboard } from './stats.js';
-import { tokenNames, positionWorth } from './tokens.js';
+import { tokenNames } from './tokens.js';
 import { settingsRows } from './ui.js';
 import { applySetting, settingValue } from './settings.js';
 import { file } from './paths.js';
@@ -55,6 +55,9 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
   const clients = new Set();
   let lastState = null;
   let portfolioRevision = 0;
+  bot.onPrices?.(data=>{
+    for(const res of clients)res.write(`event: prices\ndata: ${JSON.stringify(data)}\n\n`);
+  });
 
   onLog((e) => {
     const ev = { ...e, kind: classify(e.text) };
@@ -98,19 +101,10 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
       dayResetAt: positions.resetToday(), dailyLossLimit: cfg.dailyLossLimitSol, maxSlots: cfg.maxOpenPositions,
       inventory: positions.entries().map(([mint, pos]) => ({ mint, name: names.get(mint) ?? mint,
         from: pos.sourceLabel, paid: pos.solSpent, openedAt: pos.openedAt, tokens: pos.tokens,
-        worth: lastState?.inventory.find(p => p.mint === mint && p.tokens === pos.tokens && p.paid === pos.solSpent)?.worth ?? null })),
+        ...(bot.priceOf?.(mint,pos)??{worth:null,priceStale:true}) })),
       trades: trades.slice(-50).reverse().map(t => ({ ...t, name: names.get(t.token) ?? t.token })),
       wallets: walletRows(counted),
     };
-  }
-
-  async function worthFallback(mint, pos) {
-    try {
-      const v = await bot.valueOf(mint, pos.tokens);
-      return v == null ? null : Number(v) / 1e9;
-    } catch {
-      return null;
-    }
   }
 
   async function accountState() {
@@ -127,17 +121,15 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
     const open = positions.entries();
     const recent = trades.slice(-50).reverse();
     const name = await tokenNames([...open.map(([m]) => m), ...recent.map((t) => t.token)]);
-    const inventory = await Promise.all(
-      open.map(async ([mint, pos]) => ({
+    const inventory = open.map(([mint, pos]) => ({
         mint,
         name: name(mint),
         from: pos.sourceLabel,
         paid: pos.solSpent,
         tokens: pos.tokens,
         openedAt: pos.openedAt,
-        worth: (await positionWorth(mint, pos, cfg.sellSlippageBps)) ?? (await worthFallback(mint, pos)),
-      })),
-    );
+        ...(bot.priceOf?.(mint,pos)??{worth:null,priceStale:true}),
+      }));
     const next = {
       portfolioRevision: revision,
       mode: book.mode,
@@ -358,7 +350,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         // Use the existing balance refresh, never add an urgent RPC request to a trade update.
         const balance=lastState?.account?.address===account.address()?lastState.account.balance:null;
         return send(res, 200, {...walletPortfolio.get({balance,refresh:url.searchParams.get('refresh')==='1',
-          knownValues:book.mode==='live' ? lastState?.inventory ?? [] : []}),portfolioRevision});
+          knownValues:book.mode==='live' ? (lastState?.inventory??[]).filter(p=>!p.priceStale&&Date.now()<(p.priceValidUntil??0)) : []}),portfolioRevision});
       }
 
       if (req.method === 'GET' && url.pathname === '/api/account/qr') {

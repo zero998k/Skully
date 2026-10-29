@@ -65,6 +65,7 @@ async function main() {
   });
   // Wallet scans use their own connection on the background lane, so they never slow down copy trading.
   const scanConnection = new Connection(rpcUrl, { commitment: 'confirmed', fetch: rpc.backgroundFetch, disableRetryOnRateLimit: true });
+  const priceConnection = new Connection(rpcUrl, { wsEndpoint:wsUrl, commitment:'processed', fetch:rpc.backgroundFetch, disableRetryOnRateLimit:true });
   const book = createBook(cfg, loadKeypair());
 
   if (!cfg.dryRun && !book.keypair) {
@@ -92,7 +93,7 @@ async function main() {
   if (cfg.keepAwake) keepAwake();
 
   const account = createAccount({ cfg, connection, book, positionsFor: book.positionsFor });
-  const bot = createBot({ cfg, connection, book, rpcFetch: rpc.fetch });
+  const bot = createBot({ cfg, connection, book, rpcFetch: rpc.fetch, priceConnection });
   const finder = createFinder({ cfg, connection: scanConnection, bot });
   const walletPortfolio = createWalletPortfolio({ connection: scanConnection, book, account });
   bot.start();

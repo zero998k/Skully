@@ -1,5 +1,5 @@
 import readline from 'node:readline';
-import { tokenNames, positionWorth } from './tokens.js';
+import { tokenNames } from './tokens.js';
 import { summarize, scoreboard } from './stats.js';
 import { c, write, log, pauseFeed, resumeFeed, readTrades } from './log.js';
 import { file } from './paths.js';
@@ -103,7 +103,7 @@ export function createMenu({ cfg, bot, book, account, dashboard, updater }) {
     }
     process.stdout.write(c.dim('\n  Checking current prices...\n'));
     const name = await tokenNames(open.map(([m]) => m));
-    const rows = await Promise.all(open.map(async ([mint, pos]) => ({ mint, pos, worth: await positionWorth(mint, pos, cfg.sellSlippageBps) })));
+    const rows = open.map(([mint,pos])=>{const price=bot.priceOf(mint,pos);return {mint,pos,worth:price&&!price.priceStale?price.worth:null};});
     process.stdout.write(`\n  ${pad('#', 3)}${pad('Token', 14)}${pad('Bought', 10)}${pad('Copied from', 14)}${pad('Paid', 13)}${pad('Worth now', 13)}Profit/loss\n`);
     let paid = 0;
     let worth = 0;
