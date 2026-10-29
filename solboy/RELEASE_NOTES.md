@@ -1,3 +1,6 @@
+**Fixed in 1.11.1: wallet balance syncing**
+- Corrected a token-program address so real on-chain holdings can sync in My wallet and the Wallet Finder. Added checks that reject an incorrect program address.
+
 **New in 1.11.0: your own colourful wallet portfolio**
 - Open **My wallet** (or click your balance) for your real SOL, token holdings, profit chart, performance, history, Top 100 and recent transfers, with SOL/USD and time filters.
 - Brighter cartoon styling, a private wallet view for each friend using their own SolBoy, and deposit/withdraw controls together in one place. Practice profits stay separate from real funds; unpriced coins and unknown costs are clearly marked.
