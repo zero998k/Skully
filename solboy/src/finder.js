@@ -11,7 +11,7 @@ import { file } from './paths.js';
 import { short } from './log.js';
 
 const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022 = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCCEpPxuEb');
+const TOKEN_2022 = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 const ATA_PROGRAM = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWAN6qDZTWnPC9DH');
 const SOL_PRICE_URL = () => process.env.SOL_PRICE_URL || `https://lite-api.jup.ag/price/v3?ids=${WSOL}`;
 const LAMPORTS = 1e9;

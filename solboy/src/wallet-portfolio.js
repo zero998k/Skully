@@ -4,7 +4,8 @@ import { file } from './paths.js';
 import { dexApi } from './endpoints.js';
 import { parseTrades, WSOL } from './detect.js';
 
-const PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCCEpPxuEb'];
+// Official SPL and Token Extensions program IDs: https://solana.com/docs/references/terminology
+const PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'];
 const day = (time) => { const d = new Date(time); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const number = (n) => n !== null && n !== '' && Number.isFinite(Number(n)) ? Number(n) : null;
 const sum = (rows, key) => rows.reduce((n, r) => n + (r[key] ?? 0), 0);
