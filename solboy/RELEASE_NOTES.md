@@ -1,3 +1,10 @@
+**New in 1.13.0: faster prices while you are in a trade**
+
+- Open trades now share one price tracker with automatic sells. Supported Pump.fun and PumpSwap markets stream changes directly from your existing Solana connection; other markets use fresh, rate-limited sell quotes.
+- See your market PnL and estimated sell PnL separately, to two decimal places. Take-profit and stop-loss react to fresh sell estimates instead of waiting for the old price-check timer.
+- Delayed prices are visibly marked. After a feed interruption, SolBoy refreshes the data before treating it as live again; old screen responses cannot overwrite a newer price.
+- Price work yields to copying and stays on the background connection. No paid price feed is added. Market values and sell estimates can still differ from a chart or final fill because of entry price, fees, price impact and network timing.
+
 ## 1.12.0 — Your wallet command center
 
 - Open My wallet straight from the top bar, then jump between Overview, PnL calendar, Scorecard, Coins & activity, and Manage funds.
