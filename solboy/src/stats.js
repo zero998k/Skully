@@ -18,6 +18,7 @@ export function summarize(trades, dayStart = new Date(new Date().setHours(0, 0, 
   }
 
   return {
+    legacyPaperBuys:trades.filter(t=>t.action==='PAPER buy'&&!t.reason?.includes('simulation estimate')).length,
     buys: trades.length - sells.length,
     sells: sells.length,
     wins,

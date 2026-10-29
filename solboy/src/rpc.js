@@ -23,7 +23,7 @@ export function createRpcLimiter(requestsPerSecond) {
 
   // Background work (wallet scans) only takes a free slot: it waits while copy trading has requests queued or the
   // next slot is already taken, so a scan never delays a copy by more than one request.
-  async function waitForBackgroundSlot() {
+  async function waitForBackgroundSlot(signal) {
     for (;;) {
       const now = Date.now();
       if (!urgentWaiting && nextSlot <= now && pausedUntil <= now) {
@@ -31,21 +31,31 @@ export function createRpcLimiter(requestsPerSecond) {
         return;
       }
       await sleep(Math.max(gap, 20));
+      signal?.throwIfAborted();
     }
   }
 
-  async function limitedFetch(url, init, background = false) {
+  async function limitedFetch(url, init = {}, background = false) {
+    // Include queue time and rate-limit backoff in the deadline; a stopped RPC cannot hold a token lock forever.
+    const signal = init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(12_000)]) : AbortSignal.timeout(12_000);
+    const abortableWait = promise => new Promise((resolve, reject) => {
+      const abort = () => reject(signal.reason);
+      if (signal.aborted) return abort();
+      signal.addEventListener('abort', abort, { once: true });
+      promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+    });
     for (let attempt = 0; ; attempt++) {
-      if (background) await waitForBackgroundSlot();
+      if (background) await abortableWait(waitForBackgroundSlot(signal));
       else {
         urgentWaiting++;
         try {
-          await waitForSlot();
+          await abortableWait(waitForSlot());
         } finally {
           urgentWaiting--;
         }
       }
-      const res = await fetch(url, init);
+      signal.throwIfAborted();
+      const res = await fetch(url, { ...init, signal });
       if (res.status !== 429 || attempt >= 3) return res;
       if (Date.now() - lastWarning > 30_000) {
         lastWarning = Date.now();

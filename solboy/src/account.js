@@ -31,6 +31,7 @@ export function createAccount({ cfg, connection, book, positionsFor }) {
   }
 
   async function setMode(mode, confirmed) {
+    if(book.isTrading?.())throw new Error('A trade is still being checked. Wait for it to finish before switching modes.');
     if (mode === 'paper') {
       const held = positionsFor('live').count();
       if (!cfg.dryRun && held) {
@@ -47,6 +48,7 @@ export function createAccount({ cfg, connection, book, positionsFor }) {
     const need = +(cfg.buyAmountSol + 0.02).toFixed(4); // one trade + fees + token account rent
     const sol = await balance(true);
     if (sol < need) throw new Error(`Deposit at least ${need} SOL first. You have ${sol.toFixed(4)} SOL.`);
+    if(book.isTrading?.())throw new Error('A trade started while checking the balance. Wait for it before switching modes.');
     cfg.dryRun = false;
     saveConfigValue('dryRun', false);
     log(c.red(`REAL MONEY mode ON. SolBoy now trades real SOL from ${short(address())} (balance ${sol.toFixed(4)} SOL).`));

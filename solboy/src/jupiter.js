@@ -18,10 +18,12 @@ export async function getQuote({ inputMint, outputMint, amount, slippageBps, sig
     amount: String(amount),
     slippageBps: String(slippageBps),
   });
-  const res = await fetch(`${base}/quote?${params}`, { headers, ...(signal?{signal}:{}) });
+  const res = await fetch(`${base}/quote?${params}`, { headers, signal: signal ?? AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`Jupiter quote failed (${res.status}): ${await res.text()}`);
   const quote = await res.json();
   if (!quote.outAmount) throw new Error(`Jupiter found no route: ${JSON.stringify(quote)}`);
+  if(!/^\d+$/.test(String(quote.outAmount))||BigInt(quote.outAmount)<=0n)throw new Error('Jupiter returned an invalid output amount');
+  if((quote.inputMint&&quote.inputMint!==inputMint)||(quote.outputMint&&quote.outputMint!==outputMint)||(quote.inAmount&&String(quote.inAmount)!==String(amount)))throw new Error('Jupiter quote does not match this token and trade amount');
   return quote;
 }
 
@@ -30,6 +32,7 @@ export async function buildSwap(quote, userPublicKey, maxPriorityLamports) {
   const { base, headers } = settings();
   const res = await fetch(`${base}/swap`, {
     method: 'POST',
+    signal: AbortSignal.timeout(10_000),
     headers,
     body: JSON.stringify({
       quoteResponse: quote,

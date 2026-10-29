@@ -37,7 +37,7 @@ export function createLivePrices({connection,book,readQuote,isTrading=()=>false,
   const current=e=>entries.get(e.mint)===e&&book.mode===e.mode&&book.positions.has(e.mint)&&positionPriceKey(book.mode,e.mint,book.positions.get(e.mint))===e.key;
   const streamHealthy=()=>heartbeatAt>0&&now()-heartbeatAt<heartbeatMaxAge;
   function view(e){
-    const stream=streamHealthy()&&!e.resyncNeeded,marketFresh=stream&&e.market!=null&&!e.poolPending&&!e.poolInvalid,curveFresh=stream&&e.curve&&!e.curve.complete&&!e.pool;
+    const stream=streamHealthy()&&!e.resyncNeeded&&(!e.seedAt||now()-e.seedAt<1000),marketFresh=stream&&e.market!=null&&!e.poolPending&&!e.poolInvalid,curveFresh=stream&&e.curve&&!e.curve.complete&&!e.pool;
     const quoteFresh=e.quote&&now()-e.quote.at<=quoteMaxAge&&e.quote.at>=(e.invalidatedAt??0);
     // Pump curve return keeps the existing ~1% model. It is an estimate, not an executable fill promise.
     const curveWorth=curveFresh?Number(e.curve.sol*BigInt(e.pos.tokens)/(e.curve.tokens+BigInt(e.pos.tokens))*99n/100n)/1e9:null;
@@ -61,7 +61,7 @@ export function createLivePrices({connection,book,readQuote,isTrading=()=>false,
     if(!current(e)||slot<(e.curveSlot??0))return;
     e.curveVersion=(e.curveVersion??0)+1;
     const c=decodeCurve(info);if(!c){e.curve=null;e.market=null;e.invalidatedAt=at;broadcast(true);return;}
-    e.curveSlot=slot;e.curve=c;e.invalidatedAt=at;
+    e.seedAt=null;e.curveSlot=slot;e.curve=c;e.invalidatedAt=at;
     if(c.complete){if(!e.pool){e.market=null;e.marketAt=null;}e.discoverAt=0;broadcast(true);void discover(e);return;}
     e.resyncNeeded=false;e.market=Number(c.sol)*Number(e.pos.tokens)/Number(c.tokens)/1e9;e.marketAt=at;e.marketSlot=slot;e.marketSource='Pump curve · processed';
     onCurve(e.mint,{vSol:Number(c.sol)/1e9,vTokens:Number(c.tokens)/1e6});broadcast(true);
@@ -83,16 +83,16 @@ export function createLivePrices({connection,book,readQuote,isTrading=()=>false,
     const apply=(side,info,slot)=>{
       const n=reserve(info,side==='base'?e.mint:WSOL);if(n==null||!current(e)||slot<(e.vaults[side]?.slot??0))return;
       e.poolGeneration=(e.poolGeneration??0)+1;
-      e.vaults[side]={n,slot,dirty:true};e.invalidatedAt=now();e.poolPending=true;
+      e.vaults[side]={n,slot,dirty:true};e.poolPendingAt??=now();e.invalidatedAt=now();e.poolPending=true;
       const a=e.vaults.base,b=e.vaults.quote;
       // Never combine reserves from different slots into a made-up intermediate price.
-      if(a?.dirty&&b?.dirty&&a.slot===b.slot&&a.n>0n&&b.n>0n){a.dirty=false;b.dirty=false;e.poolPending=false;e.resyncNeeded=false;e.market=Number(b.n)*Number(e.pos.tokens)/Number(a.n)/1e9;e.marketAt=now();e.marketSlot=slot;e.marketSource='PumpSwap reserves · processed';}broadcast(true);
+      if(a?.dirty&&b?.dirty&&a.slot===b.slot&&a.n>0n&&b.n>0n){a.dirty=false;b.dirty=false;e.poolPending=false;e.poolPendingAt=null;e.resyncNeeded=false;e.market=Number(b.n)*Number(e.pos.tokens)/Number(a.n)/1e9;e.marketAt=now();e.marketSlot=slot;e.marketSource='PumpSwap reserves · processed';}broadcast(true);
     };
     subscribe(e,parsed.base,(i,s)=>apply('base',i,s));subscribe(e,parsed.quote,(i,s)=>apply('quote',i,s));
-    e.readPool=async()=>{const epoch=streamEpoch,generation=e.poolGeneration??0;try{
+    e.readPool=async()=>{if(e.readingPool)return;e.readingPool=true;e.lastPoolRead=now();const epoch=streamEpoch,generation=e.poolGeneration??0;try{
       const data=await connection.getMultipleAccountsInfoAndContext([parsed.base,parsed.quote],{commitment:'processed'});
       if(current(e)&&epoch===streamEpoch&&generation===(e.poolGeneration??0)){apply('base',data.value[0],data.context.slot);apply('quote',data.value[1],data.context.slot);}
-    }catch{}};await e.readPool();
+    }catch{}finally{e.readingPool=false;}};await e.readPool();
   }
   async function bootstrap(e){
     e.bootstrapping=true;const epoch=streamEpoch,started=now(),version=e.curveVersion??0;
@@ -120,11 +120,13 @@ export function createLivePrices({connection,book,readQuote,isTrading=()=>false,
     if(changed)broadcast(true);
   }
   async function quoteOne(e){
-    const started=now(),invalidated=e.invalidatedAt??0;nextQuoteAt=started+quoteGap;e.quoteDue=started+quoteGap;
+    const started=now();nextQuoteAt=started+quoteGap;e.quoteDue=started+quoteGap;
     try{
       const q=await readQuote(e.mint,e.pos.tokens,AbortSignal.timeout(4000));
-      if(!current(e)||invalidated!==(e.invalidatedAt??0))return;
+      if(!current(e))return;
       const worth=Number(q.outAmount)/1e9;if(!Number.isFinite(worth)||worth<0)throw Error('Invalid price');
+      // Keep the newest completed quote visible even in an active pool. Its request timestamp and
+      // invalidation still mark it delayed for auto-exits; busy trading must not starve the display.
       e.quote={worth,at:started};
       // A routed venue can invalidate its old quote on the next swap without downloading that transaction.
       if(!e.routesWatched){e.routesWatched=true;
@@ -139,6 +141,7 @@ export function createLivePrices({connection,book,readQuote,isTrading=()=>false,
     sync();broadcast();
     if(isTrading())return;
     for(const e of entries.values())if(streamHealthy()&&!e.bootstrapped&&!e.bootstrapping)void bootstrap(e);
+    for(const e of entries.values())if(e.poolPending&&e.readPool&&now()-(e.poolPendingAt??now())>=250&&now()-(e.lastPoolRead??0)>=2100)void e.readPool();
     if(quoteTask||now()<nextQuoteAt)return;
     const e=[...entries.values()].filter(e=>e.bootstrapped&&!(e.curve&&!e.curve.complete&&streamHealthy())&&now()>=e.quoteDue).sort((a,b)=>a.quoteDue-b.quoteDue)[0];
     if(e)quoteTask=quoteOne(e).finally(()=>{quoteTask=null;});
@@ -147,6 +150,16 @@ export function createLivePrices({connection,book,readQuote,isTrading=()=>false,
   return {
     start(){if(timer)return;timer=setInterval(tick,200);timer.unref?.();tick();},
     stop(){if(timer)clearInterval(timer);if(broadcastTimer)clearTimeout(broadcastTimer);timer=null;broadcastTimer=null;for(const e of entries.values())cleanup(e);entries.clear();if(slotSub!=null)Promise.resolve(connection.removeSlotChangeListener(slotSub)).catch(()=>{});},
+    seedCurve(mint,curve,slot,observedAt=now()){
+      if(now()-observedAt>=1000)return;
+      sync();const e=entries.get(mint);if(!e||!current(e))return;
+      // The copy notification already contains the post-trade reserves; don't show a blank price
+      // while a free-plan background read waits for its turn. The normal subscription takes over.
+      e.curve={sol:BigInt(Math.round(curve.vSol*1e9)),tokens:BigInt(Math.round(curve.vTokens*1e6)),complete:false};
+      e.seedAt=observedAt;e.curveVersion=(e.curveVersion??0)+1;e.curveSlot=slot??0;
+      e.market=curve.vSol*Number(e.pos.tokens)/1e6/curve.vTokens;e.marketAt=observedAt;e.marketSlot=slot??null;e.marketSource='Pump curve · trade event';
+      broadcast(true);
+    },
     sync,tick,get(mint,pos){const e=entries.get(mint);return e&&current(e)&&e.key===positionPriceKey(book.mode,mint,pos)?view(e):null;},
     subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn);},
   };

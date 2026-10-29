@@ -607,13 +607,14 @@ button:active:not(:disabled) { transform: translateY(1px); }
   <div class="ticker" aria-hidden="true"><div class="track" id="ticker"></div></div>
 
   <section class="stats">
-    <div class="card cut"><div class="label"><span class="ic">$</span>Total PnL</div><div class="big" id="score">0</div><div class="sub" id="today">today 0</div></div>
+    <div class="card cut"><div class="label"><span class="ic">$</span>Total PnL</div><div class="big" id="score">0</div><div class="sub" id="scoreUsd">USD quote loading…</div><div class="sub" id="openPnl"></div><div class="sub" id="pnlCoverage"></div><div class="sub" id="today">today 0</div></div>
     <div class="card cut"><div class="label"><span class="ic">♥</span>HP · daily risk left</div><div class="bar hp" id="hpBar"><i id="hp"></i></div><div class="sub" id="hpText">-</div><button class="mini" id="resetDay" title="Reset your profit/loss to 0">↺ Reset PnL</button></div>
     <div class="card cut"><div class="label"><span class="ic">✓</span>Win rate</div><div class="big" id="acc">-</div><div class="sub" id="wl">0W · 0L</div></div>
     <div class="card cut"><div class="label"><span class="ic">↯</span>Streak</div><div class="big" id="streak">-</div><div class="sub" id="streakSub">no closed trades yet</div></div>
     <div class="card cut"><div class="label"><span class="ic">★</span>Level</div><div class="big" id="level">LVL 1</div><div class="bar xp"><i id="xp"></i></div><div class="sub" id="xpText">0 / 10 XP</div></div>
   </section>
 
+  <div id="pendingBuys" class="hint" hidden></div>
   <div class="grid">
     <section class="panel cut">
       <h2><span class="ic" style="background:var(--accent)">🎒</span>Positions <span class="count" id="slotCount"></span></h2>
@@ -678,9 +679,9 @@ const cls = (n) => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
 const ago = (t) => { const m = Math.round((Date.now() - new Date(t)) / 60000); return m < 60 ? `${m}m ago` : m < 2880 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
-async function api(path, body) {
+async function api(path, body, signal) {
   const res = await fetch(`${path}${path.includes('?') ? '&' : '?'}t=${TOKEN}`, body
-    ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
+    ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), ...(signal?{signal}:{}) } : (signal?{signal}:{}));
   if (res.status === 401 && SERVER_MODE) { location.href = '/login'; throw new Error('Log in first.'); }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || `error ${res.status}`), { status: res.status });
@@ -737,21 +738,14 @@ function toast(kind, head, text) {
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 250); }, 5000);
   while ($('toasts').children.length > 4) $('toasts').lastChild.remove();
 }
-const shown = new Map();
-function countTo(el, value, decimals = 4) {
-  const from = shown.get(el) ?? value, start = performance.now();
-  shown.set(el, value);
-  const step = (now) => {
-    const p = Math.min(1, (now - start) / 700), v = from + (value - from) * (1 - Math.pow(1 - p, 3));
-    el.textContent = `${fmt(v, decimals)} SOL`; el.className = `big ${cls(value)}`;
-    if (p < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-}
 
 /* ---------- state ---------- */
 let S = null, refreshTask = null, latestPortfolio = null, pricesConnected=false, latestPriceSequence=0;
-const latestPrices=new Map();
+const latestPrices=new Map(), activeSells=new Set();
+const usdValue=(sol)=>{
+  const rate=S?.solRate;if(sol==null||!(rate?.price>0)||rate.stale)return 'USD unavailable / delayed';
+  return '≈ '+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(sol*rate.price);
+};
 const inventoryPriceKey=(mode,p)=>JSON.stringify([mode,p.mint,String(p.tokens),p.paid,p.openedAt]);
 function mergeLivePrices(state){
   return {...state,inventory:state.inventory.map(p=>{const price=latestPrices.get(state.mode+':'+p.mint);return price?.key===inventoryPriceKey(state.mode,p)&&(price.priceSequence??0)>=(p.priceSequence??0)?{...p,...price}:p;})};
@@ -760,7 +754,7 @@ function refresh() {
   if (refreshTask) return refreshTask;
   refreshTask = (async () => {
     try {
-      const state = await api('/api/state');
+      const state = await api('/api/state', null, AbortSignal.timeout(10_000));
       // A slow price/balance request must never overwrite a newer trade received over the stream.
       S = mergeLivePrices(latestPortfolio && (state.portfolioRevision ?? 0) < latestPortfolio.portfolioRevision
         ? { ...state, ...latestPortfolio } : state);
@@ -795,8 +789,8 @@ function render() {
     }
   }
 
-  countTo($('score'), s.totalPnl);
-  $('today').innerHTML = `today <span class="${cls(S.todayPnl)}">${fmt(S.todayPnl)} SOL</span> <button class="mini inline" data-reset-pnl title="Reset your profit/loss to 0">↺ reset</button>`;
+  renderPnl();
+  $('today').innerHTML = `today <span class="${cls(S.todayPnl)}">${fmt(S.todayPnl)} SOL · ${usdValue(S.todayPnl)}</span> <button class="mini inline" data-reset-pnl title="Reset your profit/loss to 0">↺ reset</button>`;
   const left = Math.max(0, S.dailyLossLimit + Math.min(0, S.todayPnl)), frac = left / S.dailyLossLimit;
   $('hp').style.width = `${frac * 100}%`;
   $('hpBar').className = `bar hp${frac < 0.3 ? ' low' : frac < 0.6 ? ' mid' : ''}`;
@@ -817,7 +811,18 @@ function render() {
   renderInventory(); renderChart(s.curve); renderHistory(); renderBoard(); renderLoadout(); renderAccount();
 }
 
+function renderPnl(){
+  $('score').textContent=fmt(S.summary.totalPnl)+' SOL';$('score').className='big '+cls(S.summary.totalPnl);
+  $('scoreUsd').textContent=usdValue(S.summary.totalPnl)+' · realized'+(S.mode==='paper'?' · practice estimate':'');
+  const known=S.inventory.filter(p=>pricesConnected&&p.worth!=null&&!p.priceStale&&Date.now()<(p.priceValidUntil??0)),open=known.reduce((sum,p)=>sum+p.worth-p.paid,0);
+  $('openPnl').textContent=`${known.length<S.inventory.length?'Known open sell PnL':'Open sell PnL'}: ${fmt(open)} SOL · ${usdValue(open)}${known.length<S.inventory.length?' · some prices delayed':''}`;
+  $('pnlCoverage').textContent=S.mode==='paper'&&S.summary.legacyPaperBuys?'Includes older unverified practice estimates. Reset PnL starts a fresh session; history stays.':'';
+  $('pendingBuys').hidden=!(S.pendingBuys?.length);
+  $('pendingBuys').textContent=(S.pendingBuys??[]).map(p=>`Buy confirming / receipt pending: ${p.mint.slice(0,6)}… · ${p.from}. Automatic sells are queued if the source exits.`).join(' | ');
+}
+
 function renderInventory() {
+  renderPnl();
   $('slotCount').textContent = `${S.inventory.length}/${S.maxSlots} slots`;
   const cards = S.inventory.map((p) => {
     const stale=p.priceStale||Date.now()>(p.priceValidUntil??0)||!pricesConnected;
@@ -832,13 +837,15 @@ function renderInventory() {
       <div class="meta">${marketPnl!=null?'Market PnL · your entry in SOL':'Estimated sell PnL · your entry in SOL'}</div>
       <div class="pnl ${mainStale?'':cls(main)}" style="${mainStale?'opacity:.45':''}">${main==null?'...':esc(percent(main))}</div>
       <div class="meta" data-price-status="${mainStale?'stale':'fresh'}" style="color:${mainStale?'var(--warn)':'var(--win)'}">${mainStale?'◷ Price delayed / reconnecting':'● '+(marketPnl!=null?'Streaming market':'Fresh sell quote')}</div>
-      <div class="row"><span>Paid</span><span>${p.paid.toFixed(4)} SOL</span></div>
-      <div class="row"><span>Est. sell return</span><span>${p.worth == null ? 'n/a' : p.worth.toFixed(4) + ' SOL'}${stale?' · delayed':''}</span></div>
-      <div class="row"><span>Sell PnL${marketPnl!=null?' (auto-exit)':''}</span><span class="${stale?'':cls(pnl)}">${percent(pnl)}${stale?' · delayed':''}</span></div>
-      <div class="meta">${esc(p.marketSource||p.priceSource||'Waiting for price')}<br>Auto-exits use fresh estimated sell returns, including price impact. Fees and fills can differ.</div>
+      <div class="row"><span>Open profit (market)</span><span class="${mainStale?'':cls(main)}">${main==null?'—':fmt(main)+' SOL'}<br>${usdValue(main)}${mainStale?' · delayed':''}</span></div>
+      <div class="row"><span>Paid</span><span>${p.paid.toFixed(4)} SOL · ${usdValue(p.paid)}</span></div>
+      <div class="row"><span>Est. sell return</span><span>${p.worth == null ? 'n/a' : p.worth.toFixed(4) + ' SOL · '+usdValue(p.worth)}${stale?' · delayed':''}</span></div>
+      <div class="row"><span>Sell PnL${marketPnl!=null?' (auto-exit)':''}</span><span class="${stale?'':cls(pnl)}">${percent(pnl)}${stale?' · delayed':''}<br>${pnl==null?'—':fmt(pnl)+' SOL'} · ${usdValue(pnl)}</span></div>
+      <div class="meta">${S.quick?.takeProfitPct?`TP +${S.quick.takeProfitPct}% · `:''}${S.quick?.stopLossPct?`SL −${S.quick.stopLossPct}% · `:''}Market orders can fill beyond the trigger during fast moves.<br>${esc(p.marketSource||p.priceSource||'Waiting for price')}<br>Auto-exits use fresh estimated sell returns, including price impact. Fees and fills can differ.</div>
       <div class="actions">
         <a class="btn" href="https://dexscreener.com/solana/${encodeURIComponent(p.mint)}" target="_blank" rel="noopener">Chart</a>
-        <button class="btn danger" data-sell="${esc(p.mint)}" data-name="${esc(p.name)}">Sell now</button>
+        <button class="btn danger" data-sell="${esc(p.mint)}" data-name="${esc(p.name)}">${p.pendingSell?'Check sell':'Sell now'}</button>
+        ${p.pendingSell?`<a class="btn" href="https://solscan.io/tx/${encodeURIComponent(p.pendingSell.sig)}" target="_blank" rel="noopener">Pending transaction ↗</a>`:''}
       </div></div>`;
   });
   // Keep each position and its Sell button mounted while ticks arrive. Rebuilding the whole grid
@@ -853,7 +860,12 @@ function renderInventory() {
         target.className=child.className;target.style.cssText=child.style.cssText;
         if(child.hasAttribute('data-price-status'))target.setAttribute('data-price-status',child.getAttribute('data-price-status'));
       });
-      old.querySelector('[data-sell]').dataset.name=S.inventory[i].name;desired.push(old);
+      const button=old.querySelector('[data-sell]');button.dataset.name=S.inventory[i].name;
+      if(!activeSells.has(S.inventory[i].mint)){
+        const actions=old.querySelector('.actions'),freshActions=fresh.querySelector('.actions');
+        if(actions.innerHTML!==freshActions.innerHTML)actions.innerHTML=freshActions.innerHTML;
+      }
+      desired.push(old);
     }else{fresh.dataset.positionKey=key;desired.push(fresh);}
   });
   const empties=[...slots.querySelectorAll('.slot.empty')];
@@ -863,11 +875,21 @@ function renderInventory() {
 }
 $('slots').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-sell]'); if (!b) return;
+  const mint=b.dataset.sell;
+  if(activeSells.has(mint))return;
+  const pending=S.inventory.find(p=>p.mint===mint)?.pendingSell;
   const real = S.mode === 'live' ? ' This is a REAL trade with real SOL.' : '';
-  if (!confirm(`Sell all of ${b.dataset.name} now?${real}`)) return;
-  b.disabled = true; b.textContent = 'Selling...';
-  try { await api('/api/sell', { mint: b.dataset.sell }); } catch (err) { toast('loss', 'Sell failed', err.message); }
-  refresh();
+  if (!pending&&!confirm(`Sell all of ${b.dataset.name} now?${real}`)) return;
+  activeSells.add(mint);b.disabled=true;b.textContent=pending?'Checking…':'Selling…';
+  const message=setTimeout(()=>{if(b.isConnected)b.textContent='Checking confirmation…';},4000);
+  try { await api('/api/sell', { mint }, AbortSignal.timeout(15_000)); }
+  catch (err) { toast('loss', err.name==='TimeoutError'?'Sell status delayed':'Sell failed', err.name==='TimeoutError'?
+    'SolBoy is checking the original request. Check sell will not submit it twice.':err.message); }
+  finally {
+    clearTimeout(message);activeSells.delete(mint);b.disabled=false;b.textContent='Check sell';
+    void refresh();
+  }
+
 });
 
 /* ---------- chart: one series, cumulative profit ---------- */
@@ -961,6 +983,7 @@ function renderBoard() {
       <span class="note">${n} wallet${n === 1 ? '' : 's'} watched. Best performers on top.${n > 10 ? ' Over 10 can hit the free Helius limit.' : ''}</span></div>
     ${n ? `<table><tr><th>Rank</th><th>Wallet</th><th>Per trade</th><th>Buys copied</th><th>Closed</th><th>Win rate</th><th>PnL</th><th>Status</th><th></th></tr>${rows}</table>`
         : '<div class="empty-msg">No wallets yet. Hit + Add wallet and paste one to start copying.</div>'}
+    <details class="hint" id="copyDecisions"><summary>Why trades were copied or skipped · latest 40 decisions</summary>${(S.copyActivity??[]).slice(0,40).map(a=>`<p><b>${esc(a.wallet)} · ${esc(a.status)}</b> · ${esc(a.mint?.slice(0,8)??'receipt')} · ${esc(a.reason)}</p>`).join('')||'<p>Source trades and any skip reasons will appear here.</p>'}</details>
     <div class="hint">Give a wallet about 10 closed trades before judging it. Removing a wallet stops new buys right away; if you still hold tokens from it, SolBoy keeps following its sells until they're gone.</div>`;
 }
 $('board').addEventListener('click', async (e) => {

@@ -17,7 +17,7 @@ const MIN_SOL_MOVE = 1_000_000n;
  * Works for any exchange (Pump.fun, PumpSwap, Raydium, Jupiter...) because it only looks at
  * how the wallet's balances changed. Returns [] for anything that isn't a SOL <-> token swap.
  */
-export function parseTrades(tx, wallet) {
+export function parseTrades(tx, wallet, extraQuotes = []) {
   if (!tx?.meta || tx.meta.err) return [];
   const { meta } = tx;
 
@@ -52,7 +52,7 @@ export function parseTrades(tx, wallet) {
 
   const trades = [];
   for (const [mint, t] of tokens) {
-    if (QUOTE_MINTS.has(mint)) continue;
+    if (QUOTE_MINTS.has(mint) || extraQuotes.includes(mint)) continue;
     const delta = t.post - t.pre;
     if (delta > 0n && solDelta < 0n) {
       trades.push({ side: 'buy', mint, solAmount: Number(-solDelta) / 1e9, tokenAmount: delta, heldBefore: t.pre * 10n > delta }); // dust left from an old trade doesn't count
@@ -97,9 +97,12 @@ const PUMP_TRADE_EVENT = Buffer.from([189, 219, 127, 211, 78, 230, 97, 238]); //
 
 /** Pump.fun trades made by `wallet`, straight from a notification's log lines. [] when there are none. */
 export function pumpTradesFromLogs(lines = [], wallet) {
-  const byKey = new Map();
+  const byKey = new Map(), stack=[];
+  const pump='6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
   for (const line of lines) {
-    if (!line.startsWith('Program data: ')) continue;
+    const invoke=line.match(/^Program (\w+) invoke \[\d+\]/);if(invoke){stack.push(invoke[1]);continue;}
+    const done=line.match(/^Program (\w+) (?:success|failed:)/);if(done){const index=stack.lastIndexOf(done[1]);if(index>=0)stack.length=index;continue;}
+    if (!line.startsWith('Program data: ')||stack.at(-1)!==pump) continue;
     const b = Buffer.from(line.slice(14), 'base64');
     if (b.length < 89 || !b.subarray(0, 8).equals(PUMP_TRADE_EVENT)) continue;
     let mint, user;
@@ -113,13 +116,23 @@ export function pumpTradesFromLogs(lines = [], wallet) {
     const sol = b.readBigUInt64LE(40);
     const tokens = b.readBigUInt64LE(48);
     const side = b[56] === 1 ? 'buy' : b[56] === 0 ? 'sell' : null;
-    if (!side || sol === 0n || tokens === 0n || sol > 100_000n * 1_000_000_000n) continue;
+    let quoteMint=null;
+    if(b.length>=262){
+      const size=b.readUInt32LE(258),end=262+size;
+      if(size>100||end+37>b.length)continue;
+      const shareholders=b.readUInt32LE(end+33),offset=end+37+shareholders*34;
+      if(shareholders>100||offset+56>b.length)continue;
+      quoteMint=new PublicKey(b.subarray(offset,offset+32)).toBase58();
+    }
+    const nonSol=quoteMint&&quoteMint!==PublicKey.default.toBase58()&&quoteMint!==WSOL;
+    if (!side || (!nonSol&&sol === 0n) || tokens === 0n || sol > 100_000n * 1_000_000_000n) continue;
     const k = `${side}:${mint}`;
     const t = byKey.get(k) ?? { side, mint, solAmount: 0, tokenAmount: 0n, fast: true };
+    if(nonSol){t.requiresReceipt=true;t.quoteMint=quoteMint;}
     t.solAmount += Number(sol) / 1e9;
     t.tokenAmount += tokens;
     // the bonding curve right after the trade (timestamp i64 at 89, then virtual SOL and virtual tokens)
-    if (b.length >= 113) {
+    if (!nonSol&&b.length >= 113) {
       const vSol = Number(b.readBigUInt64LE(97)) / 1e9, vTokens = Number(b.readBigUInt64LE(105)) / 1e6;
       if (vSol > 0 && vTokens > 0) t.curve = { vSol, vTokens };
     }

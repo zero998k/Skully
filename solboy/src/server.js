@@ -13,6 +13,7 @@ import { file } from './paths.js';
 import { createAssistant } from './assistant.js';
 import { AiError } from './ai.js';
 import { createAuth } from './auth.js';
+import { createSolRate } from './sol-rate.js';
 import { RESTART_CODE } from './update.js';
 
 // Settings the dashboard's Quick settings card can change while SolBoy runs.
@@ -48,6 +49,7 @@ function openInBrowser(url) {
  */
 export async function startDashboard({ cfg, bot, book, account, updater, finder, walletPortfolio, serverMode = false }) {
   const positions = book.positions;
+  const solRate=createSolRate();solRate.start();
   const secret = crypto.randomBytes(16).toString('hex');
   const page = DASHBOARD_HTML.replace('__TOKEN__', secret).replace('__SERVER_MODE__', serverMode ? 'true' : 'false');
   const auth = serverMode ? createAuth(() => process.env.DASHBOARD_PASSWORD_HASH, file('data/sessions.json')) : null;
@@ -96,10 +98,12 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
     const trades = readTrades(book.tradeLogFile), counted = positions.counted(trades);
     const names = new Map([...(lastState?.inventory ?? []).map(p => [p.mint, p.name]), ...(lastState?.trades ?? []).map(t => [t.token, t.name])]);
     return {
+      solRate:solRate.get(),copyActivity:bot.copyActivity?.()??[],pendingBuys:positions.entries().filter(([,p])=>p.pendingBuy).map(([mint,p])=>({mint,from:p.sourceLabel,sig:p.pendingBuy.sig})),
       portfolioRevision, mode: book.mode, paused: bot.isBuyingPaused(), copySpeed: bot.copySpeed(),
       summary: summarize(counted, positions.dayStart()), todayPnl: positions.todayPnl(),
       dayResetAt: positions.resetToday(), dailyLossLimit: cfg.dailyLossLimitSol, maxSlots: cfg.maxOpenPositions,
-      inventory: positions.entries().map(([mint, pos]) => ({ mint, name: names.get(mint) ?? mint,
+      inventory: positions.entries().filter(([,p])=>!p.pendingBuy).map(([mint, pos]) => ({ mint, name: names.get(mint) ?? mint,
+        pendingSell: pos.pendingSell ? { sig: pos.pendingSell.sig, submittedAt: pos.pendingSell.submittedAt } : null,
         from: pos.sourceLabel, paid: pos.solSpent, openedAt: pos.openedAt, tokens: pos.tokens,
         ...(bot.priceOf?.(mint,pos)??{worth:null,priceStale:true}) })),
       trades: trades.slice(-50).reverse().map(t => ({ ...t, name: names.get(t.token) ?? t.token })),
@@ -118,12 +122,13 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
   async function state() {
     const revision = portfolioRevision;
     const trades = readTrades(book.tradeLogFile);
-    const open = positions.entries();
+    const open = positions.entries().filter(([,p])=>!p.pendingBuy);
     const recent = trades.slice(-50).reverse();
     const name = await tokenNames([...open.map(([m]) => m), ...recent.map((t) => t.token)]);
     const inventory = open.map(([mint, pos]) => ({
         mint,
         name: name(mint),
+        pendingSell: pos.pendingSell ? { sig: pos.pendingSell.sig, submittedAt: pos.pendingSell.submittedAt } : null,
         from: pos.sourceLabel,
         paid: pos.solSpent,
         tokens: pos.tokens,
@@ -131,6 +136,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         ...(bot.priceOf?.(mint,pos)??{worth:null,priceStale:true}),
       }));
     const next = {
+      solRate:solRate.get(),copyActivity:bot.copyActivity?.()??[],pendingBuys:positions.entries().filter(([,p])=>p.pendingBuy).map(([mint,p])=>({mint,from:p.sourceLabel,sig:p.pendingBuy.sig})),
       portfolioRevision: revision,
       mode: book.mode,
       account: await accountState(),
