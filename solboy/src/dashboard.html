@@ -219,6 +219,87 @@ h3.sub { margin: 6px 0 8px; }
 .balchip:hover { border-color: var(--accent); }
 @media (max-width: 900px) { .acct { grid-template-columns: 1fr; } .deposit { grid-template-columns: 1fr; } }
 
+/* Personal wallet: a private, colourful portfolio workspace. */
+.wallet-view .stats, .wallet-view .grid, .wallet-view .overview-curve, .wallet-view .ticker { display:none; }
+.wallet-view #tab-account { padding:0; border:0; background:transparent; box-shadow:none; }
+.wallet-view .tabs { margin-top:24px; }
+.wallet-page { --wp-edge:#34303d; }
+.wallet-head { display:flex; align-items:center; flex-wrap:wrap; gap:16px; padding:8px 2px 24px; }
+.wallet-head .portrait { width:68px; height:76px; object-fit:contain; background:#ffc8ec; border:3px solid #080808; border-radius:20px; box-shadow:5px 5px 0 var(--accent); transform:rotate(-5deg); }
+.wallet-head h1 { font:800 clamp(28px,4vw,43px)/1 var(--display); letter-spacing:-1.6px; margin:5px 0 9px; }
+.wallet-eyebrow { color:var(--pink); font:12px var(--mono); letter-spacing:2px; text-transform:uppercase; }
+.wallet-head p { color:var(--ink-2); font-size:13px; margin:0; }
+.wallet-actions { display:flex; flex-wrap:wrap; gap:10px; margin-left:auto; }
+.wallet-actions .deposit-btn { background:var(--accent); border-color:#080808; box-shadow:4px 4px 0 #fff; }
+.wallet-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:0 0 18px; }
+.wallet-address { font:12px var(--mono); border:1px solid var(--wp-edge); background:#151018; color:var(--ink-2); border-radius:999px; padding:9px 13px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wallet-badge { background:#1b1622; color:var(--grape); font:11px var(--mono); border:1px solid #5c436d; padding:7px 10px; border-radius:999px; }
+.wallet-segment { display:inline-flex; gap:3px; padding:4px; border:1px solid var(--wp-edge); background:#100d14; border-radius:13px; }
+.wallet-segment button { cursor:pointer; border:0; border-radius:9px; background:transparent; color:var(--ink-2); font:800 12px var(--display); padding:7px 11px; }
+.wallet-segment button.on { background:var(--accent); color:#fff; box-shadow:2px 2px 0 #000; }
+.wallet-range { margin-left:auto; }
+.wallet-overview { display:grid; grid-template-columns:minmax(250px,.95fr) minmax(330px,1.5fr) minmax(240px,.9fr); gap:16px; }
+.wallet-card { min-width:0; background:#111015; border:2px solid var(--wp-edge); border-radius:22px; padding:21px; position:relative; overflow:hidden; }
+.wallet-card h3 { font:800 15px var(--display); margin:0 0 18px; display:flex; align-items:center; gap:9px; }
+.wallet-card h3 .count { margin-left:auto; font-size:11px; }
+.wallet-value { border-color:var(--accent); background:radial-gradient(ellipse at 90% 0, #4c143c 0, transparent 65%),#151016; box-shadow:5px 5px 0 #ff2d9540; }
+.wallet-value::after { content:'✦'; font-size:125px; position:absolute; right:-14px; top:-30px; color:#ff6bcb12; pointer-events:none; transform:rotate(15deg); }
+.wallet-total { font:800 clamp(30px,3.2vw,44px)/1.15 var(--display); letter-spacing:-1.7px; margin:5px 0; overflow-wrap:anywhere; }
+.wallet-caption { font-size:12px; color:var(--ink-3); line-height:1.55; }
+.wallet-value .wallet-caption { color:#c8a9c1; }
+.wallet-metric { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:10px 0; border-top:1px solid #ffffff0c; font-size:12px; }
+.wallet-metric b { font:500 13px var(--mono); text-align:right; }
+.wallet-mini-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:17px; }
+.wallet-mini-grid>div { background:#ffffff06; border:1px solid #ffffff12; border-radius:12px; padding:12px; }
+.wallet-mini-grid b { display:block; font:800 19px var(--display); margin-top:4px; }
+.wallet-chart { border-top:3px solid var(--sky); }
+.wallet-chart .chart-value { font:800 29px var(--display); letter-spacing:-1px; }
+.wallet-svg { width:100%; height:166px; display:block; margin:12px 0 0; overflow:visible; }
+.wallet-chart-footer { display:flex; justify-content:space-between; gap:12px; margin-top:8px; color:var(--ink-3); font:10px var(--mono); }
+.wallet-performance { border-top:3px solid var(--grape); }
+.wallet-performance .wallet-metric { padding:7px 0; }
+.wallet-distribution { display:flex; gap:3px; height:9px; margin-top:13px; overflow:hidden; border-radius:5px; background:#242028; }
+.wallet-distribution i { min-width:0; transition:flex .3s; }
+.wallet-performance .bin-dot { display:inline-block; width:7px; height:7px; border-radius:3px; margin-right:7px; }
+.wallet-lower { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr); gap:16px; margin-top:18px; }
+.wallet-ledger { padding:0; }
+.wallet-ledger-top { padding:15px; display:flex; flex-wrap:wrap; gap:12px; border-bottom:1px solid var(--wp-edge); align-items:center; }
+.wallet-search { margin-left:auto; min-width:140px; width:210px; max-width:100%; padding:9px 12px; border-radius:11px; border:1px solid var(--wp-edge); background:#08070a; color:#fff; font:12px var(--body); }
+.wallet-scroll { overflow:auto; max-height:470px; overscroll-behavior:contain; }
+.wallet-table { min-width:650px; width:100%; border-collapse:collapse; font-size:12px; }
+.wallet-table th { position:sticky; top:0; z-index:1; background:#151218; padding:12px 15px; font:11px var(--body); color:var(--ink-3); text-align:right; }
+.wallet-table td { padding:14px 15px; border-top:1px solid #ffffff07; text-align:right; font-family:var(--mono); }
+.wallet-table th:first-child,.wallet-table td:first-child { text-align:left; }
+.wallet-table tbody tr:nth-child(even) { background:#ffffff02; }
+.wallet-table tbody tr:hover { background:#ff2d9509; }
+.wallet-coin { display:flex; align-items:center; gap:10px; min-width:160px; }
+.wallet-coin img,.wallet-coin .coin-sticker { width:35px; height:35px; border:2px solid #080808; border-radius:11px; box-shadow:2px 2px 0 #776193; object-fit:cover; }
+.wallet-coin .coin-sticker { display:grid; place-items:center; background:#38274e; color:var(--grape); font:800 14px var(--display); transform:rotate(-5deg); }
+.wallet-coin b { display:block; color:#fafafa; font:800 13px var(--display); }
+.wallet-coin small { display:block; color:var(--ink-3); font:10px var(--mono); margin-top:3px; }
+.wallet-empty { min-height:250px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:30px; text-align:center; color:var(--ink-3); font-size:13px; }
+.wallet-empty .empty-sticker { font-size:37px; width:75px; height:75px; display:grid; place-items:center; background:#281429; border:2px dashed #9a467e; border-radius:25px; transform:rotate(-8deg); color:var(--pink); }
+.wallet-empty b { color:var(--ink); font:800 16px var(--display); }
+.wallet-activity { max-height:480px; overflow:auto; }
+.wallet-event { display:grid; grid-template-columns:32px minmax(0,1fr) auto; gap:10px; padding:14px 18px; align-items:center; border-top:1px solid #ffffff08; }
+.wallet-event .event-mark { display:grid; place-items:center; width:30px; height:30px; border-radius:10px; background:#163125; color:var(--win); font:800 17px var(--display); }
+.wallet-event.sell .event-mark,.wallet-event.out .event-mark { background:#32151d; color:var(--loss); }
+.wallet-event b { font:800 12px var(--display); display:block; }
+.wallet-event small { color:var(--ink-3); font:10px var(--mono); }
+.wallet-event .event-value { text-align:right; font:12px var(--mono); }
+.wallet-calendar { display:grid; grid-template-columns:repeat(14,1fr); gap:4px; margin:16px 0 12px; }
+.wallet-calendar span { aspect-ratio:1; border-radius:3px; border:1px solid #ffffff08; background:#ffffff06; }
+.wallet-note { margin:15px 3px 22px; font-size:11px; line-height:1.65; color:var(--ink-3); }
+.wallet-funds-title { display:flex; align-items:center; gap:10px; margin:27px 0 16px; font:800 22px var(--display); }
+.wallet-funds .box2 { border-radius:22px; background:#111015; }
+.wallet-funds .box2:first-child { border-top:3px solid var(--sky); }
+.wallet-funds .box2:last-child { border-top:3px solid var(--sun); }
+.wallet-funds { scroll-margin-top:180px; }
+.wallet-loading { color:var(--pink); animation:breathe 2s infinite; }
+@media(max-width:1100px){.wallet-overview{grid-template-columns:1fr 1.5fr}.wallet-performance{grid-column:1/-1}.wallet-performance .wallet-metric{display:inline-flex;width:48%;padding-right:18px}.wallet-lower{grid-template-columns:1fr}.wallet-activity{max-height:320px}}
+@media(max-width:650px){.wallet-head{gap:12px}.wallet-actions{margin-left:0;width:100%}.wallet-head .portrait{width:52px;height:61px}.wallet-overview{grid-template-columns:1fr}.wallet-performance{grid-column:auto}.wallet-range{margin-left:0}.wallet-toolbar{gap:8px}.wallet-card{padding:17px}.wallet-ledger{padding:0}.wallet-search{width:100%;margin-left:0}.wallet-segment button{padding:7px 9px}.wallet-head h1{font-size:30px}.wallet-performance .wallet-metric{width:100%;padding-right:0}.wallet-chart-footer{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.wallet-loading{animation:none}.wallet-distribution i{transition:none}}
+
 /* assistant */
 .ask-fab { position: fixed; left: 18px; bottom: 18px; z-index: 64; display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 800; font-size: 15px;
   color: #fff; background: var(--accent); border: 2px solid #000; border-radius: 999px; padding: 8px 16px 8px 8px; cursor: pointer; box-shadow: 4px 4px 0 #fafafa; transition: transform .15s var(--pop); }
@@ -522,7 +603,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
     </section>
   </div>
 
-  <section class="panel cut" style="margin-top:12px">
+  <section class="panel cut overview-curve" style="margin-top:12px">
     <h2><span class="ic" style="background:var(--sun)">📈</span>PnL curve <span class="count">total profit over time, in SOL</span></h2>
     <div class="chart-wrap" id="chartWrap"><svg id="chart" viewBox="0 0 1000 220" preserveAspectRatio="none" role="img" aria-label="Total profit over time"></svg><div class="tip" id="tip"></div></div>
   </section>
@@ -531,7 +612,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
     <button class="tab on" data-tab="history">History <kbd>1</kbd></button>
     <button class="tab" data-tab="board">Wallets <kbd>2</kbd></button>
     <button class="tab" data-tab="loadout">Loadout <kbd>3</kbd></button>
-    <button class="tab" data-tab="account">Account <kbd>4</kbd></button>
+    <button class="tab" data-tab="account">My wallet <kbd>4</kbd></button>
     <button class="tab" data-tab="finder">Finder <kbd>5</kbd></button>
   </nav>
 
@@ -765,9 +846,11 @@ function renderChart(curve) {
 
 /* ---------- tabs ---------- */
 function openTab(name) {
+  document.body.classList.toggle('wallet-view', name === 'account');
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.dataset.tab === name));
   document.querySelectorAll('.tabpage').forEach((p) => p.classList.toggle('on', p.id === `tab-${name}`));
   store.set('tab', name);
+  if (name === 'account') setTimeout(() => loadPersonalWallet(), 0);
 }
 $('tabs').onclick = (e) => { const t = e.target.closest('.tab'); if (t) openTab(t.dataset.tab); };
 openTab(['history', 'board', 'loadout', 'account', 'finder'].includes(store.get('tab')) ? store.get('tab') : 'history');
@@ -973,6 +1056,11 @@ $('updateBtn').onclick = () => {
 /* ---------- account: deposit, real-money switch, withdraw ---------- */
 let lastBalance = null;
 let accountSig = null;
+const PW = { data:null, busy:false, again:false, at:0, error:'', range:'7', tab:'holdings', activity:'activity', query:'', unit:store.get('walletUnit','USD') };
+function mountAccount(content) {
+  $('account').innerHTML = `<div class="wallet-page"><div id="personalPortfolio"></div><div class="wallet-funds" id="walletFunds"><h2 class="wallet-funds-title">✦ Manage your funds</h2>${content}</div></div>`;
+  renderPersonalWallet();
+}
 function renderAccount() {
   const a = S.account, live = S.mode === 'live';
   const bal = a.balance == null ? '...' : `${a.balance.toFixed(4)} SOL`;
@@ -983,21 +1071,22 @@ function renderAccount() {
   if (a.balance != null) lastBalance = a.balance;
   if (document.activeElement?.matches?.('#account input')) return; // don't wipe what you're typing
   const sig = JSON.stringify([a, S.mode]);
-  if (sig === accountSig) return; // nothing changed, so leave the form (and QR) alone
+  if (sig === accountSig) { loadPersonalWallet(); return; } // leave the form and QR alone
   accountSig = sig;
+  if (PW.data?.address !== a.address) { PW.data=null; PW.at=0; }
 
   if (!a.address) {
-    $('account').innerHTML = `<div class="acct"><div class="box2"><h3>Your SolBoy wallet</h3>
+    mountAccount(`<div class="acct"><div class="box2"><h3>Your SolBoy wallet</h3>
       <p>To trade with real money, SolBoy needs its own wallet. You send SOL into it, and SolBoy trades from it. The key stays on this computer only.</p>
       <p>Paper mode keeps working without one.</p>
       <p><button class="btn primary" id="createWallet">Create my SolBoy wallet</button></p></div>
-      <div class="box2"><h3>How it works</h3><p>1. Create the wallet.<br>2. Send it some SOL from Phantom or an exchange.<br>3. Flip the switch to Real money.<br>4. Withdraw back to your own wallet any time.</p></div></div>`;
+      <div class="box2"><h3>How it works</h3><p>1. Create the wallet.<br>2. Send it some SOL from Phantom or an exchange.<br>3. Flip the switch to Real money.<br>4. Withdraw back to your own wallet any time.</p></div></div>`);
     $('createWallet').onclick = async () => { try { await api('/api/account/create', {}); toast('info', 'Wallet created', 'Now send it some SOL to fund it.'); refresh(); } catch (e) { toast('loss', 'Error', e.message); } };
-    return;
+    loadPersonalWallet(); return;
   }
 
-  $('account').innerHTML = `<div class="acct">
-    <div class="box2"><h3>Balance</h3><div class="balance">${bal}</div>
+  mountAccount(`<div class="acct wallet-funds">
+    <div class="box2"><h3>↓ Add SOL · Deposit</h3><div class="balance">${bal}</div>
       <p><b>To deposit,</b> send SOL to this address from Phantom, Solflare, or any exchange (use the <b>Solana</b> network). It shows up here within about 30 seconds.</p>
       <div class="deposit"><img alt="QR code for your SolBoy wallet address" src="/api/account/qr?t=${TOKEN}&a=${encodeURIComponent(a.address)}">
         <div><div class="addrbox" id="addrText">${esc(a.address)}</div>
@@ -1021,7 +1110,7 @@ function renderAccount() {
         <div><button class="btn primary" type="submit">Withdraw</button></div>
       </form>
       <p style="margin-top:14px"><button class="btn" id="showKey" style="font-size:12px">Back up / import into Phantom</button></p>
-    </div></div>`;
+    </div></div>`);
 
   $('copyAddr').onclick = async () => { try { await navigator.clipboard.writeText(a.address); toast('info', 'Copied', 'Address copied. Paste it into Phantom or your exchange.'); } catch { getSelection().selectAllChildren($('addrText')); } };
   $('account').querySelectorAll('[data-mode]').forEach((b) => (b.onclick = () => switchMode(b.dataset.mode)));
@@ -1038,6 +1127,80 @@ function renderAccount() {
     catch (err) { $('wdErr').textContent = err.message; }
   };
   $('showKey').onclick = showKey;
+  loadPersonalWallet();
+}
+
+async function loadPersonalWallet(force=false, poll=false) {
+  if (!S?.account || !$('tab-account').classList.contains('on')) return;
+  if (PW.busy) { if(poll)PW.again=true; return; }
+  if (!force&&!poll&&Date.now()-PW.at<10000) return;
+  PW.busy=true; PW.error='';
+  try { const data=await api(`/api/account/portfolio${force?'?refresh=1':''}`);
+    if(S.mode==='live'&&(data.portfolioRevision??0)<(S.portfolioRevision??0))PW.again=true;
+    else { PW.data=data; PW.at=Date.now(); }
+  }
+  catch(e) { PW.error=e.message; PW.at=Date.now(); }
+  finally { PW.busy=false; renderPersonalWallet(); }
+  if(PW.again){PW.again=false;loadPersonalWallet(false,true);}
+  else if (PW.data?.scanning && $('tab-account').classList.contains('on')) setTimeout(()=>loadPersonalWallet(false,true),1500);
+}
+function walletMoney(value, signed=false) {
+  if (value==null || !Number.isFinite(value)) return '—';
+  const sign=signed&&value>0?'+':'';
+  if(PW.unit==='USD'&&PW.data?.solUsd>0)return sign+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(value*PW.data.solUsd);
+  return sign+value.toLocaleString('en-US',{maximumFractionDigits:4})+' SOL';
+}
+function walletCoin(row) {
+  const name=row.symbol||row.name||shortA(row.mint),image=/^https?:\/\//i.test(row.image??'')?row.image:null;
+  return `<div class="wallet-coin">${image?`<img src="${esc(image)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:`<span class="coin-sticker" aria-hidden="true">${esc(name.replace('$','').slice(0,2))}</span>`}<div><b>${esc(name)}</b><small>${esc(shortA(row.mint))}</small></div></div>`;
+}
+function walletChart(period) {
+  const W=560,H=165,pad=10,points=[{pnl:0},...(period.curve??[])],values=points.map(p=>p.pnl),min=Math.min(0,...values),max=Math.max(0,...values),span=max-min||1;
+  const x=i=>pad+i*(W-pad*2)/Math.max(1,points.length-1),y=v=>H-pad-(v-min)/span*(H-pad*2);
+  const line=points.map((p,i)=>`${x(i).toFixed(1)},${y(p.pnl).toFixed(1)}`).join(' '),colour=period.realized>=0?'#4ade80':'#ff5470';
+  const grid=[.2,.5,.8].map(f=>`<line x1="0" y1="${H*f}" x2="${W}" y2="${H*f}" stroke="#ffffff09" stroke-dasharray="3 6"/>`).join('');
+  if(!period.sells)return `<svg class="wallet-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="No recorded real sells in this period">${grid}<text x="280" y="74" text-anchor="middle" fill="#a98bff" font-size="26">✦</text><text x="280" y="108" text-anchor="middle" fill="#8e8297" font-size="12">Your first real sell starts the chart</text></svg>`;
+  return `<svg class="wallet-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Realized profit ${esc(walletMoney(period.realized,true))}"><defs><linearGradient id="walletArea" x1="0" y1="0" x2="0" y2="1"><stop stop-color="${colour}" stop-opacity=".23"/><stop offset="1" stop-color="${colour}" stop-opacity="0"/></linearGradient></defs>${grid}<polygon points="${pad},${H} ${line} ${W-pad},${H}" fill="url(#walletArea)"/><polyline points="${line}" fill="none" stroke="${colour}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${x(points.length-1)}" cy="${y(period.realized)}" r="5" fill="${colour}" stroke="#101014" stroke-width="3"/></svg>`;
+}
+function renderWalletRows() {
+  if(!$('walletRows')||!PW.data)return;
+  const d=PW.data,q=PW.query.trim().toLowerCase(),which=PW.tab;
+  const rows=(which==='holdings'?d.holdings:which==='top'?d.top:d.history).filter(r=>[r.symbol,r.name,r.mint].some(v=>String(v??'').toLowerCase().includes(q)));
+  const empty=q?'No matching coins':which==='holdings'?'No tokens held yet':'No recorded real trades yet';
+  if(!rows.length){$('walletRows').innerHTML=`<div class="wallet-empty"><span class="empty-sticker">${which==='holdings'?'◈':'✦'}</span><b>${empty}</b><span>${q?'Try a coin name or address.':'Your own real-wallet activity will appear here. Practice trades stay on the main dashboard.'}</span></div>`;return;}
+  const headings=which==='holdings'?['Token','Amount','Value','Still invested','Unrealized PnL']:['Token','Bought','Sold','Holding','Total PnL'];
+  $('walletRows').innerHTML=`<table class="wallet-table"><thead><tr>${headings.map(h=>`<th>${h}</th>`).join('')}<th>Explore</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${walletCoin(r)}</td>${which==='holdings'?`<td>${r.amount==null?'—':r.amount.toLocaleString('en-US',{maximumFractionDigits:4})}</td><td>${walletMoney(r.valueSol)}</td><td>${walletMoney(r.costSol)}</td><td class="${cls(r.pnlSol)}">${walletMoney(r.pnlSol,true)}</td>`:`<td>${walletMoney(r.bought)}</td><td>${walletMoney(r.sold)}</td><td>${walletMoney(r.holding)}</td><td class="${cls(r.pnl)}">${walletMoney(r.pnl,true)}${r.partial?' *':''}</td>`}<td><a class="mini" href="https://solscan.io/token/${encodeURIComponent(r.mint)}" target="_blank" rel="noopener" aria-label="View ${esc(r.symbol||shortA(r.mint))} on Solscan">↗</a></td></tr>`).join('')}</tbody></table>`;
+}
+function renderWalletActivity() {
+  if(!$('walletActivity')||!PW.data)return;
+  const d=PW.data,transfers=PW.activity==='transfers',rows=transfers?d.transfers:d.activity;
+  if(!rows.length){$('walletActivity').innerHTML=`<div class="wallet-empty"><span class="empty-sticker">${transfers?'⇄':'⚡'}</span><b>${transfers?'No recent SOL transfers':'Your activity starts here'}</b><span>${transfers?'Checks the latest 12 wallet transactions. Older transfers remain on Solscan.':'Real buys and sells made by this SolBoy appear here.'}</span>${transfers&&d.transferError?`<span class="neg">${esc(d.transferError)}</span>`:''}</div>`;return;}
+  $('walletActivity').innerHTML=rows.map(r=>{const info=d.history.find(c=>c.mint===r.mint),positive=r.side==='buy'||r.side==='in';
+    return `<div class="wallet-event ${r.side}"><span class="event-mark">${positive?'↙':'↗'}</span><div><b>${transfers?(positive?'Received SOL':'Sent SOL'):`${positive?'Bought':'Sold'} ${esc(info?.symbol||shortA(r.mint))}`}</b><small>${transfers?esc(shortA(r.other))+' · ':''}${r.time?esc(ago(r.time)):'Time unavailable'}</small></div><div class="event-value ${positive?'pos':'neg'}">${walletMoney(r.sol)}<br>${r.sig?`<a href="https://solscan.io/tx/${encodeURIComponent(r.sig)}" target="_blank" rel="noopener" style="color:var(--ink-3);font-size:10px">View transaction ↗</a>`:''}</div></div>`;
+  }).join('');
+}
+function renderPersonalWallet() {
+  const el=$('personalPortfolio'); if(!el||document.activeElement?.matches?.('#account input'))return;
+  const d=PW.data,period=d?.periods[PW.range]??{realized:0,buys:0,sells:0,wins:0,bins:[0,0,0,0,0],curve:[],volume:0},labels=['≥ 500%','200% – 500%','0% – 200%','−50% – 0%','< −50%'],colours=['#4ade80','#5ce1ff','#a98bff','#ff8cb4','#ff5470'];
+  const calendar=Array.from({length:28},(_,i)=>{const date=new Date();date.setDate(date.getDate()-27+i);const key=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`,pnl=d?.calendar[key];return `<span title="${key}: ${pnl==null?'No recorded sells':esc(walletMoney(pnl,true))}" style="${pnl>0?'background:#4ade8060;border-color:#4ade8070':pnl<0?'background:#ff547060;border-color:#ff547070':''}"></span>`;}).join('');
+  const rangeLabel=PW.range==='all'?'All time':`${PW.range} day${PW.range==='1'?'':'s'}`;
+  el.innerHTML=`<div class="wallet-head"><img class="portrait" src="__MASCOT__" alt="SolBoy wallet mascot"><div><span class="wallet-eyebrow">Your player treasury</span><h1>My wallet<span style="color:var(--accent)">.</span></h1><p>Your SOL. Your coins. Your score.</p></div><div class="wallet-actions"><button class="btn deposit-btn" id="walletDeposit">↓ Deposit</button><button class="btn" id="walletWithdraw">↗ Withdraw</button><button class="btn" id="walletRefresh" ${PW.busy?'disabled':''}>↻ Refresh</button></div></div>
+    <div class="wallet-toolbar"><span class="wallet-address" title="${esc(d?.address||'')}">◎ Solana · ${d?.address?esc(shortA(d.address)):'Create your wallet below'}</span><span class="wallet-badge">● Private to you</span><div class="wallet-segment" aria-label="Display currency">${['USD','SOL'].map(u=>`<button data-wallet-unit="${u}" class="${PW.unit===u?'on':''}">${u}</button>`).join('')}</div><div class="wallet-segment wallet-range" aria-label="Performance period">${[['1','1D'],['7','7D'],['30','30D'],['all','All']].map(([v,l])=>`<button data-wallet-range="${v}" class="${PW.range===v?'on':''}">${l}</button>`).join('')}</div></div>
+    ${PW.error||d?.error?`<div class="warnbox" role="status">${esc(PW.error||d.error)}</div>`:''}
+    <div class="wallet-overview"><section class="wallet-card wallet-value"><h3>◈ Wallet balance <span class="count">Real funds</span></h3><span class="wallet-caption">${d?.totalPartial?'Known value · holdings incomplete':'Estimated total value'}</span><div class="wallet-total" id="walletTotal">${walletMoney(d?.totalSol)}</div><div class="wallet-caption">${d?.totalSol==null?'Balance is not available yet':d.totalSol.toLocaleString('en-US',{maximumFractionDigits:5})+' SOL'}${PW.unit==='USD'&&!d?.solUsd?' · USD quote unavailable':''}</div><div class="wallet-calendar" aria-label="Last 28 days of recorded real profit">${calendar}</div><div class="wallet-metric"><span>Available SOL</span><b id="walletAvailable">${walletMoney(d?.balance)}</b></div><div class="wallet-metric"><span>Unrealized PnL${d?.unknownCost?' *':''}</span><b class="${cls(d?.unrealized)}">${walletMoney(d?.unrealized,true)}</b></div><div class="wallet-mini-grid"><div><span class="wallet-caption">Coins held</span><b>${d?d.holdings.length:'—'}</b></div><div><span class="wallet-caption">Lifetime realized</span><b class="${cls(d?.realized)}">${walletMoney(d?.realized,true)}</b></div></div></section>
+    <section class="wallet-card wallet-chart"><h3>✦ Realized PnL <span class="count">${rangeLabel}</span></h3><div class="chart-value ${cls(period.realized)}" id="walletRealized">${d?walletMoney(period.realized,true):'—'}</div><div class="wallet-caption">From your recorded real sells · deposits are not profit</div>${walletChart(period)}<div class="wallet-chart-footer"><span>${rangeLabel} · ${period.sells} sells</span><span>${PW.unit==='USD'&&d?.solUsd?'USD at current SOL rate':'SOL'}</span></div><div class="wallet-mini-grid"><div><span class="wallet-caption">Traded volume</span><b>${d?walletMoney(period.volume):'—'}</b></div><div><span class="wallet-caption">Win rate</span><b>${period.sells?Math.round(period.wins/period.sells*100)+'%':'—'}</b></div></div></section>
+    <section class="wallet-card wallet-performance"><h3>★ Performance <span class="count">${rangeLabel}</span></h3><div class="wallet-metric"><span>Realized PnL</span><b class="${cls(period.realized)}">${d?walletMoney(period.realized,true):'—'}</b></div><div class="wallet-metric"><span>Transactions</span><b><span class="pos">${period.buys} buys</span> / <span class="neg">${period.sells} sells</span></b></div><div class="wallet-metric"><span>Winning sells</span><b>${period.wins} / ${period.sells}</b></div><div class="wallet-caption" style="margin:16px 0 4px">Return on sold cost · per real sell</div>${labels.map((label,i)=>`<div class="wallet-metric"><span><i class="bin-dot" style="background:${colours[i]}"></i>${label}</span><b>${period.bins[i]}</b></div>`).join('')}<div class="wallet-distribution" aria-hidden="true">${colours.map((c,i)=>`<i style="background:${c};flex:${period.bins[i]}"></i>`).join('')}</div></section></div>
+    <div class="wallet-lower"><section class="wallet-card wallet-ledger"><div class="wallet-ledger-top"><div class="wallet-segment" aria-label="Wallet records">${[['holdings','Holdings'],['history','History'],['top','Top 100']].map(([v,l])=>`<button data-wallet-tab="${v}" class="${PW.tab===v?'on':''}">${l}</button>`).join('')}</div><input class="wallet-search" id="walletSearch" aria-label="Search your coins" placeholder="Search coin or address" value="${esc(PW.query)}"></div><div class="wallet-scroll" id="walletRows"></div></section><section class="wallet-card wallet-ledger"><div class="wallet-ledger-top"><div class="wallet-segment" aria-label="Wallet activity">${[['activity','Activity'],['transfers','Transfers']].map(([v,l])=>`<button data-wallet-activity="${v}" class="${PW.activity===v?'on':''}">${l}</button>`).join('')}</div><span class="wallet-badge">Your wallet</span></div><div class="wallet-activity" id="walletActivity"></div></section></div>
+    <p class="wallet-note"><span class="${d?.scanning?'wallet-loading':''}">${d?.scanning?'● Syncing wallet in the background…':d?.chainAt?'● Holdings checked '+esc(new Date(d.chainAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})):'○ Holdings have not been synced yet'}</span> · Practice mode ${S?.mode==='paper'?'is on':'is off'}; this page always shows real funds.<br>${esc(d?.coverage||'Your portfolio loads when you open My wallet.')} ${d?.unknown?`${d.unknown} coin(s) have no current price. `:''}${d?.unknownCost?'* External or unrecorded buys have unknown cost; their PnL is not included.':''}</p>`;
+  el.querySelectorAll('[data-wallet-unit]').forEach(b=>b.onclick=()=>{PW.unit=b.dataset.walletUnit;store.set('walletUnit',PW.unit);renderPersonalWallet();});
+  el.querySelectorAll('[data-wallet-range]').forEach(b=>b.onclick=()=>{PW.range=b.dataset.walletRange;renderPersonalWallet();});
+  el.querySelectorAll('[data-wallet-tab]').forEach(b=>b.onclick=()=>{PW.tab=b.dataset.walletTab;renderPersonalWallet();});
+  el.querySelectorAll('[data-wallet-activity]').forEach(b=>b.onclick=()=>{PW.activity=b.dataset.walletActivity;renderPersonalWallet();});
+  $('walletSearch').oninput=e=>{PW.query=e.target.value;renderWalletRows();};
+  $('walletRefresh').onclick=()=>loadPersonalWallet(true);
+  $('walletDeposit').onclick=()=>$('walletFunds').scrollIntoView({behavior:'smooth'});
+  $('walletWithdraw').onclick=()=>{ $('walletFunds').scrollIntoView({behavior:'smooth'}); $('wdTo')?.focus({preventScroll:true}); };
+  renderWalletRows(); renderWalletActivity();
 }
 
 function switchMode(mode) {
@@ -1074,7 +1237,7 @@ function showKey() {
     catch (err) { $('keyErr').textContent = err.message; }
   };
 }
-$('balChip').onclick = () => { openTab('account'); $('tab-account').scrollIntoView({ behavior: 'smooth' }); };
+$('balChip').onclick = () => { openTab('account'); window.scrollTo({top:0,behavior:'smooth'}); };
 
 /* ---------- SolBoy Assistant ---------- */
 let chat = [];
@@ -1268,6 +1431,7 @@ function connect() {
     if (latestPortfolio && state.portfolioRevision <= latestPortfolio.portfolioRevision) return;
     latestPortfolio = state;
     if (S) { S = { ...S, ...state }; render(); }
+    if(S?.mode==='live')loadPersonalWallet(false,true);
   });
   es.onerror = () => online(false);
 }

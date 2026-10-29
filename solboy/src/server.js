@@ -46,7 +46,7 @@ function openInBrowser(url) {
  * The game-style dashboard, served only to this computer (127.0.0.1). Every API call must carry
  * a secret made fresh each run and baked into the page, so other websites can't read or click anything.
  */
-export async function startDashboard({ cfg, bot, book, account, updater, finder, serverMode = false }) {
+export async function startDashboard({ cfg, bot, book, account, updater, finder, walletPortfolio, serverMode = false }) {
   const positions = book.positions;
   const secret = crypto.randomBytes(16).toString('hex');
   const page = DASHBOARD_HTML.replace('__TOKEN__', secret).replace('__SERVER_MODE__', serverMode ? 'true' : 'false');
@@ -352,6 +352,13 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         if (!positions.has(mint)) return send(res, 404, { error: "You don't hold that token anymore." });
         await bot.sellNow(mint);
         return send(res, 200, { ok: true });
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/account/portfolio') {
+        // Use the existing balance refresh, never add an urgent RPC request to a trade update.
+        const balance=lastState?.account?.address===account.address()?lastState.account.balance:null;
+        return send(res, 200, {...walletPortfolio.get({balance,refresh:url.searchParams.get('refresh')==='1',
+          knownValues:book.mode==='live' ? lastState?.inventory ?? [] : []}),portfolioRevision});
       }
 
       if (req.method === 'GET' && url.pathname === '/api/account/qr') {

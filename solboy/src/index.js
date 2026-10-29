@@ -10,6 +10,7 @@ import { createAccount } from './account.js';
 import { createBot } from './bot.js';
 import { createRpcLimiter } from './rpc.js';
 import { createFinder } from './finder.js';
+import { createWalletPortfolio } from './wallet-portfolio.js';
 import { createMenu } from './ui.js';
 import { startDashboard } from './server.js';
 import { log, captureLibraryOutput } from './log.js';
@@ -93,12 +94,13 @@ async function main() {
   const account = createAccount({ cfg, connection, book, positionsFor: book.positionsFor });
   const bot = createBot({ cfg, connection, book, rpcFetch: rpc.fetch });
   const finder = createFinder({ cfg, connection: scanConnection, bot });
+  const walletPortfolio = createWalletPortfolio({ connection: scanConnection, book, account });
   bot.start();
   const updater = createUpdater();
   let dashboard = null;
   if (cfg.dashboard.enabled) {
     try {
-      dashboard = await startDashboard({ cfg, bot, book, account, updater, finder, serverMode: SERVER_MODE });
+      dashboard = await startDashboard({ cfg, bot, book, account, updater, finder, walletPortfolio, serverMode: SERVER_MODE });
     } catch (e) {
       log(`Dashboard couldn't start (${e.message}). The bot keeps running here in the terminal.`);
     }
