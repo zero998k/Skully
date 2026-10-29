@@ -121,7 +121,7 @@ check('personal wallet','recent transfers have an honest empty state',typeof fl.
 check('personal wallet','wallet data cannot be reached without authentication or through a friend link',fl.walletPrivate&&fl.walletGuestBlocked,[fl.walletPrivate,fl.walletGuestBlocked]);
 check('personal wallet','fits a phone',fl.walletPhoneOverflow===false,fl.walletPhoneOverflow);
 for(const [name,ok]of Object.entries(fl.walletMath??{}))check('personal wallet',name,ok===true,ok);
-check('personal wallet','financial calculation tests ran',Object.keys(fl.walletMath??{}).length===6,fl.walletMath);
+check('personal wallet','financial calculation tests ran',Object.keys(fl.walletMath??{}).length===7,fl.walletMath);
 for (const name of ['paperIsNotConfirmed', 'noRouteCacheSkipsRedundantQuote', 'expiredRouteCacheRechecks', 'confirmedBuyWithoutExtraLookup', 'sellsAreTimed', 'failedConfirmationDoesNotOpenOrDuplicate', 'currentFreeJupiterEndpoint']) check('speed', name, speed[name] === true, speed[name] ?? speed.crashed);
 
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');

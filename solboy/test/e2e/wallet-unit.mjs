@@ -19,16 +19,17 @@ assert.equal(old.totalSol,null);assert.equal(old.periods[7].realized,0);assert.e
 const results={realFundsExcludePaper:true,unknownPricesAndCostsStayUnknown:true,tokenDecimalsAndTotals:true,staleHoldingsCannotRestoreSold:true,periodsAndChartUseRealSells:true};
 
 // A fresh scan returns immediately, shares in-flight work, and uses only the supplied background connection.
-let release,calls=0;const gate=new Promise(r=>release=r),oldFetch=globalThis.fetch,oldPrice=process.env.SOL_PRICE_URL;
+let release,calls=0;const programs=[],gate=new Promise(r=>release=r),oldFetch=globalThis.fetch,oldPrice=process.env.SOL_PRICE_URL;
 process.env.SOL_PRICE_URL='https://wallet.unit.invalid/price';
 globalThis.fetch=async url=>Response.json(String(url).includes('/price')?{'So11111111111111111111111111111111111111112':{usdPrice:150}}:[]);
 try {
  const service=createWalletPortfolio({account:{address:()=>address},book:{positionsFor:mode=>{assert.equal(mode,'live');return{entries:()=>[]};}},readLiveTrades:()=>[],
-  connection:{getParsedTokenAccountsByOwner:async()=>{calls++;await gate;return{value:[]};},getSignaturesForAddress:async()=>[]}});
+  connection:{getParsedTokenAccountsByOwner:async(owner,filter)=>{programs.push(filter.programId.toBase58());calls++;await gate;return{value:[]};},getSignaturesForAddress:async()=>[]}});
  const start=performance.now();assert.equal(service.get({balance:3}).balance,3);assert(performance.now()-start<100);
  assert(service.get({balance:3,refresh:true}).scanning);assert.equal(calls,2);release();
  for(let i=0;i<50&&service.get({balance:3}).scanning;i++)await new Promise(r=>setTimeout(r,5));
  assert.equal(service.get({balance:3}).solUsd,150);service.get({balance:3});assert.equal(calls,2);
+ assert.deepEqual(programs,['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA','TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb']);results.officialTokenPrograms=true;
  results.backgroundScanIsNonblockingAndCached=true;
 }finally{globalThis.fetch=oldFetch;if(oldPrice===undefined)delete process.env.SOL_PRICE_URL;else process.env.SOL_PRICE_URL=oldPrice;}
 console.log(JSON.stringify(results));

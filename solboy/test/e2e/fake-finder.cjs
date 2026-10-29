@@ -114,7 +114,7 @@ function rpc(method, params) {
     case 'getAccountInfo': return ok(COINS.has(a) ? { data: [Buffer.alloc(82).toString('base64'), 'base64'], executable: false, lamports: 1461600, owner: TOKEN, rentEpoch: 0, space: 82 } : null);
     case 'getBalance': return ok(a === A.SMART ? 12.5e9 : 1e9);
     case 'getTokenAccountsByOwner': {
-      const filter = params[1] ?? {}, held = [...(HOLD.get(a) ?? new Map())].filter(([m, n]) => n > 0 && (!filter.mint || filter.mint === m) && filter.programId !== 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCCEpPxuEb');
+      const filter = params[1] ?? {}, held = [...(HOLD.get(a) ?? new Map())].filter(([m, n]) => n > 0 && (!filter.mint || filter.mint === m) && filter.programId !== 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
       return ok(held.map(([m, n]) => ({ pubkey: pk(), account: { data: { program: 'spl-token', parsed: { type: 'account', info: { mint: m, owner: a, isNative: false, state: 'initialized', tokenAmount: { amount: String(Math.round(n * 1e6)), decimals: 6, uiAmount: n, uiAmountString: String(n) } } }, space: 165 }, executable: false, lamports: 2039280, owner: TOKEN, rentEpoch: 0, space: 165 } })));
     }
     default: return undefined;
