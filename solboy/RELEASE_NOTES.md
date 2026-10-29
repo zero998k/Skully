@@ -1,3 +1,8 @@
+**New in 1.11.0: your own colourful wallet portfolio**
+- Open **My wallet** (or click your balance) for your real SOL, token holdings, profit chart, performance, history, Top 100 and recent transfers, with SOL/USD and time filters.
+- Brighter cartoon styling, a private wallet view for each friend using their own SolBoy, and deposit/withdraw controls together in one place. Practice profits stay separate from real funds; unpriced coins and unknown costs are clearly marked.
+- Wallet scans run in the background so copy trading keeps priority. Your existing keys, settings and update buttons stay.
+
 **New in 1.10.2**
 - **⟳ Check for updates** button at the top: checks right away and, if there's a new version, opens the Update window. SolBoy also checks by itself every 15 minutes now (it used to be every 6 hours), so the yellow Update button shows up much sooner for you and your friends.
 
