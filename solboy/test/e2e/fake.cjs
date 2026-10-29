@@ -62,6 +62,7 @@ function rpc(method, params) {
     case 'getTokenSupply': if (P.coins.has(params[0])) return ok({ amount: '1000000000000000', decimals: 6, uiAmount: 1e9, uiAmountString: '1000000000' });
       return ok({ amount: '1000000000', decimals: 6, uiAmount: 1000, uiAmountString: '1000' });
     case 'getTokenAccountsByOwner': { const c = [...P.coins.values()].find((x) => x.pair && x.pair === params[0]); if (c) { const quote = params[1]?.mint?.startsWith('So111'); const key = quote ? c.vaultQuote : c.vaultBase; return ok([{ pubkey: key, account: vaultAcct(c, key) }]); } }
+      if (params[1]?.programId === 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCCEpPxuEb') return ok([]);
       if (params[2]?.encoding === 'base64') return ok([]); // a pool SolBoy guessed that isn't on this fake chain
       return ok(S.held > 0n ? [{ pubkey: DEV, account: { data: { program: 'spl-token', parsed: { type: 'account', info: { mint: MINT, owner: params[0], tokenAmount: { amount: S.held.toString(), decimals: 6, uiAmount: Number(S.held) / 1e6, uiAmountString: String(Number(S.held) / 1e6) } } }, space: 165 }, executable: false, lamports: 2039280, owner: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', rentEpoch: 0, space: 165 } }] : []);
     case 'sendTransaction': {

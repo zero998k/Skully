@@ -2,6 +2,7 @@
 const fs=require('node:fs'), assert=require('node:assert/strict');
 const [a,b]=process.argv.slice(2).map(p=>JSON.parse(fs.readFileSync(p)));
 assert(a.simulated&&b.simulated&&a.rounds===b.rounds);
+assert(Boolean(a.walletOpen)===Boolean(b.walletOpen),'Use the same open page for both speed runs');
 for(const name of Object.keys(a.cases)){
  for(const metric of ['buy','sell','buyVisible','sellVisible']){
   const before=a.cases[name][metric],after=b.cases[name][metric];

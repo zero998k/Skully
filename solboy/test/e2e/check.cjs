@@ -114,6 +114,14 @@ check('speed', 'completed simulated buy and sell reach the screen in under a sec
 check('speed', 'older state cannot hide a new buy or restore a sold position', f.staleStateCannotHideBuy && f.staleStateCannotRestoreSold, [f.staleStateCannotHideBuy, f.staleStateCannotRestoreSold]);
 check('speed', 'paper timing is clearly labelled', /Sell.*paper/.test(f.paperSpeedLabel ?? ''), f.paperSpeedLabel);
 const speed = json('speed.json');
+check('personal wallet','private portfolio is separate from practice results',fl.personalWalletHeader==='My wallet.'&&fl.personalWalletRealOnly===true,fl.personalWalletHeader);
+check('personal wallet','completed live buys and sells update wallet holdings immediately',fl.liveWalletBought===true&&fl.liveWalletSold===true,[fl.liveWalletBought,fl.liveWalletSold]);
+check('personal wallet','currency, period, history, search and Top 100 work',fl.walletSolUnits&&fl.walletPeriod&&fl.walletHistory>=1&&fl.walletSearch&&fl.walletTop>=1&&fl.walletTop<=100,[fl.walletHistory,fl.walletTop]);
+check('personal wallet','recent transfers have an honest empty state',typeof fl.walletTransfers==='string'&&fl.walletTransfers.length>0,fl.walletTransfers);
+check('personal wallet','wallet data cannot be reached without authentication or through a friend link',fl.walletPrivate&&fl.walletGuestBlocked,[fl.walletPrivate,fl.walletGuestBlocked]);
+check('personal wallet','fits a phone',fl.walletPhoneOverflow===false,fl.walletPhoneOverflow);
+for(const [name,ok]of Object.entries(fl.walletMath??{}))check('personal wallet',name,ok===true,ok);
+check('personal wallet','financial calculation tests ran',Object.keys(fl.walletMath??{}).length===6,fl.walletMath);
 for (const name of ['paperIsNotConfirmed', 'noRouteCacheSkipsRedundantQuote', 'expiredRouteCacheRechecks', 'confirmedBuyWithoutExtraLookup', 'sellsAreTimed', 'failedConfirmationDoesNotOpenOrDuplicate', 'currentFreeJupiterEndpoint']) check('speed', name, speed[name] === true, speed[name] ?? speed.crashed);
 
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');

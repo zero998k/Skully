@@ -17,7 +17,7 @@ const summary = rows => { const a = [...rows].sort((x,y)=>x-y); return { medianM
  const [binary, output] = process.argv.slice(2); const rounds=Number(process.env.BENCH_ROUNDS || 8);
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'solboy-latency-'));
  const fake=spawn(process.execPath,[path.join(__dirname,'fake.cjs')],{detached:true,stdio:'ignore'});
- let app,browser; const report={simulated:true,rounds,cases:{}};
+ let app,browser; const report={simulated:true,rounds,walletOpen:Boolean(process.env.BENCH_WALLET),cases:{}};
  try {
   await until(()=>F('/state').then(()=>true).catch(()=>false));
   browser=await chromium.launch();
@@ -31,7 +31,9 @@ const summary = rows => { const a = [...rows].sort((x,y)=>x-y); return { medianM
    app=spawn(exe,[],{detached:true,stdio:['pipe','ignore','ignore'],env:{...process.env,PORT:'18778'}});
    const page=await browser.newPage({viewport:{width:1440,height:1000}});
    await until(()=>fetch('http://localhost:18778/').then(()=>true).catch(()=>false));
-   await page.goto('http://localhost:18778/');await page.waitForFunction(()=>typeof S!=='undefined'&&S?.account);await sleep(600);
+   await page.goto('http://localhost:18778/');await page.waitForFunction(()=>typeof S!=='undefined'&&S?.account);
+   if(process.env.BENCH_WALLET)await page.click('[data-tab=account]');
+   await sleep(600);
    if(process.env.BENCH_STREAM_ONLY){report.stream=await require('./stream.cjs')(page,F);console.log(report.stream);await page.close();groupStop(app);app=null;await sleep(700);continue;}
    const rows={buy:[],sell:[],buyVisible:[],sellVisible:[]};
    const posFile=path.join(folder,'data',`positions-${live?'live':'paper'}.json`);
