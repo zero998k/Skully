@@ -1,3 +1,12 @@
+**New in 1.14.0: faster exits and more reliable profit figures**
+
+- Fixed inflated practice profits on coins priced in another token. Real buys and sells now use their own confirmed receipts for token amounts and net SOL, including network costs.
+- Fixed a launch-time check that could miss a developer's first buy. Sells arriving during a buy are kept, delayed source receipts are retried, reconnects check missed trades, and switched-off wallets stop using copy-trading requests.
+- A failed Sell now restores its button and shows the error. Delayed submitted trades are saved and checked without sending them twice; live prices keep moving during the request.
+- See SOL, approximate USD and percentage PnL at the top and in open trades, plus copy/skip reasons on Wallets. Older practice history is preserved and marked as unverified estimates.
+
+Stops remain market orders: fast price moves, fees, price impact and slippage can change the final fill. No paid subscription or data feed was added.
+
 **New in 1.13.0: faster prices while you are in a trade**
 
 - Open trades now share one price tracker with automatic sells. Supported Pump.fun and PumpSwap markets stream changes directly from your existing Solana connection; other markets use fresh, rate-limited sell quotes.
