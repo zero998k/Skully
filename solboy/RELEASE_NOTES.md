@@ -1,3 +1,10 @@
+## 1.12.0 — Your wallet command center
+
+- Open My wallet straight from the top bar, then jump between Overview, PnL calendar, Scorecard, Coins & activity, and Manage funds.
+- Explore a full monthly PnL calendar with clickable days and monthly CSV downloads.
+- See win/loss averages, profit factor, drawdown, streaks, returns, portfolio allocation, and results from each copied wallet.
+- Sort and filter your coins, open detailed coin records, filter activity, and export your records. Your real funds stay separate from practice trades, and every friend gets their own private page.
+
 **Fixed in 1.11.1: wallet balance syncing**
 - Corrected a token-program address so real on-chain holdings can sync in My wallet and the Wallet Finder. Added checks that reject an incorrect program address.
 
