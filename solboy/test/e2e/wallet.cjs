@@ -2,9 +2,10 @@ const {execFileSync}=require('node:child_process');
 const path=require('node:path');
 module.exports=async(p,BASE,E)=>{
  const R={walletMath:JSON.parse(execFileSync(process.execPath,[path.join(__dirname,'wallet-unit.mjs')],{encoding:'utf8'}))};
- await p.setViewportSize({width:1600,height:1050});await p.click('[data-tab=account]');
+ await p.setViewportSize({width:1600,height:1050});await p.click('[data-tab=history]');await p.click('#myWalletTop');
  await p.waitForFunction(()=>typeof PW!=='undefined'&&PW.data?.address&&PW.data.periods.all.sells>=2,{timeout:20000});
  R.personalWalletHeader=await p.locator('#personalPortfolio h1').innerText();
+ R.walletTopShortcut=await p.locator('#myWalletTop').getAttribute('aria-current')==='page';
  R.personalWalletRealOnly=await p.evaluate(()=>S.mode==='paper'&&PW.data.activity.every(t=>['buy','sell'].includes(t.side))&&PW.data.balance===S.account.balance&&PW.data.realized!==S.summary.totalPnl);
  await p.click('[data-wallet-unit=SOL]');R.walletSolUnits=(await p.locator('#walletAvailable').innerText()).includes('SOL');
  await p.click('[data-wallet-range="1"]');R.walletPeriod=await p.evaluate(()=>PW.range==='1'&&PW.data.periods[1].sells>=2);
@@ -12,12 +13,38 @@ module.exports=async(p,BASE,E)=>{
  await p.fill('#walletSearch','no-such-coin-fixture');R.walletSearch=(await p.locator('#walletRows').innerText()).includes('No matching coins');
  await p.fill('#walletSearch','');await p.locator('#walletSearch').blur();
  await p.click('[data-wallet-tab=top]');R.walletTop=await p.locator('#walletRows tbody tr').count();
+ await p.selectOption('#walletSort','pnl-low');
+ R.walletSort=await p.evaluate(()=>{const r=walletFilteredRows();return r.length>0&&r.every((v,i)=>!i||r[i-1].pnl<=v.pnl);});
+ await p.selectOption('#walletCoinFilter','profit');R.walletFilter=await p.evaluate(()=>walletFilteredRows().every(r=>r.pnl>0));
+ await p.selectOption('#walletCoinFilter','all');await p.selectOption('#walletSort','value');
+ await p.locator('[data-wallet-coin]').first().click();R.walletCoinDetails=(await p.locator('#modalBody').innerText()).includes('Remaining recorded cost')&&(await p.locator('#modalBody').innerText()).includes('Recent recorded orders');await p.click('#modalClose');
+ const recordDownload=p.waitForEvent('download');await p.click('#walletExportTrades');
+ R.walletCsv=await require('node:fs/promises').readFile(await(await recordDownload).path(),'utf8');
+ await p.evaluate(()=>{PW.month='2024-02';PW.day='2024-02-29';renderPersonalWallet();});
+ R.walletLeapMonth=await p.locator('[data-wallet-day]').count()===29;
+ await p.click('#walletPrevMonth');R.walletMonthBack=(await p.locator('#walletMonthLabel').innerText()).includes('January 2024');
+ await p.click('#walletNextMonth');R.walletMonthForward=(await p.locator('#walletMonthLabel').innerText()).includes('February 2024');
+ await p.click('#walletThisMonth');
+ const picked=await p.evaluate(()=>PW.data.calendarDays.find(d=>d.sells>0)?.date);
+ await p.click(`[data-wallet-day="${picked}"]`);R.walletDay=(await p.locator('#walletDayDetail').innerText()).includes('sells')&&await p.locator(`[data-wallet-day="${picked}"]`).getAttribute('aria-pressed')==='true';
+ const calendarDownload=p.waitForEvent('download');await p.click('#walletExportCalendar');R.walletCalendarCsv=await require('node:fs/promises').readFile(await(await calendarDownload).path(),'utf8');
+ R.walletInsights=await p.locator('#walletInsightsSection .wallet-stat-tile').count()===12&&(await p.locator('#walletInsightsSection').innerText()).includes('Copied-wallet breakdown');
+ R.walletSourceNames=(await p.locator('#walletInsightsSection').innerText()).includes('wallet1')&&await p.locator('#walletInsightsSection a[href$="/account/wallet1"]').count()===0;
+ const snapshot=await p.evaluate(()=>PW.data);
+ await p.evaluate(()=>{PW.data={...PW.data,balance:0,totalSol:80,holdings:Array.from({length:8},(_,i)=>({mint:'fixture-'+i,symbol:'Coin '+i,valueSol:10,amount:1,costSol:null,pnlSol:null})),unknown:0};renderPersonalWallet();});
+ R.walletConcentration=await p.locator('#walletLargestAllocation').innerText()==='12.5%';
+ await p.evaluate(data=>{PW.data=data;renderPersonalWallet();},snapshot);
+ await p.click('[data-wallet-jump=walletCalendarSection]');await p.waitForTimeout(600);R.walletJump=await p.locator('#walletCalendarSection').evaluate(el=>{const gap=el.getBoundingClientRect().top-document.querySelector('.hud').getBoundingClientRect().bottom;return gap>=5&&gap<60;});
+ await p.selectOption('#walletActivityFilter','wins');R.walletWinFilter=await p.evaluate(()=>PW.data.activity.filter(r=>r.pnl>0).length===document.querySelectorAll('#walletActivity .wallet-event').length);await p.selectOption('#walletActivityFilter','all');
  await p.click('[data-wallet-activity=transfers]');R.walletTransfers=await p.locator('#walletActivity').innerText();
  R.walletPrivate=(await fetch(BASE+'/api/account/portfolio')).status===403;
  const shared=await p.evaluate(()=>api('/api/share/start',{}));
  try { R.walletGuestBlocked=(await fetch(shared.url+'/api/account/portfolio')).status===404; }
  finally { await p.evaluate(()=>api('/api/share/stop',{})); }
  await p.click('[data-wallet-tab=history]');await p.click('[data-wallet-activity=activity]');
+ // Untrusted names in a locally exported file must not become spreadsheet formulas.
+ const csvSafety=p.waitForEvent('download');await p.evaluate(()=>walletCsv('safe.csv',['Name'],[['=1+1'],['@SUM(A1)'],[-2],[null]]));
+ R.walletCsvSafety=await require('node:fs/promises').readFile(await(await csvSafety).path(),'utf8');
  await p.screenshot({path:E+'/13-personal-wallet.png',fullPage:true});
  await p.setViewportSize({width:390,height:900});await p.screenshot({path:E+'/14-personal-wallet-phone.png',fullPage:true});
  R.walletPhoneOverflow=await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth);

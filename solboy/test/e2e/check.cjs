@@ -120,8 +120,16 @@ check('personal wallet','currency, period, history, search and Top 100 work',fl.
 check('personal wallet','recent transfers have an honest empty state',typeof fl.walletTransfers==='string'&&fl.walletTransfers.length>0,fl.walletTransfers);
 check('personal wallet','wallet data cannot be reached without authentication or through a friend link',fl.walletPrivate&&fl.walletGuestBlocked,[fl.walletPrivate,fl.walletGuestBlocked]);
 check('personal wallet','fits a phone',fl.walletPhoneOverflow===false,fl.walletPhoneOverflow);
+check('personal wallet','top bar shortcut and section jumps work',fl.walletTopShortcut&&fl.walletJump,[fl.walletTopShortcut,fl.walletJump]);
+check('personal wallet','monthly calendar supports leap day, browsing and day details',fl.walletLeapMonth&&fl.walletMonthBack&&fl.walletMonthForward&&fl.walletDay,[fl.walletLeapMonth,fl.walletMonthBack,fl.walletMonthForward,fl.walletDay]);
+check('personal wallet','scorecard, sorting, profit filters and coin details work',fl.walletInsights&&fl.walletSort&&fl.walletFilter&&fl.walletCoinDetails,[fl.walletInsights,fl.walletSort,fl.walletFilter,fl.walletCoinDetails]);
+check('personal wallet','calendar and real-trade CSV downloads contain actual records',fl.walletCsv?.includes('Realized PnL (SOL)')&&fl.walletCsv?.includes('"sell"')&&fl.walletCalendarCsv?.includes('Timezone')&&fl.walletCalendarCsv?.split('\r\n').length>=2,[fl.walletCsv?.length,fl.walletCalendarCsv?.length]);
+check('personal wallet','CSV exports protect text cells against spreadsheet formulas',fl.walletCsvSafety?.includes('"\'=1+1"')&&fl.walletCsvSafety?.includes('"\'@SUM(A1)"')&&fl.walletCsvSafety?.includes('"-2"'),fl.walletCsvSafety);
+check('personal wallet','activity can be filtered to profitable sells',fl.walletWinFilter===true,fl.walletWinFilter);
+check('personal wallet','source nicknames stay readable and do not become invalid explorer links',fl.walletSourceNames===true,fl.walletSourceNames);
+check('personal wallet','largest-asset allocation does not mistake grouped small coins for one asset',fl.walletConcentration===true,fl.walletConcentration);
 for(const [name,ok]of Object.entries(fl.walletMath??{}))check('personal wallet',name,ok===true,ok);
-check('personal wallet','financial calculation tests ran',Object.keys(fl.walletMath??{}).length===7,fl.walletMath);
+check('personal wallet','financial calculation tests ran',Object.keys(fl.walletMath??{}).length===11,fl.walletMath);
 for (const name of ['paperIsNotConfirmed', 'noRouteCacheSkipsRedundantQuote', 'expiredRouteCacheRechecks', 'confirmedBuyWithoutExtraLookup', 'sellsAreTimed', 'failedConfirmationDoesNotOpenOrDuplicate', 'currentFreeJupiterEndpoint']) check('speed', name, speed[name] === true, speed[name] ?? speed.crashed);
 
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');
