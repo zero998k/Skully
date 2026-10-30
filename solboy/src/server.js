@@ -66,7 +66,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
     backlog.push(ev);
     if (backlog.length > 80) backlog.shift();
     for (const res of clients) res.write(`data: ${JSON.stringify(ev)}\n\n`);
-    if (ev.kind === 'buy' || ev.kind === 'sell') {
+    if (ev.kind === 'buy' || ev.kind === 'sell' || /sell failed|Copy sell retry/.test(ev.text)) {
       portfolioRevision++;
       const data = JSON.stringify(portfolioSnapshot());
       for (const res of clients) res.write(`event: portfolio\ndata: ${data}\n\n`);
@@ -99,11 +99,12 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
     const names = new Map([...(lastState?.inventory ?? []).map(p => [p.mint, p.name]), ...(lastState?.trades ?? []).map(t => [t.token, t.name])]);
     return {
       solRate:solRate.get(),copyActivity:bot.copyActivity?.()??[],pendingBuys:positions.entries().filter(([,p])=>p.pendingBuy).map(([mint,p])=>({mint,from:p.sourceLabel,sig:p.pendingBuy.sig})),
-      portfolioRevision, mode: book.mode, paused: bot.isBuyingPaused(), copySpeed: bot.copySpeed(),
+      paperWallet:book.paperWallet?.status()??null,portfolioRevision, mode: book.mode, paused: bot.isBuyingPaused(), copySpeed: bot.copySpeed(),
       summary: summarize(counted, positions.dayStart()), todayPnl: positions.todayPnl(),
       dayResetAt: positions.resetToday(), dailyLossLimit: cfg.dailyLossLimitSol, maxSlots: cfg.maxOpenPositions,
       inventory: positions.entries().filter(([,p])=>!p.pendingBuy).map(([mint, pos]) => ({ mint, name: names.get(mint) ?? mint,
         pendingSell: pos.pendingSell ? { sig: pos.pendingSell.sig, submittedAt: pos.pendingSell.submittedAt } : null,
+        copiedSell:pos.copiedExit?{attempts:pos.copiedExit.attempts,nextAttemptAt:pos.copiedExit.nextAttemptAt,lastError:pos.copiedExit.lastError,paused:!cfg.followSells}:null,
         from: pos.sourceLabel, paid: pos.solSpent, openedAt: pos.openedAt, tokens: pos.tokens,
         ...(bot.priceOf?.(mint,pos)??{worth:null,priceStale:true}) })),
       trades: trades.slice(-50).reverse().map(t => ({ ...t, name: names.get(t.token) ?? t.token })),
@@ -129,6 +130,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         mint,
         name: name(mint),
         pendingSell: pos.pendingSell ? { sig: pos.pendingSell.sig, submittedAt: pos.pendingSell.submittedAt } : null,
+        copiedSell:pos.copiedExit?{attempts:pos.copiedExit.attempts,nextAttemptAt:pos.copiedExit.nextAttemptAt,lastError:pos.copiedExit.lastError,paused:!cfg.followSells}:null,
         from: pos.sourceLabel,
         paid: pos.solSpent,
         tokens: pos.tokens,
@@ -139,6 +141,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
       solRate:solRate.get(),copyActivity:bot.copyActivity?.()??[],pendingBuys:positions.entries().filter(([,p])=>p.pendingBuy).map(([mint,p])=>({mint,from:p.sourceLabel,sig:p.pendingBuy.sig})),
       portfolioRevision: revision,
       mode: book.mode,
+      paperWallet:book.paperWallet?.status()??null,
       account: await accountState(),
       paused: bot.isBuyingPaused(),
       copySpeed: bot.copySpeed(),
@@ -343,6 +346,16 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         if (req.method === 'POST' && url.pathname === '/api/share/start') return send(res, 200, await share.start());
         if (req.method === 'POST' && url.pathname === '/api/share/stop') return send(res, 200, share.stop());
         return send(res, 200, share.status());
+      }
+
+      if(req.method==='POST'&&url.pathname==='/api/paper/balance'){
+        try{
+          const body=await readBody(req);if(body.unlimited!==true&&body.sol==null)throw new Error('Enter a starting paper balance in SOL.');
+          const paperWallet=book.paperWallet.setStartingBalance(body.unlimited===true?null:body.sol);
+          portfolioRevision++;const data=JSON.stringify(portfolioSnapshot());
+          for(const client of clients)client.write(`event: portfolio\ndata: ${data}\n\n`);
+          return send(res,200,paperWallet);
+        }catch(error){return send(res,400,{error:error.message});}
       }
 
       if (req.method === 'POST' && url.pathname === '/api/sell') {

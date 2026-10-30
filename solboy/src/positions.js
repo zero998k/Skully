@@ -24,6 +24,23 @@ export class Positions {
   update(mint, changes) { Object.assign(this.data.open[mint], changes); this.save(); }
   close(mint) { delete this.data.open[mint]; this.save(); }
 
+  // Practice cash and its position/PnL change are one atomic file replacement. A crash
+  // cannot debit cash without opening the position or credit the same sell twice.
+  settlePaper(mint, pos, cashDelta, pnl = null) {
+    const before=this.data;
+    this.data=structuredClone(before);
+    try {
+      if(this.data.paperWallet?.enabled){
+        const available=BigInt(this.data.paperWallet.availableLamports)+cashDelta;
+        if(available<0n)throw new Error('Not enough paper SOL for this buy.');
+        this.data.paperWallet.availableLamports=String(available);
+      }
+      if(pos==null)delete this.data.open[mint];else this.data.open[mint]=pos;
+      if(pnl!=null)this.data.pnlByDay[today()]=(this.data.pnlByDay[today()]??0)+pnl;
+      this.save();
+    }catch(error){this.data=before;throw error;}
+  }
+
   recordPnl(sol) {
     const d = today();
     this.data.pnlByDay[d] = (this.data.pnlByDay[d] ?? 0) + sol;

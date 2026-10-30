@@ -1,5 +1,6 @@
 import { Positions } from './positions.js';
 import { file } from './paths.js';
+import {createPaperWallet} from './paper-wallet.js';
 
 /**
  * Paper and real-money trading keep separate positions and trade logs. The book always points
@@ -26,5 +27,6 @@ export function createBook(cfg, keypair) {
     },
   });
   book.positionsFor = storeFor;
+  book.paperWallet = createPaperWallet(book);
   return book;
 }

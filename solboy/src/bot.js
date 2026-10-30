@@ -2,7 +2,7 @@ import bs58 from 'bs58';
 import { randomUUID } from 'node:crypto';
 import { PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { parseTrades, looksLikeSwap, pumpTradesFromLogs, WSOL } from './detect.js';
-import { getQuote, buildSwap } from './jupiter.js';
+import { getQuote, buildSwap, getMarketPrices, backgroundPriceReady } from './jupiter.js';
 import { log, short, recordTrade, notify, c } from './log.js';
 import { checkWallet, saveWallets } from './config.js';
 import { recordCopy } from './finder.js';
@@ -42,7 +42,9 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
   const exitQueued=new Set(), lastReconcile=new Map();
   const balanceRepairs=new Set(),lastBalanceRepair=new Map();
   const prices=priceConnection?createLivePrices({connection:priceConnection,book,isTrading:()=>buysInFlight>0||locks.size>0,
-    readQuote:(mint,tokens,signal)=>quoteFor({inputMint:mint,outputMint:WSOL,amount:tokens,slippageBps:cfg.sellSlippageBps,signal}),
+    readQuote:(mint,tokens,signal)=>quoteFor({inputMint:mint,outputMint:WSOL,amount:tokens,slippageBps:cfg.sellSlippageBps,signal,background:true}),
+    readMarket:getMarketPrices,canRequest:backgroundPriceReady,
+    quotePriority:(pos,worth)=>{const pct=(worth/pos.solSpent-1)*100;return (cfg.takeProfitPct&&pct>=cfg.takeProfitPct)||(cfg.stopLossPct&&pct<=-Math.abs(cfg.stopLossPct))?1:0;},
     onCurve:(mint,curve)=>rememberCurve(mint,curve)}):null;
   const tag = () => (cfg.dryRun ? 'PAPER ' : '');
 
@@ -175,6 +177,7 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
     if (w.paused) return `copying is switched off for ${w.label} (Wallets tab)`;
     if (cfg.onlyFirstBuy && t.heldBefore) return `${w.label} already held this coin and is adding more; SolBoy only copies their first buy`;
     if (positions.has(t.mint)) return 'already holding this token';
+    if(cfg.dryRun&&book.paperWallet&&!book.paperWallet.canSpend(Math.round((w.buyAmountSol??cfg.buyAmountSol)*LAMPORTS)))return 'not enough paper SOL; choose a smaller buy or reset Paper funds when your positions are closed';
     if (cfg.blocklist.includes(t.mint)) return 'token is on your blocklist';
     if (t.solAmount < cfg.minSourceBuySol) return `their buy is under minSourceBuySol (${cfg.minSourceBuySol} SOL)`;
     if (positions.count() + [...buyReservations].filter(m=>!positions.has(m)).length >= cfg.maxOpenPositions) return `already at maxOpenPositions (${cfg.maxOpenPositions})`;
@@ -407,7 +410,9 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
   }
 
   async function sendCopyBuy(w, t, lamports, quote) {
+    let paperReservation=null;
     try {
+      if(cfg.dryRun)paperReservation=book.paperWallet?.reserve(lamports)??null;
       const hooks = {
         beforeSubmit:()=>checkEntry(w,t),
         onSubmitted:transaction=>positions.open(t.mint,{
@@ -417,17 +422,18 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
         onFailed:()=>positions.close(t.mint),
       };
       const timing = t.curve ? await curveSwap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, t.curve, null, hooks) : await swap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, quote, null, hooks);
-      finishBuy(w,t,timing,lamports);
+      finishBuy(w,t,timing,lamports,paperReservation);
 
     } catch (e) {
       decision(w,t,positions.get(t.mint)?.pendingBuy?'Pending':'Not copied',e.message);
       log(`  ${positions.get(t.mint)?.pendingBuy?'buy pending':'buy failed'}: ${e.message}`);
-    }
+    }finally{book.paperWallet?.release(paperReservation);}
   }
 
-  function finishBuy(w,t,timing,expectedLamports) {
+  function finishBuy(w,t,timing,expectedLamports,paperReservation=null) {
     const sol=Number(timing.costRaw??expectedLamports)/LAMPORTS;
-    positions.open(t.mint,{source:w.address,sourceLabel:w.label,sourceTrade:t.order,solSpent:sol,boughtTotal:sol,soldTotal:0,tokens:String(timing.outRaw),fillVerified:Boolean(timing.sig),balanceAt:Date.now(),openedAt:positions.get(t.mint)?.openedAt??new Date().toISOString()});
+    const opened={source:w.address,sourceLabel:w.label,sourceTrade:t.order,solSpent:sol,boughtTotal:sol,soldTotal:0,tokens:String(timing.outRaw),fillVerified:Boolean(timing.sig),balanceAt:Date.now(),openedAt:positions.get(t.mint)?.openedAt??new Date().toISOString()};
+    if(cfg.dryRun&&book.paperWallet)book.paperWallet.commitBuy(paperReservation,t.mint,opened,expectedLamports);else positions.open(t.mint,opened);
     if(t.curve)prices?.seedCurve(t.mint,t.curve,t.order?.slot,t.seenAt);
     recordTrade(book.tradeLogFile,{action:`${tag()}buy`,mint:t.mint,wallet:w.label,sol,reason:`copied ${w.label}${cfg.dryRun?' (simulation estimate)':' (receipt verified, including network costs)'}`,tx:timing.sig});
     decision(w,t,'Copied',cfg.dryRun?'Practice buy priced as an estimate':'Buy receipt verified');
@@ -451,28 +457,48 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
     }
   }
 
-  async function copySell(w, t) {
-    const pos = positions.get(t.mint);
-    if (!pos || !cfg.followSells) return;
-    if (pos.source !== w.address) return log(`  not selling: this position was copied from ${pos.sourceLabel}`);
-    if (newer(pos.sourceTrade, t.order)) return log('  not selling: this exit belongs to an earlier source entry');
-    try { t.fractionSold = await sourceFraction(w, t); }
-    catch (e) {
+  const savedSourceExit=t=>({mint:t.mint,side:t.side,seenAt:t.seenAt,order:t.order,signature:t.signature,tokenAmount:String(t.tokenAmount),curve:t.curve,fractionSold:t.fractionSold});
+  async function copySell(w,t){
+    const pos=positions.get(t.mint);
+    if(!pos||!cfg.followSells)return;
+    if(pos.source!==w.address)return log(`  not selling: this position was copied from ${pos.sourceLabel}`);
+    if(newer(pos.sourceTrade,t.order))return log('  not selling: this exit belongs to an earlier source entry');
+    const id=JSON.stringify([t.signature??t.order?.seenAt??t.seenAt,t.order?.index??0]);
+    if((pos.sourceExitIds??[]).includes(id)||newer(pos.lastSourceExitOrder,t.order))return;
+    // An uncertain buy has no reliable token quantity yet. Keep the source instruction
+    // until its own receipt supplies one; never turn a partial sell into a full exit.
+    if(pos.pendingBuy){
+      positions.update(t.mint,{queuedSourceExit:savedSourceExit(t)});await reconcileBuy(t.mint);
+      if(positions.get(t.mint)?.pendingBuy||!positions.has(t.mint))return;
+      return copySell(w,t);
+    }
+    try{t.fractionSold=await sourceFraction(w,t);}
+    catch(error){
       const previous=pos.queuedSourceExit;
-      if(!previous||newer(t.order,previous.order)) positions.update(t.mint,{queuedSourceExit:{
-        mint:t.mint,side:t.side,seenAt:t.seenAt,order:t.order,signature:t.signature,tokenAmount:String(t.tokenAmount),curve:t.curve,
-      }});
-      return log(`Developer sell is waiting for its receipt: ${e.message}`);
+      if(!previous||newer(t.order,previous.order))positions.update(t.mint,{queuedSourceExit:savedSourceExit(t)});
+      return log(`Developer sell is waiting for its receipt: ${error.message}`);
     }
     if(pos.queuedSourceExit)positions.update(t.mint,{queuedSourceExit:null});
-    // Selling 90%+ counts as out: many traders keep a tiny "moon bag" forever, which would never free the slot.
-    const out = t.fractionSold >= 0.9;
-    if (cfg.sellOnlyOnFullExit) {
-      if (!out) return log(`  not selling yet: ${w.label} sold ${Math.round(t.fractionSold * 100)}% and still holds most of it. SolBoy sells when they sell 90% or more`);
-      return sellPosition(t.mint, 1, `${w.label} sold out`, null, false, null, t);
-    }
-    const fraction = cfg.sellMode === 'all' ? 1 : t.fractionSold;
-    await sellPosition(t.mint, fraction, `${w.label} sold ${Math.round(t.fractionSold * 100)}%`, null, false, null, t);
+    const out=t.fractionSold>=.9;
+    if(cfg.sellOnlyOnFullExit&&!out)return log(`  not selling yet: ${w.label} sold ${Math.round(t.fractionSold*100)}% and still holds most of it. SolBoy sells when they sell 90% or more`);
+    const fraction=cfg.sellOnlyOnFullExit||cfg.sellMode==='all'?1:Math.min(1,Math.max(0,t.fractionSold));
+    if(!(fraction>0))return;
+    const previous=pos.copiedExit,held=BigInt(pos.tokens),base=previous?BigInt(previous.targetRemaining)<held?BigInt(previous.targetRemaining):held:held;
+    const target=fraction>=.98?0n:base-base*BigInt(Math.round(fraction*10000))/10000n;
+    const reason=previous?.targetRemaining==='0'?previous.reason:out&&cfg.sellOnlyOnFullExit?`${w.label} sold out`:`${w.label} sold ${Math.round(t.fractionSold*100)}%`;
+    positions.update(t.mint,{copiedExit:{id,targetRemaining:String(target),reason,trigger:{seenAt:t.seenAt,side:'sell',signature:t.signature,curve:t.curve},attempts:0,
+      nextAttemptAt:previous?.lastError?previous.nextAttemptAt:Date.now(),lastError:previous?.lastError??null},
+      sourceExitIds:[...(pos.sourceExitIds??[]),id].slice(-32),lastSourceExitOrder:t.order});
+    await runCopiedExit(t.mint,id);
+  }
+
+  async function runCopiedExit(mint,id){
+    const pos=positions.get(mint),exit=pos?.copiedExit;
+    if(!exit||exit.id!==id||!cfg.followSells||Date.now()<(exit.nextAttemptAt??0)||pos.pendingSell)return;
+    positions.update(mint,{copiedExit:{...exit,attempts:exit.attempts+1}});
+    if(exit.attempts)log(`Copy sell retry for ${short(mint)} (attempt ${exit.attempts+1}).`);
+    const trigger={...exit.trigger,copiedExitId:id};if(exit.attempts)delete trigger.curve;
+    await sellPosition(mint,1,exit.reason,null,false,null,trigger);
   }
 
   async function tokenBalance(mint, reader = connection) {
@@ -510,12 +536,15 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
         return log(`  ${short(mint)}: no tokens left, position closed`);
       }
       if(!cfg.dryRun&&BigInt(pos.tokens)>0n&&held>BigInt(pos.tokens))held=BigInt(pos.tokens);
-      const full = fraction >= 0.98;
-      const amount = full ? held : (held * BigInt(Math.round(fraction * 10_000))) / 10_000n;
+      const copied=trigger.copiedExitId&&positions.get(mint)?.copiedExit?.id===trigger.copiedExitId?positions.get(mint).copiedExit:null;
+      const target=copied?BigInt(copied.targetRemaining):null;
+      if(target!=null&&held<=target){positions.update(mint,{copiedExit:null,queuedExit:null});return {ok:true};}
+      const amount=copied?held-target:fraction>=.98?held:(held*BigInt(Math.round(fraction*10000)))/10000n;
+      const full=amount>=held;
       if (amount === 0n) return;
 
       const hooks = { onFailed: () => positions.update(mint, { pendingSell: null, fillVerified:false, balanceAt:0 }), onSubmitted: transaction => positions.update(mint, { pendingSell: {
-        ...transaction, amount: String(amount), held: String(held), full, fraction, reason, trigger: { seenAt: trigger.seenAt, side: trigger.side }, submittedAt: Date.now(),
+        ...transaction, amount: String(amount), held: String(held), full, fraction, reason, trigger: { seenAt: trigger.seenAt, side: trigger.side, copiedExitId:trigger.copiedExitId }, submittedAt: Date.now(),
       } }) };
       // A fresh copied Pump sell already supplies the active venue and reserves: no quote detour.
       const freshCurve = trigger.curve && Date.now() - trigger.seenAt < 2000;
@@ -525,8 +554,14 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
 
     } catch (e) {
       if (e.code === 'BALANCE_PENDING' && positions.has(mint)) positions.update(mint, { queuedExit: {
-        fraction, reason, trigger: { seenAt: trigger.seenAt, side: trigger.side },
+        fraction, reason, trigger: { seenAt: trigger.seenAt, side: trigger.side, copiedExitId:trigger.copiedExitId },
       } });
+      const retry=positions.get(mint)?.copiedExit;
+      if(retry&&retry.id===trigger.copiedExitId){
+        const delay=e.code==='BALANCE_PENDING'?0:Math.max(e.retryAfterMs??0,Math.min(300*2**Math.min(retry.attempts-1,5),8000));
+        positions.update(mint,{copiedExit:{...retry,nextAttemptAt:Date.now()+delay,lastError:String(e.message).slice(0,300)}});
+        decision({address:pos.source,label:pos.sourceLabel},{mint,side:'sell',signature:retry.trigger.signature},'Sell retry',e.message);
+      }
       log(`  sell failed for ${short(mint)}: ${e.message}`);
       if (throwErrors) throw new Error(pos.pendingSell ? `Sell submitted; confirmation is delayed. Check sell checks the same transaction. ${e.message}` : e.message);
     }
@@ -538,12 +573,13 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
     const solOut = Number(outRaw) / LAMPORTS;
     const cost = pos.solSpent * (full ? 1 : Number(amount) / Number(held));
     const pnl = solOut - cost;
-    positions.recordPnl(pnl);
-    if (full) {
-      positions.close(mint);
-      finishRetiring(pos.source);
-    }
-    else positions.update(mint, { solSpent: pos.solSpent - cost, tokens: (held - amount).toString(), pendingSell: null, queuedExit: null, fillVerified:Boolean(timing.sig), balanceAt:Date.now(), boughtTotal: pos.boughtTotal ?? pos.solSpent, soldTotal: (pos.soldTotal ?? 0) + solOut });
+    const remaining=held-amount,exit=pos.copiedExit;
+    const keepExit=exit&&remaining>BigInt(exit.targetRemaining)?{...exit,nextAttemptAt:Date.now(),lastError:null}:null;
+    const next=full?null:{...pos,solSpent:pos.solSpent-cost,tokens:String(remaining),pendingSell:null,queuedExit:null,copiedExit:keepExit,
+      fillVerified:Boolean(timing.sig),balanceAt:Date.now(),boughtTotal:pos.boughtTotal??pos.solSpent,soldTotal:(pos.soldTotal??0)+solOut};
+    const settled=cfg.dryRun&&book.paperWallet?.settleSell(mint,next,outRaw,pnl);
+    if(!settled){positions.recordPnl(pnl);if(full)positions.close(mint);else positions.update(mint,next);}
+    if(full)finishRetiring(pos.source);
 
     const pnlText = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL`;
     recordTrade(book.tradeLogFile, { action: `${tag()}sell`, mint, wallet: pos.sourceLabel, sol: solOut.toFixed(6), pnl: pnl.toFixed(6), reason, tx: sig });
@@ -578,7 +614,7 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
     for (const [mint, pos] of positions.entries()) {
       const r = await withLock(mint, () => sellPosition(mint, 1, 'sold all (from the dashboard)', null, true)).catch((e) => ({ error: e }));
       if (r?.ok || !positions.has(mint)) { out.sold++; continue; }
-      if (positions.get(mint)?.pendingBuy || positions.get(mint)?.pendingSell || positions.get(mint)?.queuedExit) { out.failed.push(short(mint)); continue; }
+      if (positions.get(mint)?.pendingBuy || positions.get(mint)?.pendingSell || positions.get(mint)?.queuedExit || positions.get(mint)?.copiedExit) { out.failed.push(short(mint)); continue; }
       const value = await valueOf(mint, pos.tokens).catch(() => null);
       if (!value) {
         positions.recordPnl(-pos.solSpent);
@@ -593,7 +629,7 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
   }
 
   let checking = false;
-  async function checkExits() {
+  async function checkExits(recoveryOnly=false) {
     for(const [key,pending]of pendingReceipts)if(!pending.running&&Date.now()-pending.attemptAt>=2000){
       if(Date.now()-pending.seenAt>300_000){pendingReceipts.delete(key);decision(pending.w,null,'Not copied','Source receipt unavailable after five minutes');continue;}
       pending.running=true;void handleSignature(pending.w,pending.signature,pending.seenAt,pending.logLines,pending.slot,pending.order).catch(()=>{}).finally(()=>{const current=pendingReceipts.get(key);if(current)current.running=false;});
@@ -606,7 +642,7 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
       lastReconcile.set(mint,Date.now());if(lastReconcile.size>200)lastReconcile.delete(lastReconcile.keys().next().value);
       void withLock(mint, () => reconcileSell(mint)).catch(e => log(`Sell status for ${short(mint)}: ${e.message}`));
     }
-    for (const [mint, pos] of positions.entries()) if (pos.queuedExit && !pos.pendingSell && !locks.has(mint)) {
+    for (const [mint, pos] of positions.entries()) if (pos.queuedExit && !pos.copiedExit && !pos.pendingSell && !locks.has(mint)) {
       const exit = pos.queuedExit;
       void withLock(mint, () => sellPosition(mint, exit.fraction, exit.reason, null, false, null, exit.trigger)).catch(() => {});
     }
@@ -616,10 +652,14 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
       const exit={...pos.queuedSourceExit,tokenAmount:BigInt(pos.queuedSourceExit.tokenAmount)};
       void withLock(mint,()=>copySell(w,exit)).catch(()=>{});
     }
+    for(const [mint,pos]of positions.entries())if(pos.copiedExit&&!pos.pendingBuy&&!pos.pendingSell&&!locks.has(mint)&&cfg.followSells&&Date.now()>=(pos.copiedExit.nextAttemptAt??0)){
+      const id=pos.copiedExit.id;void withLock(mint,()=>runCopiedExit(mint,id)).catch(()=>{});
+    }
+    if(recoveryOnly)return;
     if (checking) return;
     if(prices){
       for(const [mint,pos]of positions.entries()){
-        if(pos.pendingBuy||pos.pendingSell||pos.queuedExit||pos.queuedSourceExit)continue;
+        if(pos.pendingBuy||pos.pendingSell||pos.queuedExit||pos.queuedSourceExit||pos.copiedExit)continue;
         let tokens;try{tokens=BigInt(pos.tokens??0);}catch{continue;}
         if(!cfg.dryRun&&tokens===0n){
           const key=positionPriceKey(book.mode,mint,pos);
@@ -653,7 +693,7 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
     try {
       for (const [mint, pos] of positions.entries()) {
         try {
-          if(pos.pendingBuy||pos.pendingSell||pos.queuedExit||pos.queuedSourceExit)continue;
+          if(pos.pendingBuy||pos.pendingSell||pos.queuedExit||pos.queuedSourceExit||pos.copiedExit)continue;
           // a real-money position whose token count wasn't known yet: read it from the wallet first
           if (!cfg.dryRun && BigInt(pos.tokens ?? 0) === 0n) {
             const held = await tokenBalance(mint);
@@ -780,6 +820,7 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
     }
     // Always scheduled, so take-profit / stop-loss can be switched on while SolBoy is running.
     setInterval(checkExits, cfg.priceCheckSeconds * 1000);
+    setInterval(()=>{void checkExits(true);},250).unref?.();
     prices?.subscribe(()=>{void checkExits();});
     prices?.start();
     setInterval(() => {

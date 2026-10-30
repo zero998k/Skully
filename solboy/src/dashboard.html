@@ -589,6 +589,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
       <div class="logo" id="logo" data-text="SOLBOY">SOL<b>BOY</b></div>
     </div>
     <span class="chip" id="mode">...</span>
+    <button class="balchip" id="paperFundsTop" title="Choose your practice starting balance" hidden>Paper funds</button>
     <span class="status"><span class="dot" id="dot"></span><span id="conn">CONNECTING</span></span>
     <button class="balchip" id="balChip" title="Open your account">◎ Set up wallet</button>
     <button class="btn wallet-top-link" id="myWalletTop" title="Your personal wallet, PnL calendar and funds" aria-current="false">✦ My wallet</button>
@@ -742,9 +743,11 @@ function toast(kind, head, text) {
 /* ---------- state ---------- */
 let S = null, refreshTask = null, latestPortfolio = null, pricesConnected=false, latestPriceSequence=0;
 const latestPrices=new Map(), activeSells=new Set();
-const usdValue=(sol)=>{
-  const rate=S?.solRate;if(sol==null||!(rate?.price>0)||rate.stale)return 'USD unavailable / delayed';
-  return '≈ '+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(sol*rate.price);
+const usdValue=(sol,position=null)=>{
+  const live=(position?[position]:S?.inventory??[]).filter(p=>p.solUsd>0&&Date.now()<(p.solUsdValidUntil??0)).sort((a,b)=>(b.solUsdAt??0)-(a.solUsdAt??0))[0];
+  const rate=S?.solRate,price=live?.solUsd??(!rate?.stale?rate?.price:null);
+  if(sol==null||!(price>0))return 'USD unavailable / delayed';
+  return '≈ '+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(sol*price);
 };
 const inventoryPriceKey=(mode,p)=>JSON.stringify([mode,p.mint,String(p.tokens),p.paid,p.openedAt]);
 function mergeLivePrices(state){
@@ -812,6 +815,7 @@ function render() {
 }
 
 function renderPnl(){
+  const practice=S.paperWallet;$('paperFundsTop').hidden=S.mode!=='paper';$('paperFundsTop').textContent=practice?.enabled?`Paper funds: ${practice.availableSol.toFixed(4)} SOL`:'Paper funds · choose balance';
   $('score').textContent=fmt(S.summary.totalPnl)+' SOL';$('score').className='big '+cls(S.summary.totalPnl);
   $('scoreUsd').textContent=usdValue(S.summary.totalPnl)+' · realized'+(S.mode==='paper'?' · practice estimate':'');
   const known=S.inventory.filter(p=>pricesConnected&&p.worth!=null&&!p.priceStale&&Date.now()<(p.priceValidUntil??0)),open=known.reduce((sum,p)=>sum+p.worth-p.paid,0);
@@ -830,18 +834,23 @@ function renderInventory() {
     const pnl = p.worth == null||!(p.paid>0) ? null : p.worth - p.paid;
     const marketPnl=p.marketWorth==null||!(p.paid>0)?null:p.marketWorth-p.paid;
     const percent=v=>v==null?'—':`${v>0?'▲ +':v<0?'▼ ':''}${(v/p.paid*100).toFixed(2)}%`;
-    const main=marketPnl!=null?marketPnl:pnl,mainStale=marketPnl!=null?marketStale:stale;
+    const useMarket=marketPnl!=null&&(!marketStale||stale),main=useMarket?marketPnl:pnl,mainStale=useMarket?marketStale:stale;
+    const referenceMarket=useMarket&&/reference|conversion/.test(p.marketSource??''),updatedAt=useMarket?p.marketAt:p.priceAt;
+    const priceAge=updatedAt==null?'':`${Math.max(0,(Date.now()-updatedAt)/1000).toFixed(1)}s ago`;
+    const status=mainStale?(!pricesConnected?'Price feed disconnected':(useMarket?p.marketIssue:p.priceIssue)||'Price update delayed'):
+      (useMarket?(referenceMarket?'Refreshed market':'Streaming market'):'Recent sell estimate');
     return `<div class="slot cut">
       <div class="name">${esc(p.name)}</div>
       <div class="meta">copied from ${esc(p.from)} · ${ago(p.openedAt)}</div>
-      <div class="meta">${marketPnl!=null?'Market PnL · your entry in SOL':'Estimated sell PnL · your entry in SOL'}</div>
+      <div class="meta">${useMarket?'Market PnL · your entry in SOL':'Estimated sell PnL · your entry in SOL'}</div>
       <div class="pnl ${mainStale?'':cls(main)}" style="${mainStale?'opacity:.45':''}">${main==null?'...':esc(percent(main))}</div>
-      <div class="meta" data-price-status="${mainStale?'stale':'fresh'}" style="color:${mainStale?'var(--warn)':'var(--win)'}">${mainStale?'◷ Price delayed / reconnecting':'● '+(marketPnl!=null?'Streaming market':'Fresh sell quote')}</div>
-      <div class="row"><span>Open profit (market)</span><span class="${mainStale?'':cls(main)}">${main==null?'—':fmt(main)+' SOL'}<br>${usdValue(main)}${mainStale?' · delayed':''}</span></div>
-      <div class="row"><span>Paid</span><span>${p.paid.toFixed(4)} SOL · ${usdValue(p.paid)}</span></div>
-      <div class="row"><span>Est. sell return</span><span>${p.worth == null ? 'n/a' : p.worth.toFixed(4) + ' SOL · '+usdValue(p.worth)}${stale?' · delayed':''}</span></div>
-      <div class="row"><span>Sell PnL${marketPnl!=null?' (auto-exit)':''}</span><span class="${stale?'':cls(pnl)}">${percent(pnl)}${stale?' · delayed':''}<br>${pnl==null?'—':fmt(pnl)+' SOL'} · ${usdValue(pnl)}</span></div>
-      <div class="meta">${S.quick?.takeProfitPct?`TP +${S.quick.takeProfitPct}% · `:''}${S.quick?.stopLossPct?`SL −${S.quick.stopLossPct}% · `:''}Market orders can fill beyond the trigger during fast moves.<br>${esc(p.marketSource||p.priceSource||'Waiting for price')}<br>Auto-exits use fresh estimated sell returns, including price impact. Fees and fills can differ.</div>
+      <div class="meta" data-price-status="${mainStale?'stale':'fresh'}" style="color:${mainStale?'var(--warn)':'var(--win)'}">${mainStale?'◷ ':'● '}${esc(status)}${priceAge?' · '+priceAge:''}${referenceMarket&&p.marketSlotLag>0?' · '+p.marketSlotLag+' blocks behind':''}</div>
+      <div class="row"><span>Open profit (${useMarket?'market':'est. sell'})</span><span class="${mainStale?'':cls(main)}">${main==null?'—':fmt(main)+' SOL'}<br>${usdValue(main,p)}${mainStale?' · delayed':''}</span></div>
+      <div class="row"><span>Paid</span><span>${p.paid.toFixed(4)} SOL · ${usdValue(p.paid,p)}</span></div>
+      <div class="row"><span>Est. sell return</span><span>${p.worth == null ? 'n/a' : p.worth.toFixed(4) + ' SOL · '+usdValue(p.worth,p)}${stale?' · delayed':''}</span></div>
+      <div class="row"><span>Sell PnL${useMarket?' (auto-exit)':''}</span><span class="${stale?'':cls(pnl)}">${percent(pnl)}${stale?' · delayed':''}<br>${pnl==null?'—':fmt(pnl)+' SOL'} · ${usdValue(pnl,p)}</span></div>
+      <div class="meta">${S.quick?.takeProfitPct?`TP +${S.quick.takeProfitPct}% · `:''}${S.quick?.stopLossPct?`SL −${S.quick.stopLossPct}% · `:''}Market orders can fill beyond the trigger during fast moves.<br>${esc((useMarket?p.marketSource:p.priceSource)||'Waiting for price')}<br>Auto-exits use fresh estimated sell returns, including price impact. Fees and fills can differ.${referenceMarket?' Market reference refreshes within the free service limit; it is not a guaranteed fill.':''}</div>
+      <div class="meta" data-copied-sell-status>${p.copiedSell?esc(p.pendingSell?'Copied sell submitted · checking its receipt':p.copiedSell.paused?'Copied sell retry paused · Follow sells is off':`Copied sell retry · attempt ${p.copiedSell.attempts} · ${Math.max(0,Math.ceil((p.copiedSell.nextAttemptAt-Date.now())/1000))}s`)+(p.copiedSell.lastError?'<br>'+esc(p.copiedSell.lastError):''):''}</div>
       <div class="actions">
         <a class="btn" href="https://dexscreener.com/solana/${encodeURIComponent(p.mint)}" target="_blank" rel="noopener">Chart</a>
         <button class="btn danger" data-sell="${esc(p.mint)}" data-name="${esc(p.name)}">${p.pendingSell?'Check sell':'Sell now'}</button>
@@ -1044,13 +1053,19 @@ const QUICK_FIELDS = [
 ];
 let quickSig = null, quickError = '';
 function renderLoadout() {
-  if (document.activeElement?.matches?.('#quick input, #quick select')) return; // don't wipe what you're typing
-  const sig = JSON.stringify([S.quick, S.settings]);
+  if (document.activeElement?.matches?.('#quick input, #quick select, #paperFundsForm input')) return; // don't wipe what you're typing
+  const sig = JSON.stringify([S.quick, S.settings, S.paperWallet, S.mode]);
   if (sig === quickSig) return;
   quickSig = sig;
   const q = S.quick ?? {};
   const field = ([k, label, hint, ph]) => `<label>${esc(label)} <small>${esc(hint)}</small><input name="${k}" inputmode="decimal" autocomplete="off" placeholder="${q[k] == null ? 'off' : ph}" value="${q[k] == null ? '' : esc(q[k])}"></label>`;
-  $('loadout').innerHTML = `<div class="box2 quick"><h3>Quick settings</h3>
+  const practice=S.paperWallet;
+  $('loadout').innerHTML = `<div class="box2 quick" id="paperFunds" style="margin-bottom:20px;border-color:var(--sun)"><h3>🎮 Paper funds · practice only</h3>
+      <p>${practice?.enabled?`Available: <b>${practice.availableSol.toFixed(4)} SOL</b> · ${usdValue(practice.availableSol)}<br>Started with ${practice.startingSol} SOL${practice.reservedSol?' · '+practice.reservedSol.toFixed(4)+' SOL reserved for buys':''}.`:'Choose a realistic starting balance. Practice is unlimited until you set one.'}</p>
+      <form class="form" id="paperFundsForm"><label>Starting SOL<input id="paperStartingSol" inputmode="decimal" autocomplete="off" value="${esc(practice?.startingSol??10)}" ${S.mode!=='paper'?'disabled':''}></label>
+      <div style="display:flex;flex-wrap:wrap;gap:10px"><button class="btn primary" type="submit" ${S.mode!=='paper'?'disabled':''}>${practice?.enabled?'Reset':'Set'} paper balance</button><button class="btn" type="button" id="paperUnlimited" ${S.mode!=='paper'||!practice?.enabled?'disabled':''}>Use unlimited practice</button></div><div class="err" id="paperFundsError"></div></form>
+      <p style="font-size:12px">${S.mode!=='paper'?'Switch to Paper mode to change this. ':''}Buy amounts come out of these practice funds; completed sells add their estimated proceeds. Insufficient funds stop a buy. Close open paper positions before resetting. Trade history and real funds stay separate; network fees and actual fills can differ.</p></div>
+    <div class="box2 quick"><h3>Quick settings</h3>
       <p>Changes work straight away and are saved for next time. No restart.</p>
       <form class="form" id="quick">
         <div class="row2">${QUICK_FIELDS.slice(0, 2).map(field).join('')}</div>
@@ -1070,6 +1085,12 @@ function renderLoadout() {
     <h3 class="sub">Full loadout <small style="font-weight:400;font-size:12px;color:var(--ink-3)">SolBoy ${esc(S.update?.version ?? '')}</small></h3>
     <div class="kv">${S.settings.map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}</div>
     <div class="hint">Everything else lives in <code>${esc(S.configPath)}</code> (TextEdit works). Edit it, save, then restart SolBoy.</div>`;
+  const setPaperFunds=async unlimited=>{
+    $('paperFundsError').textContent='';
+    try{S.paperWallet=await api('/api/paper/balance',unlimited?{unlimited:true}:{sol:$('paperStartingSol').value});document.activeElement?.blur?.();quickSig=null;renderLoadout();renderPnl();toast('info','Paper funds saved','Your real wallet and trade history are unchanged.');refresh();}
+    catch(error){$('paperFundsError').textContent=error.message;}
+  };
+  $('paperFundsForm').onsubmit=e=>{e.preventDefault();void setPaperFunds(false);};$('paperUnlimited').onclick=()=>setPaperFunds(true);
   $('quick').onsubmit = async (e) => {
     e.preventDefault();
     $('quickErr').textContent = '';
@@ -1398,6 +1419,7 @@ function showKey() {
     catch (err) { $('keyErr').textContent = err.message; }
   };
 }
+$('paperFundsTop').onclick=()=>{openTab('loadout');$('paperFunds')?.scrollIntoView({behavior:'smooth',block:'center'});};
 $('balChip').onclick = () => { openTab('account'); window.scrollTo({top:0,behavior:'smooth'}); };
 $('myWalletTop').onclick = () => { openTab('account'); window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'}); };
 
