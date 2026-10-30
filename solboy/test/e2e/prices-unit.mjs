@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {PublicKey,Keypair} from '@solana/web3.js';
-import {createLivePrices,decodeCurve,decodePool,curveAddress,canonicalPool,PUMP,PUMP_AMM} from '../../src/live-prices.js';
+import {createLivePrices,decodeCurve,decodePool,decodeDlmmSol,DLMM,curveAddress,canonicalPool,PUMP,PUMP_AMM} from '../../src/live-prices.js';
 import {WSOL} from '../../src/detect.js';
 const results={},mint=Keypair.generate().publicKey.toBase58();
 const curve=(sol=40_000_000_000n,tokens=800_000_000_000_000n,complete=false)=>{const data=Buffer.alloc(115);Buffer.from([23,183,248,55,96,216,172,96]).copy(data);data.writeBigUInt64LE(tokens,8);data.writeBigUInt64LE(sol,16);data[48]=Number(complete);return{owner:PUMP,data};};
@@ -161,6 +161,24 @@ const updatedForeign=curve(80_000_000_000n);new PublicKey(quotedMint).toBuffer()
 time+=6100;slotCallback({slot:702});assert(engine.get(mint,current).marketStale);engine.stop();results.nonSolCurvesStreamWithCorrectCurrencyAndExpireWhenConversionIsStale=true;
 engine=createLivePrices({connection:conn,book,now:()=>time,readMarket:async()=>({}),readQuote:async()=>{throw Error('No route');}});engine.start();slotCallback({slot:710});await flush();engine.tick();await flush();assert.equal(engine.get(mint,current).marketWorth,null);assert(engine.get(mint,current).marketStale);engine.stop();results.nonSolCurvesCannotPretendTheirRawQuoteUnitsAreSol=true;
 
+// The user's 96UQ case: the curve is live, but the intermediate currency must
+// come from its Meteora/SOL pool, even when Jupiter is unavailable or rate limited.
+const conversionPool=Keypair.generate().publicKey;
+const dlmm=(active=0,inverse=false)=>{const data=Buffer.alloc(904);Buffer.from([33,11,49,98,181,101,177,13]).copy(data);data.writeInt32LE(active,76);data.writeUInt16LE(100,80);new PublicKey(inverse?WSOL:quotedMint).toBuffer().copy(data,88);new PublicKey(inverse?quotedMint:WSOL).toBuffer().copy(data,120);return{owner:DLMM,data};};
+assert.equal(decodeDlmmSol(dlmm(),quotedMint),1);assert(Math.abs(decodeDlmmSol(dlmm(10),quotedMint)-1.01**10)<1e-12);assert(Math.abs(decodeDlmmSol(dlmm(10,true),quotedMint)-1/1.01**10)<1e-12);
+assert.equal(decodeDlmmSol({...dlmm(),owner:PUMP},quotedMint),null);const pausedPool=dlmm();pausedPool.data[82]=1;assert.equal(decodeDlmmSol(pausedPool,quotedMint),null);assert.equal(decodeDlmmSol(dlmm(),mint),null);results.dlmmChecksProgramMintsStatusAndBothPriceDirections=true;
+curveData=curve(40_000_000_000n);new PublicKey(quotedMint).toBuffer().copy(curveData.data,83);let conversionReads=0,bgAllowed=false;
+const conversionConnection={...conn,getAccountInfoAndContext:async key=>key.equals(conversionPool)?(conversionReads++,{context:{slot:800},value:dlmm()}):{context:{slot:800},value:curveData}};
+engine=createLivePrices({connection:conversionConnection,book,now:()=>time,canRequest:()=>bgAllowed,readMarket:async()=>{throw Error('No price HTTP');},readQuote:async()=>{throw Error('No quote HTTP');}});
+engine.observeRoute({routePlan:[{swapInfo:{label:'Meteora DLMM',ammKey:conversionPool.toBase58(),inputMint:WSOL,outputMint:quotedMint}}]});engine.start();slotCallback({slot:800});await flush();engine.tick();await flush();
+assert.equal(engine.get(mint,current).marketWorth,5);assert(!engine.get(mint,current).marketStale);assert.match(engine.get(mint,current).marketSource,/Meteora conversion/);assert.equal(conversionReads,1);results.conversionStreamsWithoutAnyJupiterCapacityOrUsdReference=true;
+let broadcasts=0;const unsub=engine.subscribe(()=>broadcasts++);
+for(let i=1;i<=10;i++){time+=50;push(curveAddress(mint),updatedForeign,800+i);push(conversionPool,dlmm(i),800+i);assert(Math.abs(engine.get(mint,current).marketWorth-10*1.01**i)<1e-9);assert(!engine.get(mint,current).marketStale);}
+assert(broadcasts>=10);unsub();results.tenLiveUpdatesInHalfASecondAreNotHeldForAOneSecondTimer=true;
+push(conversionPool,dlmm(-100),801);assert(Math.abs(engine.get(mint,current).marketWorth-10*1.01**10)<1e-9);results.oldConversionSlotsCannotRewindTheDisplayedProfit=true;
+time+=6100;assert(engine.get(mint,current).marketStale);slotCallback({slot:820});assert(engine.get(mint,current).marketStale);engine.tick();await flush();assert(engine.get(mint,current).marketStale);push(conversionPool,dlmm(12),821);assert(engine.get(mint,current).marketStale);push(curveAddress(mint),updatedForeign,821);assert(!engine.get(mint,current).marketStale);results.reconnectRequiresAResyncedConversionNotJustAHeartbeat=true;
+push(conversionPool,pausedPool,822);assert(engine.get(mint,current).marketStale);engine.stop();const removedConversion=removed.length;push(conversionPool,dlmm(13),823);assert.equal(removed.length,removedConversion);results.invalidConversionAndClosedPositionNeverKeepALivePrice=true;
+
 // The real HTTP helpers share the service quota and reserve capacity for foreground trades.
 const {getMarketPrices,getQuote,backgroundPriceReady}=await import('../../src/jupiter.js');
 const originalFetch=globalThis.fetch,originalNow=Date.now,originalBase=process.env.JUPITER_API_URL,originalKey=process.env.JUPITER_API_KEY;
@@ -170,6 +188,7 @@ try{
  globalThis.fetch=async url=>{networkCount++;lastMarketUrl=new URL(url);return limited?new Response('{}',{status:429,headers:{'retry-after':'7'}}):new Response(JSON.stringify({outAmount:'1000'}),{status:200});};
  assert(backgroundPriceReady());for(let i=0;i<24;i++)await getMarketPrices([mint,mint,WSOL]);
  assert.equal(lastMarketUrl.pathname,'/price/v3');assert.equal(lastMarketUrl.searchParams.get('ids'),mint+','+WSOL);assert(!backgroundPriceReady());
+ await assert.rejects(getQuote({inputMint:mint,outputMint:WSOL,amount:'1000',slippageBps:100,background:true}),/free capacity/);await assert.rejects(getMarketPrices([mint]),/free capacity/);assert.equal(networkCount,24);results.researchAndPriceHelpersCannotBypassTheSharedBackgroundBudget=true;
  await getQuote({inputMint:mint,outputMint:WSOL,amount:'1000',slippageBps:100});assert.equal(networkCount,25);
  networkTime+=61000;assert(backgroundPriceReady());results.backgroundPricesReserveQuotaButNeverQueueABuyOrSell=true;
  limited=true;let error;try{await getMarketPrices([mint]);}catch(e){error=e;}assert.equal(error.retryAfterMs,7000);assert(!backgroundPriceReady());networkTime+=7100;assert(backgroundPriceReady());

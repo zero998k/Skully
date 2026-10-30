@@ -70,5 +70,14 @@ module.exports=async(p,F,E)=>{
  const originalForeign=await foreignPos();R.foreignCurveConversion=Math.abs(originalForeign.marketWorth-2*originalForeign.paid)<1e-8;
  start=Date.now();await F('/price/curve?mint='+foreign.mint+'&quote='+quoted.quote+'&sol=320000000000000');
  R.foreignCurveStreams=await until(async()=>{const x=await foreignPos();return x&&!x.marketStale&&Math.abs(x.marketWorth-4*x.paid)<1e-8;},3000);R.foreignCurveMs=Date.now()-start;
- await p.screenshot({path:E+'/21-foreign-curve-price.png'});await p.evaluate(m=>api('/api/sell',{mint:m}),foreign.mint);return R;
+ await p.screenshot({path:E+'/21-foreign-curve-price.png'});await p.evaluate(m=>api('/api/sell',{mint:m}),foreign.mint);
+ // Reproduce 96UQ: unavailable HTTP references/quotes must not stop the live conversion.
+ const fx=await F('/price/curve?sol=800000000000000&quote='+quoted.quote);await F('/price/dlmm?mint='+fx.mint+'&quote='+quoted.quote);await F('/price/market?mint='+quoted.quote+'&missing=1');await F('/emit?side=buy&mint='+fx.mint);
+ const fxPos=()=>p.evaluate(m=>S.inventory.find(x=>x.mint===m),fx.mint);
+ if(!await until(async()=>{const x=await fxPos();return x&&!x.marketStale&&/Meteora conversion/.test(x.marketSource??'');},10000))throw Error('Live Meteora conversion did not start from the buy route');
+ const initialFx=await fxPos();await F('/price/quote-error?mint='+fx.mint+'&status=429');
+ await sleep(6500);R.streamingConversionSurvivesMissingHttpPrices=!(await fxPos()).marketStale;
+ let worst=0;for(let i=1;i<=5;i++){const t=Date.now();await F('/price/dlmm?mint='+fx.mint+'&active='+i);if(!await until(async()=>{const x=await fxPos();return x&&!x.marketStale&&Math.abs(x.marketWorth-initialFx.marketWorth*1.01**i)<1e-9;},900))throw Error('Live conversion tick did not reach dashboard');worst=Math.max(worst,Date.now()-t);}
+ R.liveConversionBurstMs=worst;R.liveConversionStableSellButton=await p.locator('[data-sell="'+fx.mint+'"]').isEnabled();await p.screenshot({path:E+'/22-live-meteora-conversion.png'});
+ await F('/price/quote-error');await p.evaluate(m=>api('/api/sell',{mint:m}),fx.mint);return R;
 };

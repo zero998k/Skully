@@ -131,7 +131,7 @@ check('personal wallet','largest-asset allocation does not mistake grouped small
 for(const [name,ok]of Object.entries(fl.walletMath??{}))check('personal wallet',name,ok===true,ok);
 check('personal wallet','financial calculation tests ran',Object.keys(fl.walletMath??{}).length===11,fl.walletMath);
 for(const [name,ok]of Object.entries(fl.priceMath??{}))check('live prices',name,ok===true,ok);
-check('live prices','price calculation and lifecycle tests ran',Object.keys(fl.priceMath??{}).length===30,fl.priceMath);
+check('live prices','price calculation and lifecycle tests ran',Object.keys(fl.priceMath??{}).length===37,fl.priceMath);
 check('live prices','market and sell values update under one second while full state is stalled',fl.priceTickWhileStateStalled&&fl.priceTickMs<1000,[fl.priceTickWhileStateStalled,fl.priceTickMs]);
 check('live prices','late full state cannot rewind a streamed price',fl.oldStateCannotRewindPrice===true,fl.oldStateCannotRewindPrice);
 check('live prices','market versus sell PnL and two decimal precision are explicit',fl.marketAndSellClearlySeparated&&fl.twoDecimalPercent,[fl.marketAndSellClearlySeparated,fl.twoDecimalPercent]);
@@ -146,6 +146,8 @@ check('live prices','a live curve quoted in another currency has correct convert
 check('live prices','non-SOL curve ticks update under one second',fl.foreignCurveStreams&&fl.foreignCurveMs<1000,[fl.foreignCurveStreams,fl.foreignCurveMs]);
 check('live prices','SOL and dollar PnL use the same fresh conversion rate',fl.referenceUsdMatchesConversion===true,fl.referenceUsdMatchesConversion);
 check('live prices','fresh sell estimate replaces a stale reference without claiming a stream',fl.referenceFallbackIsHonest===true,fl.referenceFallbackIsHonest);
+check('live prices','live conversion survives missing HTTP prices and quote rate limits',fl.streamingConversionSurvivesMissingHttpPrices===true,fl.streamingConversionSurvivesMissingHttpPrices);
+check('live prices','five streamed conversion changes each reach the dashboard under one second',fl.liveConversionBurstMs<1000&&fl.liveConversionStableSellButton,[fl.liveConversionBurstMs,fl.liveConversionStableSellButton]);
 for (const name of ['paperIsNotConfirmed', 'noRouteCacheSkipsRedundantQuote', 'expiredRouteCacheRechecks', 'confirmedBuyWithoutExtraLookup', 'sellsAreTimed', 'failedConfirmationDoesNotOpenOrDuplicate', 'currentFreeJupiterEndpoint']) check('speed', name, speed[name] === true, speed[name] ?? speed.crashed);
 
 for(const [name,ok]of Object.entries(fl.paperMath??{}))check('paper funds',name,ok===true,ok);

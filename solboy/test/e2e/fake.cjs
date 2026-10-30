@@ -10,7 +10,7 @@ const WHALE = 'AqzPs1UDhnK2Ga37PphobfMukGtN53erw5N3KhoR6qky';
 const MINT = 'CkVfySiwbXr8uosL9W9vtuiKSSd4WqhvBr2YjyQKv8u3';
 const DEV = '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU';
 const S = { groq413: 1, groqdown: 0, apidown: 0, release: 0, corrupt: 0, mult: 1, balanceLamports: 0, held: 0n, sent: [], groq: [], swaps: [], log: [] };
-const PRICE_ACCOUNTS=new Map(),PRICE_MARKETS=new Map();let priceFailureMint=null,priceFailureStatus=503;
+const PRICE_ACCOUNTS=new Map(),PRICE_MARKETS=new Map(),PRICE_CONVERSIONS=new Map();let priceFailureMint=null,priceFailureStatus=503;
 const PRICE_CURVES=new Map();let priceSlot=100,priceHeartbeat=true,priceQuoteDelay=0;
 const curvePda=mint=>web3.PublicKey.findProgramAddressSync([Buffer.from('bonding-curve'),new web3.PublicKey(mint).toBuffer()],new web3.PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'))[0].toBase58();
 const priceCurveInfo=c=>{const b=Buffer.alloc(115);Buffer.from([23,183,248,55,96,216,172,96]).copy(b);b.writeBigUInt64LE(BigInt(c.tokens),8);b.writeBigUInt64LE(BigInt(c.sol),16);b[48]=Number(c.complete);if(c.quote)new web3.PublicKey(c.quote).toBuffer().copy(b,83);return{data:[b.toString('base64'),'base64'],owner:'6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P',lamports:1,executable:false,rentEpoch:0};};
@@ -101,6 +101,13 @@ const mainHttp = http.createServer(async (r, res) => { const b = await body(r); 
     const mint=u.searchParams.get('mint');if(u.searchParams.get('missing')==='1')PRICE_MARKETS.delete(mint);
     else PRICE_MARKETS.set(mint,{usdPrice:Number(u.searchParams.get('usd')??1),decimals:Number(u.searchParams.get('decimals')??6),lag:Number(u.searchParams.get('lag')??0)});
     return json(res,{mint});
+  }
+  if(u.pathname==='/price/dlmm'){
+    const q=u.searchParams,mint=q.get('mint'),old=PRICE_CONVERSIONS.get(mint),pair=old?.pair??pk(),quote=q.get('quote')??old?.quote??pk();
+    const d=Buffer.alloc(904);Buffer.from([33,11,49,98,181,101,177,13]).copy(d);d.writeInt32LE(Number(q.get('active')??0),76);d.writeUInt16LE(100,80);new web3.PublicKey(quote).toBuffer().copy(d,88);new web3.PublicKey('So11111111111111111111111111111111111111112').toBuffer().copy(d,120);
+    const info={data:[d.toString('base64'),'base64'],owner:'LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo',lamports:1,executable:false,rentEpoch:0};PRICE_ACCOUNTS.set(pair,info);PRICE_CONVERSIONS.set(mint,{pair,quote});priceSlot++;
+    for(const [id,s]of subs)if(s.kind==='account'&&s.key===pair&&s.ws.readyState===1)s.ws.send(JSON.stringify({jsonrpc:'2.0',method:'accountNotification',params:{result:{context:{slot:priceSlot},value:info},subscription:id}}));
+    return json(res,{mint,quote,pair});
   }
   if(u.pathname==='/price/pool'){
     const q=u.searchParams,mint=q.get('mint')||pk(),quote=q.get('quote')||pk(),program=new web3.PublicKey('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
@@ -205,7 +212,9 @@ http.createServer(async (r, res) => { const b = await body(r); const u = new URL
   if (u.pathname.endsWith('/quote')) { const amt = BigInt(u.searchParams.get('amount') ?? '0'); const buy = u.searchParams.get('inputMint').startsWith('So111');
     const pump=pumpMints.has(u.searchParams.get(buy?'outputMint':'inputMint'));
     const out = pump ? (buy?BigInt(Math.floor((800e6-40*800e6/(40+Number(amt)/1e9*.99))*1e6)):BigInt(Math.floor(40e9*Number(amt)/(800e12+Number(amt))*.99))) : buy ? amt : BigInt(Math.floor(Number(amt) * S.mult));
-    return json(res, { inputMint: u.searchParams.get('inputMint'), outputMint: u.searchParams.get('outputMint'), inAmount: amt.toString(), outAmount: out.toString(), contextSlot:priceSlot }); }
+    const conversion=PRICE_CONVERSIONS.get(u.searchParams.get(buy?'outputMint':'inputMint'));
+    return json(res, { inputMint: u.searchParams.get('inputMint'), outputMint: u.searchParams.get('outputMint'), inAmount: amt.toString(), outAmount: out.toString(), contextSlot:priceSlot,
+      routePlan:conversion?[{swapInfo:{label:'Meteora DLMM',ammKey:conversion.pair,inputMint:conversion.quote,outputMint:'So11111111111111111111111111111111111111112'}}]:[] }); }
   if (u.pathname.endsWith('/swap')) { const { quoteResponse: qr, userPublicKey } = JSON.parse(b); const user = new web3.PublicKey(userPublicKey);
     const msg = new web3.TransactionMessage({ payerKey: user, recentBlockhash: '11111111111111111111111111111111', instructions: [new web3.TransactionInstruction({ programId: new web3.PublicKey('JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4'), keys: [{ pubkey: user, isSigner: true, isWritable: true }], data: Buffer.from([1,++buildNumber%255]) })] }).compileToV0Message();
     const planned=new web3.VersionedTransaction(msg),buy=qr.inputMint.startsWith('So111');
