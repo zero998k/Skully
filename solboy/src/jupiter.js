@@ -25,6 +25,7 @@ export function backgroundPriceReady(){
 }
 
 export async function getQuote({ inputMint, outputMint, amount, slippageBps, signal, background=false }) {
+  if(background&&!backgroundPriceReady())throw Object.assign(new Error('Price refresh waiting for free capacity'),{retryAfterMs:2100});
   const { base, headers } = settings();
   const params = new URLSearchParams({
     inputMint,
@@ -56,6 +57,7 @@ async function serviceError(res, name) {
 // A single reference-price request covers every open coin and its quote currency. This shares
 // the tracker's background request budget with sell quotes; copying never waits for it.
 export async function getMarketPrices(mints, signal) {
+  if(!backgroundPriceReady())throw Object.assign(new Error('Price refresh waiting for free capacity'),{retryAfterMs:2100});
   const { base, headers } = settings();
   const url = new URL('/price/v3', base);
   url.searchParams.set('ids', [...new Set(mints)].slice(0, 50).join(','));

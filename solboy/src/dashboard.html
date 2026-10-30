@@ -835,7 +835,7 @@ function renderInventory() {
     const marketPnl=p.marketWorth==null||!(p.paid>0)?null:p.marketWorth-p.paid;
     const percent=v=>v==null?'—':`${v>0?'▲ +':v<0?'▼ ':''}${(v/p.paid*100).toFixed(2)}%`;
     const useMarket=marketPnl!=null&&(!marketStale||stale),main=useMarket?marketPnl:pnl,mainStale=useMarket?marketStale:stale;
-    const referenceMarket=useMarket&&/reference|conversion/.test(p.marketSource??''),updatedAt=useMarket?p.marketAt:p.priceAt;
+    const referenceMarket=useMarket&&/reference|refreshed quote/.test(p.marketSource??''),updatedAt=useMarket?p.marketAt:p.priceAt;
     const priceAge=updatedAt==null?'':`${Math.max(0,(Date.now()-updatedAt)/1000).toFixed(1)}s ago`;
     const status=mainStale?(!pricesConnected?'Price feed disconnected':(useMarket?p.marketIssue:p.priceIssue)||'Price update delayed'):
       (useMarket?(referenceMarket?'Refreshed market':'Streaming market'):'Recent sell estimate');

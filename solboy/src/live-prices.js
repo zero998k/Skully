@@ -4,6 +4,16 @@ import { WSOL } from './detect.js';
 // Account layouts from pump-fun/pump-public-docs, idl/pump.json and idl/pump_amm.json.
 export const PUMP = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
 export const PUMP_AMM = new PublicKey('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
+export const DLMM = new PublicKey('LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo');
+// Meteora's official LbPair layout: active bin is a raw Y/X price, before fees
+// and price impact. This is a market mark, never an executable sell quote.
+export function decodeDlmmSol(info,mint){
+  const d=info?.data;if(!info?.owner?.equals?.(DLMM)||!Buffer.isBuffer(d)||d.length<216||!d.subarray(0,8).equals(Buffer.from([33,11,49,98,181,101,177,13]))||d[82]!==0)return null;
+  const x=new PublicKey(d.subarray(88,120)).toBase58(),y=new PublicKey(d.subarray(120,152)).toBase58(),step=d.readUInt16LE(80);
+  if(!step||step>10000||!((x===mint&&y===WSOL)||(y===mint&&x===WSOL)))return null;
+  const p=Math.pow(1+step/10000,d.readInt32LE(76)),ratio=x===mint?p:1/p;
+  return Number.isFinite(ratio)&&ratio>0?ratio:null;
+}
 const CURVE_ID=Buffer.from([23,183,248,55,96,216,172,96]),POOL_ID=Buffer.from([241,154,109,4,17,177,109,188]);
 const TOKEN_PROGRAMS=new Set(['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA','TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb']);
 export const positionPriceKey=(mode,mint,pos)=>JSON.stringify([mode,mint,String(pos.tokens),pos.solSpent,pos.openedAt]);
@@ -36,7 +46,7 @@ function reserve(info,mint){
 /** Only open positions are watched. Bootstrap reads use the background RPC lane; swaps never wait for this. */
 export function createLivePrices({connection,book,readQuote,readMarket,canRequest=()=>true,quotePriority=()=>0,isTrading=()=>false,onCurve=()=>{},now=Date.now,quoteGap=2100,quoteMaxAge=3000,heartbeatMaxAge=6000,marketMaxAge=6000,marketMaxSlotLag=20}){
   const entries=new Map(),listeners=new Set();let timer=null,broadcastTimer=null,heartbeatAt=0,slotSub=null,sequence=0,lastBroadcast=0,quoteTask=null,nextQuoteAt=0,streamEpoch=0,lost=false,latestSlot=0,marketDue=0,marketTask=null,marketCursor=0;
-  const marketPrices=new Map();
+  const marketPrices=new Map(),conversionRoutes=new Map();
   const current=e=>entries.get(e.mint)===e&&book.mode===e.mode&&book.positions.has(e.mint)&&positionPriceKey(book.mode,e.mint,book.positions.get(e.mint))===e.key;
   const streamHealthy=()=>heartbeatAt>0&&now()-heartbeatAt<heartbeatMaxAge;
   function reference(mint){
@@ -49,7 +59,9 @@ export function createLivePrices({connection,book,readQuote,readMarket,canReques
     if(stream&&worth!=null&&!e.poolPending&&!e.poolInvalid)validUntil=heartbeatAt+heartbeatMaxAge;
     if(e.quoteMint&&e.quoteMint!==WSOL){
       const q=reference(e.quoteMint),sol=reference(WSOL);
-      if(q&&sol&&e.marketRaw!=null){worth=e.marketRaw/10**q.decimals*q.usd/sol.usd;at=Math.min(e.marketAt,q.at,sol.at);slot=Math.min(e.marketSlot,q.slot,sol.slot);source=(e.marketVenue??'PumpSwap')+' stream · refreshed quote/SOL conversion';
+      const c=e.conversions?.get(e.quoteMint),live=stream&&c?.ratio&&c.epoch===streamEpoch;
+      if(live&&e.marketRaw!=null){worth=e.marketRaw*c.ratio/1e9;at=Math.min(e.marketAt,c.at);slot=Math.min(e.marketSlot,c.slot);source=(e.marketVenue??'PumpSwap')+' + Meteora conversion · processed';validUntil=!e.poolPending&&!e.poolInvalid?heartbeatAt+heartbeatMaxAge:0;
+      }else if(q&&sol&&e.marketRaw!=null){worth=e.marketRaw/10**q.decimals*q.usd/sol.usd;at=Math.min(e.marketAt,q.at,sol.at);slot=Math.min(e.marketSlot,q.slot,sol.slot);source=(e.marketVenue??'PumpSwap')+' stream · refreshed quote/SOL conversion';
         validUntil=stream&&!e.poolPending&&!e.poolInvalid?Math.min(heartbeatAt+heartbeatMaxAge,q.at+marketMaxAge,sol.at+marketMaxAge):0;
       }else validUntil=0;
     }
@@ -106,6 +118,31 @@ export function createLivePrices({connection,book,readQuote,readMarket,canReques
   }
   function subscribe(e,key,fn){
     try{const id=connection.onAccountChange(key,(info,ctx)=>{heartbeat(ctx);if(current(e))fn(info,ctx.slot);},'processed');e.accountSubs.push(id);}catch{}
+  }
+  function observeRoute(q){
+    for(const r of q?.routePlan??[]){const s=r.swapInfo;if(s?.label!=='Meteora DLMM'||!s.ammKey)continue;
+      const mint=s.inputMint===WSOL?s.outputMint:s.outputMint===WSOL?s.inputMint:null;
+      if(mint&&mint!==WSOL){try{new PublicKey(s.ammKey);new PublicKey(mint);}catch{continue;}conversionRoutes.delete(mint);conversionRoutes.set(mint,s.ammKey);}
+    }
+    while(conversionRoutes.size>200)conversionRoutes.delete(conversionRoutes.keys().next().value);
+    for(const e of entries.values())watchConversions(e);
+  }
+  function watchConversions(e){
+    if(!e.quoteMint||e.quoteMint===WSOL)return;
+    const mint=e.quoteMint,address=conversionRoutes.get(mint);if(!address)return;
+    e.conversions??=new Map();let c=e.conversions.get(mint);
+    if(!c){
+      c={address,slot:0,epoch:-1};e.conversions.set(mint,c);
+      subscribe(e,new PublicKey(address),(info,slot)=>apply(info,slot));
+    }
+    function apply(info,slot){
+      if(!current(e)||slot<c.slot)return;
+      c.ratio=decodeDlmmSol(info,mint);c.slot=slot;c.at=now();c.epoch=streamEpoch;broadcast(true);
+    }
+    if(c.epoch!==streamEpoch&&!c.reading&&now()>=(c.retryAt??0)){
+      c.reading=true;const epoch=streamEpoch;
+      void connection.getAccountInfoAndContext(new PublicKey(c.address),{commitment:'processed'}).then(data=>{if(epoch===streamEpoch)apply(data.value,data.context.slot);}).catch(()=>{}).finally(()=>{c.reading=false;c.retryAt=now()+1000;});
+    }
   }
   async function discover(e){
     if(!current(e)||e.discovering||e.pool||now()-(e.discoverAt??-Infinity)<60_000||!streamHealthy())return;
@@ -172,6 +209,7 @@ export function createLivePrices({connection,book,readQuote,readMarket,canReques
     try{
       const q=await readQuote(e.mint,e.pos.tokens,AbortSignal.timeout(4000));
       if(!current(e))return;
+      observeRoute(q);
       const worth=Number(q.outAmount)/1e9;if(!Number.isFinite(worth)||worth<0)throw Error('Invalid price');
       // Quote age starts when requested, not when received. Use its chain slot to assess
       // recency; normal swap activity alone does not mean the quote service disconnected.
@@ -221,6 +259,7 @@ export function createLivePrices({connection,book,readQuote,readMarket,canReques
     for(const e of entries.values())if(streamHealthy()&&!e.bootstrapped&&!e.bootstrapping&&now()>=(e.bootstrapRetryAt??0))void bootstrap(e);
     for(const e of entries.values())if(e.poolPending&&e.readPool&&now()-(e.poolPendingAt??now())>=250&&now()-(e.lastPoolRead??0)>=2100)void e.readPool();
     for(const e of entries.values())if(e.bootstrapped&&!e.bootstrapping&&!e.curve&&!e.foreignCurve&&!e.pool)void discover(e);
+    for(const e of entries.values())watchConversions(e);
     if(isTrading()||quoteTask||marketTask||now()<nextQuoteAt||!canRequest())return;
     if(readMarket&&now()>=marketDue&&[...entries.values()].some(e=>(e.bootstrapped||e.bootstrapAttempted)&&!e.curve&&(!e.pool||e.quoteMint!==WSOL))){
       marketTask=refreshMarket().finally(()=>{marketTask=null;});return;
@@ -241,7 +280,7 @@ export function createLivePrices({connection,book,readQuote,readMarket,canReques
       e.market=curve.vSol*Number(e.pos.tokens)/1e6/curve.vTokens;e.marketAt=observedAt;e.marketSlot=slot??null;e.marketSource='Pump curve · trade event';
       broadcast(true);
     },
-    sync,tick,get(mint,pos){const e=entries.get(mint);return e&&current(e)&&e.key===positionPriceKey(book.mode,mint,pos)?view(e):null;},
+    observeRoute,sync,tick,get(mint,pos){const e=entries.get(mint);return e&&current(e)&&e.key===positionPriceKey(book.mode,mint,pos)?view(e):null;},
     subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn);},
   };
 }

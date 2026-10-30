@@ -219,7 +219,7 @@ export function createFinder({ cfg, connection, bot }) {
     const info = await coinInfo([...held.tokens.keys(), ...[...coins.values()].sort((a, b) => b.lastTime - a.lastTime).slice(0, 120).map((c) => c.mint)]);
     // coins DexScreener doesn't list yet (still on a Pump.fun curve): ask Jupiter or the curve
     for (const [mint, amt] of [...held.tokens].filter(([m]) => !info.get(m)?.priceSol).slice(0, 12)) {
-      const v = await bot.valueOf(mint, BigInt(Math.round(amt * 1e6))).catch(() => null);
+      const v = await bot.valueOf(mint, BigInt(Math.round(amt * 1e6)),true).catch(() => null);
       if (v) info.set(mint, { ...(info.get(mint) ?? {}), priceSol: Number(v) / LAMPORTS / amt });
     }
     const now = Date.now() / 1000;
@@ -447,7 +447,7 @@ export function createFinder({ cfg, connection, bot }) {
     const list = [...buyers.values()].filter((b) => b.buySol > 0).sort((a, b) => a.rank - b.rank).slice(0, 40);
     const [[usd, info], held] = await Promise.all([infoP, holdingsOf(list.map((b) => b.wallet), mint)]);
     let priceSol = info.get(mint)?.priceSol ?? null;
-    if (!priceSol) { const v = await bot.valueOf(mint, 1_000_000_000n).catch(() => null); if (v) priceSol = Number(v) / LAMPORTS / 1000; }
+    if (!priceSol) { const v = await bot.valueOf(mint, 1_000_000_000n,true).catch(() => null); if (v) priceSol = Number(v) / LAMPORTS / 1000; }
     for (const b of list) {
       b.holding = held.get(b.wallet) ?? 0;
       const entry = b.boughtTok ? b.buySol / b.boughtTok : null;
@@ -531,7 +531,7 @@ export function createFinder({ cfg, connection, bot }) {
     const mints = [...new Set(buys.map((b) => b.token))];
     const info = await coinInfo(mints);
     for (const m of mints.filter((x) => !info.get(x)?.priceSol).slice(0, 15)) {
-      const v = await bot.valueOf(m, 1_000_000_000n).catch(() => null);
+      const v = await bot.valueOf(m, 1_000_000_000n,true).catch(() => null);
       if (v) info.set(m, { ...(info.get(m) ?? {}), priceSol: Number(v) / LAMPORTS / 1000 });
     }
     const rows = buys.map((b) => {

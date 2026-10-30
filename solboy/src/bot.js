@@ -208,6 +208,7 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
   async function quoteFor(args) {
     try {
       const quote = await getQuote(args);
+      prices?.observeRoute(quote);
       noRoutes.delete(args.inputMint === WSOL ? args.outputMint : args.inputMint);
       return quote;
     } catch (e) {
@@ -357,9 +358,9 @@ export function createBot({ cfg, connection, book, rpcFetch, priceConnection }) 
   }
 
   /** What selling `tokensRaw` would return right now, in lamports (null if no price). */
-  async function valueOf(mint, tokensRaw) {
+  async function valueOf(mint, tokensRaw, background=false) {
     try {
-      const q = await quoteFor({ inputMint: mint, outputMint: WSOL, amount: String(tokensRaw), slippageBps: cfg.sellSlippageBps });
+      const q = await quoteFor({ inputMint: mint, outputMint: WSOL, amount: String(tokensRaw), slippageBps: cfg.sellSlippageBps, background });
       return BigInt(q.outAmount);
     } catch {
       const c = await curveOf(mint);
