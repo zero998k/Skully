@@ -10,9 +10,10 @@ const WHALE = 'AqzPs1UDhnK2Ga37PphobfMukGtN53erw5N3KhoR6qky';
 const MINT = 'CkVfySiwbXr8uosL9W9vtuiKSSd4WqhvBr2YjyQKv8u3';
 const DEV = '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU';
 const S = { groq413: 1, groqdown: 0, apidown: 0, release: 0, corrupt: 0, mult: 1, balanceLamports: 0, held: 0n, sent: [], groq: [], swaps: [], log: [] };
+const PRICE_ACCOUNTS=new Map(),PRICE_MARKETS=new Map();let priceFailureMint=null,priceFailureStatus=503;
 const PRICE_CURVES=new Map();let priceSlot=100,priceHeartbeat=true,priceQuoteDelay=0;
 const curvePda=mint=>web3.PublicKey.findProgramAddressSync([Buffer.from('bonding-curve'),new web3.PublicKey(mint).toBuffer()],new web3.PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'))[0].toBase58();
-const priceCurveInfo=c=>{const b=Buffer.alloc(115);Buffer.from([23,183,248,55,96,216,172,96]).copy(b);b.writeBigUInt64LE(BigInt(c.tokens),8);b.writeBigUInt64LE(BigInt(c.sol),16);b[48]=Number(c.complete);return{data:[b.toString('base64'),'base64'],owner:'6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P',lamports:1,executable:false,rentEpoch:0};};
+const priceCurveInfo=c=>{const b=Buffer.alloc(115);Buffer.from([23,183,248,55,96,216,172,96]).copy(b);b.writeBigUInt64LE(BigInt(c.tokens),8);b.writeBigUInt64LE(BigInt(c.sol),16);b[48]=Number(c.complete);if(c.quote)new web3.PublicKey(c.quote).toBuffer().copy(b,83);return{data:[b.toString('base64'),'base64'],owner:'6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P',lamports:1,executable:false,rentEpoch:0};};
 // ---- fake Pump.fun world for Pulse (PumpPortal-style feed) ----
 const P0 = Date.now(); const slotNow = () => 1000 + Math.floor((Date.now() - P0) / 400);
 const P = { chainTx: new Map(), coins: new Map(), names: new Map(), accts: new Map(), funds: new Map(), fundSigs: new Map(), clients: new Set(), noroute: new Set(), vaults: new Map() };
@@ -43,6 +44,8 @@ function vaultAcct(c, key) { const d = Buffer.alloc(165); new web3.PublicKey(key
   d.writeBigUInt64LE(BigInt(Math.round(key === c.vaultQuote ? c.ammQuote * 1e9 : c.ammBase * 1e6)), 64); d[108] = 1;
   return { data: [d.toString('base64'), 'base64'], executable: false, lamports: 2039280, owner: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', rentEpoch: 0, space: 165 }; }
 function rpc(method, params) {
+  if(method==='getAccountInfo'&&PRICE_ACCOUNTS.has(params[0]))return{context:{slot:priceSlot},value:PRICE_ACCOUNTS.get(params[0])};
+  if(method==='getMultipleAccounts'&&params[0].some(k=>PRICE_ACCOUNTS.has(k)))return{context:{slot:priceSlot},value:params[0].map(k=>PRICE_ACCOUNTS.get(k)??null)};
   if(method==='getAccountInfo'&&PRICE_CURVES.has(params[0]))return{context:{slot:priceSlot},value:priceCurveInfo(PRICE_CURVES.get(params[0]))};
   const ff = FF.rpc(method, params); if (ff !== undefined) return ff;
   switch (method) {
@@ -93,15 +96,35 @@ function rpc(method, params) {
 const json = (res, x) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(x)); };
 const body = (r) => new Promise((ok) => { let b = ''; r.on('data', (d) => (b += d)); r.on('end', () => ok(b)); });
 const mainHttp = http.createServer(async (r, res) => { const b = await body(r); const u = new URL(r.url, 'http://x');
+  if(u.pathname==='/price/quote-error'){priceFailureMint=u.searchParams.get('mint')||null;priceFailureStatus=Number(u.searchParams.get('status')??503);return json(res,{enabled:!!priceFailureMint});}
+  if(u.pathname==='/price/market'){
+    const mint=u.searchParams.get('mint');if(u.searchParams.get('missing')==='1')PRICE_MARKETS.delete(mint);
+    else PRICE_MARKETS.set(mint,{usdPrice:Number(u.searchParams.get('usd')??1),decimals:Number(u.searchParams.get('decimals')??6),lag:Number(u.searchParams.get('lag')??0)});
+    return json(res,{mint});
+  }
+  if(u.pathname==='/price/pool'){
+    const q=u.searchParams,mint=q.get('mint')||pk(),quote=q.get('quote')||pk(),program=new web3.PublicKey('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
+    const creator=web3.PublicKey.findProgramAddressSync([Buffer.from('pool-authority'),new web3.PublicKey(mint).toBuffer()],new web3.PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'))[0];
+    const pair=web3.PublicKey.findProgramAddressSync([Buffer.from('pool'),Buffer.from([0,0]),creator.toBuffer(),new web3.PublicKey(mint).toBuffer(),new web3.PublicKey(quote).toBuffer()],program)[0].toBase58();
+    const old=PRICE_ACCOUNTS.get(pair),base=old?new web3.PublicKey(Buffer.from(old.data[0],'base64').subarray(139,171)).toBase58():pk(),quoteVault=old?new web3.PublicKey(Buffer.from(old.data[0],'base64').subarray(171,203)).toBase58():pk();
+    const d=Buffer.alloc(301);Buffer.from([241,154,109,4,17,177,109,188]).copy(d);new web3.PublicKey(mint).toBuffer().copy(d,43);new web3.PublicKey(quote).toBuffer().copy(d,75);new web3.PublicKey(base).toBuffer().copy(d,139);new web3.PublicKey(quoteVault).toBuffer().copy(d,171);
+    const virtual=BigInt.asUintN(128,BigInt(q.get('virtual')??'-20000000000'));d.writeBigUInt64LE(virtual&((1n<<64n)-1n),245);d.writeBigUInt64LE(virtual>>64n,253);
+    const account=(data,owner)=>({data:[data.toString('base64'),'base64'],owner,lamports:1,executable:false,rentEpoch:0});
+    const token=(m,n)=>{const b=Buffer.alloc(165);new web3.PublicKey(m).toBuffer().copy(b);b.writeBigUInt64LE(BigInt(n),64);return account(b,'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');};
+    PRICE_ACCOUNTS.set(pair,account(d,program.toBase58()));PRICE_ACCOUNTS.set(base,token(mint,q.get('base')??'1000000000000'));PRICE_ACCOUNTS.set(quoteVault,token(quote,q.get('reserve')??'220000000000'));
+    const curve={sol:'0',tokens:'0',complete:true,quote};PRICE_CURVES.set(curvePda(mint),curve);PRICE_MARKETS.set(quote,{usdPrice:Number(q.get('quoteUsd')??100),decimals:8,lag:0});priceSlot++;
+    for(const [id,sub]of subs)if(sub.kind==='account'&&[pair,base,quoteVault].includes(sub.key)&&sub.ws.readyState===1)sub.ws.send(JSON.stringify({jsonrpc:'2.0',method:'accountNotification',params:{subscription:id,result:{context:{slot:priceSlot},value:PRICE_ACCOUNTS.get(sub.key)}}}));
+    return json(res,{mint,quote,pair,slot:priceSlot});
+  }
   if(u.pathname==='/price/heartbeat'){priceHeartbeat=u.searchParams.get('enabled')!=='0';return json(res,{enabled:priceHeartbeat});}
   if(u.pathname==='/price/quote-delay'){priceQuoteDelay=Number(u.searchParams.get('ms')??0);return json(res,{ms:priceQuoteDelay});}
   if(u.pathname==='/price/curve'){
-    const mint=u.searchParams.get('mint')||pk(),key=curvePda(mint),c={sol:u.searchParams.get('sol')||'40000000000',tokens:u.searchParams.get('tokens')||'800000000000000',complete:u.searchParams.get('complete')==='1'};
+    const mint=u.searchParams.get('mint')||pk(),key=curvePda(mint),c={sol:u.searchParams.get('sol')||'40000000000',tokens:u.searchParams.get('tokens')||'800000000000000',complete:u.searchParams.get('complete')==='1',quote:u.searchParams.get('quote')||undefined};
     PRICE_CURVES.set(key,c);priceSlot++;let sent=0;
     for(const [id,s]of subs)if(s.kind==='account'&&s.key===key&&s.ws.readyState===1){sent++;s.ws.send(JSON.stringify({jsonrpc:'2.0',method:'accountNotification',params:{result:{context:{slot:priceSlot},value:priceCurveInfo(c)},subscription:id}}));}
     return json(res,{mint,key,slot:priceSlot,sent});
   }
-  if (u.pathname === '/emit') { const side = u.searchParams.get('side'); const sig = makeTx(side, Number(u.searchParams.get('frac') ?? 1), Number(u.searchParams.get('held') ?? 0), u.searchParams.get('mint') === '2' ? MINT2 : MINT);
+  if (u.pathname === '/emit') { const side = u.searchParams.get('side'); const sig = makeTx(side, Number(u.searchParams.get('frac') ?? 1), Number(u.searchParams.get('held') ?? 0), u.searchParams.get('mint') === '2' ? MINT2 : u.searchParams.get('mint') || MINT);
     for (const [id, s] of subs) if (s.ws.readyState === 1 && s.kind === 'logs') s.ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'logsNotification', params: { result: { context: { slot: 1 }, value: { signature: sig, err: null, logs: ['Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [1]', `Program log: Instruction: ${side === 'buy' ? 'Buy' : 'Sell'}`] } }, subscription: id } }));
     return json(res, { sig, subs: [...subs.values()].filter((s) => s.kind === 'logs').length }); }
   // A Pump.fun trade by the watched wallet, as the logs of a "processed" notification carry it (no transaction to fetch).
@@ -172,12 +195,17 @@ new WebSocketServer({ port: 18904, host: '127.0.0.1' }).on('connection', (ws) =>
 
 // Jupiter: 1 lamport buys 1 token; selling returns tokens * mult lamports. /swap returns a real v0 transaction.
 http.createServer(async (r, res) => { const b = await body(r); const u = new URL(r.url, 'http://x');
+  if(u.pathname==='/price/v3'){
+    const ids=(u.searchParams.get('ids')??'').split(',');S.priceRequests??=[];S.priceRequests.push({at:Date.now(),ids});
+    const rows=Object.fromEntries(ids.flatMap(m=>m==='So11111111111111111111111111111111111111112'?[[m,{usdPrice:100,decimals:9,blockId:priceSlot}]]:PRICE_MARKETS.has(m)?[[m,{...PRICE_MARKETS.get(m),blockId:priceSlot-PRICE_MARKETS.get(m).lag}]]:[]));return json(res,rows);
+  }
   if(u.pathname.endsWith('/quote')&&priceQuoteDelay)await new Promise(r=>setTimeout(r,priceQuoteDelay));
+  if(u.pathname.endsWith('/quote')&&priceFailureMint&&u.searchParams.get('inputMint')===priceFailureMint){res.statusCode=priceFailureStatus;return json(res,{error:'Temporary sell quote service unavailable'});}
   if (u.pathname.endsWith('/quote') && (P.noroute.has(u.searchParams.get('inputMint')) || P.noroute.has(u.searchParams.get('outputMint')))) { res.statusCode = 400; return res.end('{"error":"Could not find any route","errorCode":"COULD_NOT_FIND_ANY_ROUTE"}'); }
   if (u.pathname.endsWith('/quote')) { const amt = BigInt(u.searchParams.get('amount') ?? '0'); const buy = u.searchParams.get('inputMint').startsWith('So111');
     const pump=pumpMints.has(u.searchParams.get(buy?'outputMint':'inputMint'));
     const out = pump ? (buy?BigInt(Math.floor((800e6-40*800e6/(40+Number(amt)/1e9*.99))*1e6)):BigInt(Math.floor(40e9*Number(amt)/(800e12+Number(amt))*.99))) : buy ? amt : BigInt(Math.floor(Number(amt) * S.mult));
-    return json(res, { inputMint: u.searchParams.get('inputMint'), outputMint: u.searchParams.get('outputMint'), inAmount: amt.toString(), outAmount: out.toString() }); }
+    return json(res, { inputMint: u.searchParams.get('inputMint'), outputMint: u.searchParams.get('outputMint'), inAmount: amt.toString(), outAmount: out.toString(), contextSlot:priceSlot }); }
   if (u.pathname.endsWith('/swap')) { const { quoteResponse: qr, userPublicKey } = JSON.parse(b); const user = new web3.PublicKey(userPublicKey);
     const msg = new web3.TransactionMessage({ payerKey: user, recentBlockhash: '11111111111111111111111111111111', instructions: [new web3.TransactionInstruction({ programId: new web3.PublicKey('JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4'), keys: [{ pubkey: user, isSigner: true, isWritable: true }], data: Buffer.from([1,++buildNumber%255]) })] }).compileToV0Message();
     const planned=new web3.VersionedTransaction(msg),buy=qr.inputMint.startsWith('So111');

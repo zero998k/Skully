@@ -38,10 +38,11 @@ function setup(live=false){
   getSignatureStatuses:async sigs=>({value:sigs.map(sig=>statuses.get(sig)??null)}),isBlockhashValid:async()=>({value:f.blockhashValid??true}),
   getAccountInfo:async()=>null,
   sendRawTransaction:async raw=>{const tx=VersionedTransaction.deserialize(raw),ix=tx.message.compiledInstructions[0],side=ix.data[0]===1?'buy':'sell',mint=tx.message.staticAccountKeys[ix.accountKeyIndexes[1]].toBase58(),sig=bs58.encode(tx.signatures[0]);
-    f.sends.push({side,mint,at:Date.now(),sig});
+    const previousHeld=held.get(mint)??0n;f.sends.push({side,mint,at:Date.now(),sig});
     if(!f.failOnChain){if(side==='buy')held.set(mint,(held.get(mint)??0n)+1000n);else{held.set(mint,0n);f.balance+=100_000_000;}}
     const verified=receipt(owner.publicKey.toBase58(),mint,side);
     if(side==='sell'&&f.partialSell){verified.meta.postTokenBalances[0].uiTokenAmount.amount='500';held.set(mint,500n);}
+    if(side==='sell'&&f.sellFillTokens){const left=previousHeld-f.sellFillTokens;verified.meta.preTokenBalances[0].uiTokenAmount.amount=String(previousHeld);verified.meta.postTokenBalances[0].uiTokenAmount.amount=String(left);held.set(mint,left);}
     txs.set(sig,verified);
     statuses.set(sig,{err:f.failOnChain?{InstructionError:[0,'Custom']}:null,confirmationStatus:f.confirmationUnknown?'processed':'confirmed'});
     if(f.sendError)throw Error('RPC connection dropped after send');return sig;
@@ -54,7 +55,7 @@ function setup(live=false){
 }
 globalThis.fetch=async(url,init={})=>{
  const f=fixture,u=String(url);init.signal?.throwIfAborted();
- if(u.includes('/quote?')){f.quotes++;if(f.quoteError)throw Error('Quote server unavailable');return f.route?Response.json({outAmount:'1000'}):new Response('No route',{status:400});}
+ if(u.includes('/quote?')){f.quotes++;if(f.quoteError)throw Error('Quote server unavailable');const query=new URL(u).searchParams;f.quoteAmounts??=[];f.quoteAmounts.push(query.get('amount'));return f.route?Response.json({inputMint:query.get('inputMint'),outputMint:query.get('outputMint'),inAmount:query.get('amount'),outAmount:'1000'}):new Response('No route',{status:400});}
  if(u.endsWith('/trade-local')||u.endsWith('/swap')){
   if(f.buildGate)await f.buildGate.promise;if(f.buildError)throw Error('Trade builder unavailable');
   const body=JSON.parse(init.body),side=body.action??(body.quoteResponse.inputMint==='So11111111111111111111111111111111111111112'?'buy':'sell'),mint=body.mint??(side==='buy'?body.quoteResponse.outputMint:body.quoteResponse.inputMint),user=new PublicKey(body.publicKey??body.userPublicKey);
@@ -183,6 +184,50 @@ for(const phase of ['safetyGate','buildGate']){
 {
  const f=setup(true),mint=Keypair.generate().publicKey.toBase58();let confirmations=0;const previous=f.connection.confirmTransaction;f.connection.confirmTransaction=async(...args)=>{confirmations++;return previous(...args);};f.connection.onSignature=()=>1;f.connection.removeSignatureListener=async()=>{};
  await f.emit(mint,'buy');await f.emit(mint,'sell');assert.equal(confirmations,0);assert(!f.positions.has(mint));assert.equal(f.sends.length,2);results.confirmedReceiptAvoidsRedundantSignatureRpcPolling=true;
+}
+// A copied sell is a durable target balance, retained across errors and process restarts.
+{
+ const f=setup(true),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');f.buildError=true;await f.emit(mint,'sell');assert(f.positions.get(mint).copiedExit?.lastError);assert.equal(f.sends.length,1);
+ f.buildError=false;f.positions.update(mint,{copiedExit:{...f.positions.get(mint).copiedExit,nextAttemptAt:0}});await f.bot.checkExits(true);await until(()=>!f.positions.has(mint));assert.equal(f.sends.length,2);results.failedCopiedBuilderRetriesWithoutAnotherSourceSell=true;
+}
+{
+ const f=setup(true),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');f.buildError=true;await f.emit(mint,'sell');
+ f.positions=new Positions(f.positions.file);f.book.positions=f.positions;f.bot=createBot({cfg:f.cfg,connection:f.connection,book:f.book});f.buildError=false;f.route=true;
+ f.positions.update(mint,{copiedExit:{...f.positions.get(mint).copiedExit,nextAttemptAt:0}});await f.bot.checkExits(true);await until(()=>!f.positions.has(mint));assert.equal(f.sends.length,2);results.failedCopiedExitSurvivesAppRestart=true;
+}
+{
+ const f=setup(true),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');f.failOnChain=true;await f.emit(mint,'sell');assert(f.positions.get(mint).copiedExit);assert(!f.positions.get(mint).pendingSell);
+ f.failOnChain=false;f.positions.update(mint,{copiedExit:{...f.positions.get(mint).copiedExit,nextAttemptAt:0}});await f.bot.checkExits(true);await until(()=>!f.positions.has(mint));assert.equal(f.sends.length,3);results.failedOnChainCopiedSellGetsOneNewAttempt=true;
+}
+{
+ const f=setup(true),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');f.sendError=true;await f.emit(mint,'sell');assert(f.positions.get(mint).pendingSell);assert(f.positions.get(mint).copiedExit);
+ f.sendError=false;await f.bot.checkExits(true);await until(()=>!f.positions.has(mint));assert.equal(f.sends.length,2);results.copiedSellResponseLossChecksTheAcceptedSignatureWithoutResend=true;
+}
+{
+ const f=setup(true),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');f.confirmationUnknown=true;await f.emit(mint,'sell');const pending=f.positions.get(mint).pendingSell;assert(pending);
+ f.statuses.delete(pending.sig);f.blockhashValid=false;f.confirmationUnknown=false;f.held.set(mint,1000n);await f.bot.checkExits(true);await until(()=>!f.positions.get(mint)?.pendingSell);
+ f.positions.update(mint,{copiedExit:{...f.positions.get(mint).copiedExit,nextAttemptAt:0}});await f.bot.checkExits(true);await until(()=>!f.positions.has(mint));assert.equal(f.sends.length,3);results.expiredCopiedSellRetriesOnlyAfterHistoryAndExpiryChecks=true;
+}
+{
+ const f=setup(true),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');f.cfg.sellOnlyOnFullExit=false;f.sourceLeft=30_000_000_000_000n;f.buildError=true;await f.emit(mint,'sell',{sig:'durable-half-exit'});assert.equal(f.positions.get(mint).copiedExit.targetRemaining,'500');
+ // Another sale reduced the balance while the first attempt was waiting. Retry the missing 300, not half of 800.
+ f.positions.update(mint,{tokens:'800',solSpent:f.positions.get(mint).solSpent*.8,copiedExit:{...f.positions.get(mint).copiedExit,nextAttemptAt:0}});f.held.set(mint,800n);f.sellFillTokens=300n;f.buildError=false;f.route=true;
+ await f.bot.checkExits(true);await until(()=>f.sends.length===2&&!f.positions.get(mint)?.pendingSell);assert.equal(f.quoteAmounts.at(-1),'300');assert.equal(f.positions.get(mint).tokens,'500');assert.equal(f.positions.get(mint).copiedExit,null);
+ f.positions=new Positions(f.positions.file);f.book.positions=f.positions;f.bot=createBot({cfg:f.cfg,connection:f.connection,book:f.book});await f.emit(mint,'sell',{sig:'durable-half-exit'});await f.bot.checkExits(true);assert.equal(f.sends.length,2);results.partialRetriesUseAnAbsoluteTargetAndDeduplicateAfterRestart=true;
+}
+{
+ const f=setup(true),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');f.cfg.sellOnlyOnFullExit=false;f.buildError=true;f.sourceLeft=90_000_000_000_000n;await f.emit(mint,'sell');assert.equal(f.positions.get(mint).copiedExit.targetRemaining,'750');
+ f.sourceLeft=30_000_000_000_000n;await f.emit(mint,'sell');assert.equal(f.positions.get(mint).copiedExit.targetRemaining,'375');results.consecutivePartialSourceSellsCombineWithoutLosingTheFirstExit=true;
+}
+{
+ const f=setup(true),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');f.buildError=true;await f.emit(mint,'sell');const attempts=f.positions.get(mint).copiedExit.attempts;await f.bot.checkExits(true);assert.equal(f.positions.get(mint).copiedExit.attempts,attempts);
+ f.cfg.followSells=false;f.positions.update(mint,{copiedExit:{...f.positions.get(mint).copiedExit,nextAttemptAt:0}});await f.bot.checkExits(true);assert.equal(f.sends.length,1);f.cfg.followSells=true;f.buildError=false;
+ await Promise.all([f.bot.sellNow(mint),f.bot.checkExits(true)]);await until(()=>!f.positions.has(mint));assert.equal(f.sends.length,2);results.copyRetriesRespectBackoffFollowSettingsAndManualSellLocks=true;
+}
+
+{
+ const f=setup(true),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');f.buildError=true;await f.emit(mint,'sell');f.quoteError=true;f.bot=createBot({cfg:f.cfg,connection:f.connection,book:f.book});
+ const all=await f.bot.sellAll();assert.equal(all.writtenOff,0);assert(all.failed.length===1);assert(f.positions.get(mint).copiedExit);results.sellAllCannotWriteOffAPositionWithACopiedExitStillQueued=true;
 }
 const report={checks:results,simulated:true,samples,cycles:samples.length,maxSellSubmitMs:Math.max(...samples.map(x=>x.sellSubmitMs)),maxExitCompleteMs:Math.max(...samples.map(x=>x.exitCompleteMs))};
 if(output)fs.writeFileSync(output,JSON.stringify(report,null,2));console.log(JSON.stringify(report));

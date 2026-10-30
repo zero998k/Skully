@@ -323,6 +323,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   Object.assign(R, await require('./wallet.cjs')(p, BASE, E));
   Object.assign(R, await require('./prices.cjs')(p, F, E));
   Object.assign(R, await require('./rapid.cjs')(p, F, E));
+  Object.assign(R, await require('./paper.cjs')(p, F, E, APP));
   R.errors = errors; R.fakeUnhandled = w2.log;
   console.log(JSON.stringify(R, null, 1));
   await b.close();

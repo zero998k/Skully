@@ -131,7 +131,7 @@ check('personal wallet','largest-asset allocation does not mistake grouped small
 for(const [name,ok]of Object.entries(fl.walletMath??{}))check('personal wallet',name,ok===true,ok);
 check('personal wallet','financial calculation tests ran',Object.keys(fl.walletMath??{}).length===11,fl.walletMath);
 for(const [name,ok]of Object.entries(fl.priceMath??{}))check('live prices',name,ok===true,ok);
-check('live prices','price calculation and lifecycle tests ran',Object.keys(fl.priceMath??{}).length===12,fl.priceMath);
+check('live prices','price calculation and lifecycle tests ran',Object.keys(fl.priceMath??{}).length===30,fl.priceMath);
 check('live prices','market and sell values update under one second while full state is stalled',fl.priceTickWhileStateStalled&&fl.priceTickMs<1000,[fl.priceTickWhileStateStalled,fl.priceTickMs]);
 check('live prices','late full state cannot rewind a streamed price',fl.oldStateCannotRewindPrice===true,fl.oldStateCannotRewindPrice);
 check('live prices','market versus sell PnL and two decimal precision are explicit',fl.marketAndSellClearlySeparated&&fl.twoDecimalPercent,[fl.marketAndSellClearlySeparated,fl.twoDecimalPercent]);
@@ -140,14 +140,23 @@ check('live prices','stalled feed is labelled and cannot trigger an automatic se
 check('live prices','fresh price after resync triggers take profit promptly',fl.freshFeedAutoSells&&fl.freshAutoSellMs<2000&&/take-profit/.test(fl.autoExitReason??''),[fl.freshAutoSellMs,fl.autoExitReason]);
 check('live prices','fresh stop loss sells promptly and each position sells only once',fl.liveStopLoss&&fl.stopLossMs<2000&&fl.oneSellPerPosition&&/stop-loss/.test(fl.stopLossReason??''),[fl.stopLossMs,fl.stopLossReason,fl.oneSellPerPosition]);
 check('live prices','a manual sell racing an automatic exit cannot sell the position twice',fl.manualAndAutoCannotDoubleSell===true,fl.manualAndAutoCannotDoubleSell);
+check('live prices','a coin priced in another token has correct converted PnL',fl.quotedPoolConversion===true,fl.quotedPoolConversion);
+check('live prices','newer pool fees and live swaps update together under one second',fl.quotedPoolStreams&&fl.quotedPoolMs<1000,[fl.quotedPoolStreams,fl.quotedPoolMs]);
+check('live prices','a live curve quoted in another currency has correct converted PnL',fl.foreignCurveConversion===true,fl.foreignCurveConversion);
+check('live prices','non-SOL curve ticks update under one second',fl.foreignCurveStreams&&fl.foreignCurveMs<1000,[fl.foreignCurveStreams,fl.foreignCurveMs]);
+check('live prices','SOL and dollar PnL use the same fresh conversion rate',fl.referenceUsdMatchesConversion===true,fl.referenceUsdMatchesConversion);
+check('live prices','fresh sell estimate replaces a stale reference without claiming a stream',fl.referenceFallbackIsHonest===true,fl.referenceFallbackIsHonest);
 for (const name of ['paperIsNotConfirmed', 'noRouteCacheSkipsRedundantQuote', 'expiredRouteCacheRechecks', 'confirmedBuyWithoutExtraLookup', 'sellsAreTimed', 'failedConfirmationDoesNotOpenOrDuplicate', 'currentFreeJupiterEndpoint']) check('speed', name, speed[name] === true, speed[name] ?? speed.crashed);
 
+for(const [name,ok]of Object.entries(fl.paperMath??{}))check('paper funds',name,ok===true,ok);
+check('paper funds','practice ledger tests ran',Object.keys(fl.paperMath??{}).length===10,fl.paperMath);
+for(const name of ['paperTopShortcut','paperStartingBalanceSaved','paperInvalidBalanceRejected','paperBuyDebitsCash','paperInsufficientBuySkipped','paperResetProtectsOpenTrades','paperSellCreditsProceeds','paperFailedBuyRefunds','paperBalanceSurvivesReload','paperPhoneFits','paperZeroStopsBuys','paperUnlimitedRestored','copiedSellRetryVisible','copiedSellRecoveredOnce','paperApiPrivate'])check('paper and copied exits',name,fl[name]===true,fl[name]);
 const fills=json('fills.json');
 for(const [name,ok]of Object.entries(fills))check('fill accuracy',name,ok===true,ok);
 check('fill accuracy','receipt and non-SOL accounting tests ran',Object.keys(fills).length===9,fills);
 const rapid=json('rapid.json');
 for(const [name,ok]of Object.entries(rapid.checks??{}))check('rapid copy',name,ok===true,ok);
-check('rapid copy','24 repeated cycles from 25ms to five seconds in paper and simulated live mode',rapid.cycles===24&&rapid.samples?.every(x=>x.sellSubmitMs<1000)&&Object.keys(rapid.checks??{}).length===28,rapid);
+check('rapid copy','24 repeated cycles from 25ms to five seconds in paper and simulated live mode',rapid.cycles===24&&rapid.samples?.every(x=>x.sellSubmitMs<1000)&&Object.keys(rapid.checks??{}).length===37,rapid);
 check('PnL display','top and open trades show SOL, USD and percent',fl.pnlSolUsdTop&&fl.pnlSolUsdTrade&&fl.liveTopPnlChangesWithTicks,[fl.pnlSolUsdTop,fl.pnlSolUsdTrade,fl.liveTopPnlChangesWithTicks]);
 check('copy decisions','copy and skip explanations are visible',fl.copyReasonsVisible,fl.copyReasonsVisible);
 check('sell recovery','a failed sell reports its error and restores the button without losing the position',fl.failedSellButtonRecovers&&fl.failedSellExplained&&fl.failedSellKeepsPosition,[fl.failedSellButtonRecovers,fl.failedSellExplained]);

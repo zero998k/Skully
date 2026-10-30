@@ -1,0 +1,22 @@
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'solboy-paper-funds-'));process.chdir(dir);
+const {createBook}=await import('../../src/book.js');
+const cfg={dryRun:true},book=createBook(cfg,null),wallet=book.paperWallet,results={};
+const pos={tokens:'1000',solSpent:.5,source:'test-source',sourceLabel:'test source',openedAt:'2026-10-29T00:00:00Z'};
+assert(!wallet.status().enabled);assert(wallet.canSpend(1000000000000n));assert.equal(wallet.reserve(500000000n),null);
+wallet.commitBuy(null,'unlimited',pos,500000000n);assert(book.positions.has('unlimited'));book.positions.close('unlimited');results.existingPracticeStaysUnlimitedUntilYouChooseABalance=true;
+wallet.setStartingBalance('1');const first=wallet.reserve(600000000n);assert.equal(wallet.status().availableSol,.4);assert.equal(wallet.status().reservedSol,.6);assert.throws(()=>wallet.reserve(600000000n),/Not enough paper SOL/);wallet.release(first);assert.equal(wallet.status().availableSol,1);results.concurrentReservationsCannotOverdrawAndFailuresReleaseThem=true;
+let id=wallet.reserve(500000000n);wallet.commitBuy(id,'coin',pos,500000000n);assert.equal(wallet.status().availableSol,.5);
+let saved=JSON.parse(fs.readFileSync(path.join(dir,'data/positions-paper.json')));assert(saved.open.coin);assert.equal(saved.paperWallet.availableLamports,'500000000');assert.throws(()=>wallet.setStartingBalance('10'),/Close your open paper/);assert.throws(()=>wallet.setStartingBalance(null),/Close your open paper/);results.buyAndCashDebitAreSavedTogetherAndResetCannotEraseAnOpenTrade=true;
+wallet.settleSell('coin',{...pos,tokens:'500',solSpent:.25},400000000n,.15);assert.equal(wallet.status().availableSol,.9);assert.equal(book.positions.get('coin').tokens,'500');wallet.settleSell('coin',null,300000000n,.05);assert.equal(wallet.status().availableSol,1.2);assert(!book.positions.has('coin'));assert(Math.abs(book.positions.todayPnl()-.2)<1e-12);results.partialAndFullSellsCreditActualEstimatedProceedsOnce=true;
+const restarted=createBook(cfg,null);assert.equal(restarted.paperWallet.status().availableSol,1.2);assert(!restarted.positions.has('coin'));results.practiceBalanceAndClosedTradesSurviveRestart=true;
+// A failed file save must not spend cash in memory or on disk.
+id=wallet.reserve(200000000n);const store=book.positionsFor('paper'),save=store.save;store.save=()=>{throw Error('disk unavailable');};assert.throws(()=>wallet.commitBuy(id,'failed-save',pos,200000000n),/disk unavailable/);wallet.release(id);store.save=save;assert.equal(wallet.status().availableSol,1.2);assert(!store.has('failed-save'));saved=JSON.parse(fs.readFileSync(store.file));assert.equal(saved.paperWallet.availableLamports,'1200000000');results.failedAtomicSaveCannotLosePracticeCash=true;
+// An interrupted paper order was never sent to a chain: its memory reservation does not survive a restart.
+id=wallet.reserve(400000000n);assert.equal(createBook(cfg,null).paperWallet.status().availableSol,1.2);wallet.release(id);results.unfinishedPaperRequestsDoNotLoseCashAfterRestart=true;
+const history=store.todayPnl();wallet.setStartingBalance('0');assert.equal(wallet.status().availableSol,0);assert(!wallet.canSpend(1n));wallet.setStartingBalance('0.123456789');assert.equal(wallet.status().availableSol,.123456789);assert.equal(store.todayPnl(),history);
+for(const bad of ['-1','NaN','1e3','0.1234567891','1000001','',undefined])assert.throws(()=>wallet.setStartingBalance(bad));results.zeroBalancesAndNineDecimalPrecisionAreValidatedWithoutResettingPnl=true;
+book.isTrading=()=>true;assert.throws(()=>wallet.setStartingBalance('2'),/current trade/);book.isTrading=()=>false;
+book.positionsFor('live').open('real',{...pos});const liveBefore=fs.readFileSync(book.positionsFor('live').file);cfg.dryRun=false;assert.throws(()=>wallet.reserve(1n),/real-money/);assert.throws(()=>wallet.setStartingBalance('2'),/Switch to Paper/);assert.equal(wallet.settleSell('real',null,1n,0),false);assert(fs.readFileSync(book.positionsFor('live').file).equals(liveBefore));results.paperFundsCannotBeUsedInLiveModeOrChangeRealPositions=true;
+cfg.dryRun=true;wallet.setStartingBalance(null);assert(!wallet.status().enabled);assert.equal(store.todayPnl(),history);assert(fs.readFileSync(book.positionsFor('live').file).equals(liveBefore));results.unlimitedPracticeCanBeRestoredWithoutTouchingRealFundsOrHistory=true;
+console.log(JSON.stringify(results));
