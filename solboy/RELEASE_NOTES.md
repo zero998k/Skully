@@ -1,3 +1,8 @@
+## 1.15.1 — Live conversion prices
+
+- Coins that trade through a Meteora/SOL pair can now stream their conversion directly from the chain, including the coin in the reported screenshot. Price changes reach the screen as they arrive instead of relying on repeated conversion-price requests.
+- Wallet research now respects the same background price-request limit, leaving capacity for actual buys and sells. Existing delayed-data warnings remain when a reliable live source is unavailable; free services can still fail.
+
 **New in 1.15.0: sell recovery, realistic practice funds and better prices**
 
 - Copied sells now keep their instruction after a failed quote, builder or transaction, and retry after short pauses. Restarts keep the exit too. Submitted transactions are checked before another is sent, and partial retries sell only the amount still owed.
