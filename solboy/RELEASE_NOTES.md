@@ -1,3 +1,13 @@
+**New in 1.15.0: sell recovery, realistic practice funds and better prices**
+
+- Copied sells now keep their instruction after a failed quote, builder or transaction, and retry after short pauses. Restarts keep the exit too. Submitted transactions are checked before another is sent, and partial retries sell only the amount still owed.
+- Choose your starting SOL with the new Paper funds button at the top. Practice buys spend that balance, completed sells add their estimated proceeds, and insufficient funds stop a buy. The balance survives updates and restarts. Existing practice stays unlimited until you choose an amount; history is kept.
+- Fixed false price-delay warnings on busy coins, added more live PumpSwap pools and quote-currency conversions, including live curves priced in SPCX or other coins, and made dollar PnL use the same SOL rate as the coin valuation. Larger portfolios rotate through the price checks without dropping coins.
+- Failed initial price lookups now retry automatically, and another trade waiting for confirmation does not block chain-price setup.
+- Background price checks leave room for trading and respect free-service limits. Refresh ages and genuine source delays stay visible.
+
+Market quotes, practice fills and stop prices remain estimates. Network limits, liquidity, fees and fast moves can still delay or prevent a fill; retries keep your chosen slippage limits.
+
 **New in 1.14.0: faster exits and more reliable profit figures**
 
 - Fixed inflated practice profits on coins priced in another token. Real buys and sells now use their own confirmed receipts for token amounts and net SOL, including network costs.
