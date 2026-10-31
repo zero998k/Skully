@@ -1,3 +1,13 @@
+## 1.16.0 — Live prices, phone access and a new look
+
+- Coins trading on Raydium or Meteora now update live from their pools, like Pump.fun coins, without extra price requests. Open PnL at the top uses each coin's freshest price.
+- New 📱 Phone access: watch PnL, sell and pause from your phone with a private link and its own password. It stays on after restarts. Wallet keys, withdrawals and real-money switching stay on your computer.
+- Optional permanent phone link with free Tailscale, so the link never changes. The Phone access window has a 3-step guide with download links.
+- New Retro arcade colors, and Sell now sells in one tap with no confirmation.
+- Fixed the page being wider than phone screens.
+
+Prices still depend on your RPC and free services; delayed warnings stay visible when data is late. Take-profit and stop-loss still use real sell quotes.
+
 ## 1.15.2 — Fewer missed trades when your RPC is busy
 
 - Buys and sells now go to the front of the line when your free RPC plan is busy, and SolBoy waits as long as the provider asks instead of retrying too soon. Background checks no longer crowd out copying.

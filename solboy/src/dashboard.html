@@ -60,6 +60,7 @@ body { min-height: 100vh; overflow-x: hidden; }
 @keyframes hop { 40% { transform: translateY(-12px) rotate(8deg) scale(1.08); } }
 @keyframes droop { 30% { transform: translateY(3px) rotate(-8deg); } 60% { transform: translateY(3px) rotate(6deg); } }
 @font-face { font-family: 'SolBoyLogo'; src: url(data:font/woff2;base64,__LOGO_FONT__) format('woff2'); font-weight: 800; font-display: block; }
+.guide{margin:6px 0 10px 18px;padding:0;line-height:1.6}.guide li{margin:4px 0}.guide a{color:var(--accent)}
 .logo { font-family: 'SolBoyLogo', var(--display); font-weight: 800; font-size: 34px; letter-spacing: .5px; position: relative; line-height: 1; color: #fff; text-shadow: 3px 3px 0 #000, 0 0 16px rgba(255,255,255,.18); }
 .logo b { color: var(--accent); font-weight: 800; text-shadow: 3px 3px 0 #000, 0 0 18px rgba(255,45,149,.85), 0 0 36px rgba(255,45,149,.45); }
 .logo::after { content: attr(data-text); position: absolute; inset: 0; color: var(--pink); opacity: 0; clip-path: inset(45% 0 30% 0); }
@@ -334,6 +335,8 @@ h3.sub { margin: 6px 0 8px; }
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100vw); z-index: 66; background: var(--panel); border-left: 2px solid var(--edge);
   display: flex; flex-direction: column; transform: translateX(105%); transition: transform .35s var(--pop); box-shadow: -8px 0 0 rgba(255, 45, 149, .25); }
 .drawer.on { transform: none; }
+/* A closed drawer parked off-screen still widened the page on phones; take it out of layout. */
+.drawer:not(.on) { display: none; }
 .drawer header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 2px solid var(--edge); }
 .drawer header b { font-family: var(--display); font-size: 19px; display: block; }
 .drawer header small { color: var(--ink-3); font-size: 12px; }
@@ -365,6 +368,8 @@ h3.sub { margin: 6px 0 8px; }
 
 /* tables */
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
+/* Wide History and Board tables scroll inside their panel on phones instead of widening the page. */
+#history, #board { overflow-x: auto; }
 th { font-family: var(--display); font-weight: 800; font-size: 13px; color: var(--ink-3); text-align: left; padding: 10px; border-bottom: 2px solid var(--edge); }
 td { padding: 11px 10px; border-bottom: 1px solid #1f1f1f; }
 td.num { font-family: var(--mono); }
@@ -578,6 +583,9 @@ button:active:not(:disabled) { transform: translateY(1px); }
   .club .side { display: none; } .club .win.showSide .side { display: flex; position: absolute; inset: 0 30% 0 0; z-index: 2; box-shadow: 6px 0 0 #000; }
   .club .menuBtn { display: inline-flex; } .joinGrid { grid-template-columns: 1fr; } .msg-row .tools { display: flex; position: static; margin-left: auto; align-self: flex-start; }
 }
+/* Retro arcade colorway (1.16.0): deep purple, hot pink, cyan wins, same sticker style. */
+:root{--bg:#1a1033;--panel:#241646;--panel-2:#2e1d57;--edge:#40297a;--ink:#fbefff;--ink-2:#d2c6ec;--ink-3:#b3a2d6;--accent:#ff4fd8;--pink:#ff8ae6;--sky:#31e1ff;--sun:#ffe14f;--grape:#a98bff;--win:#31e1ff}
+.hud{background:rgba(26,16,51,.94)}
 </style>
 </head>
 <body>
@@ -601,6 +609,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
     <button class="btn" id="pauseBtn" title="Stop copying new buys. Sells keep following.">Pause copying <kbd>P</kbd></button>
     <button class="btn clubBtn" id="clubBtn" title="Chat with friends, profiles and coin calls">💬 Social Lobby</button>
     <button class="btn" id="hypoBtn" title="What each copy made, and what it would have made">🧮 Hypothetical PnL</button>
+    <button class="btn" id="phoneBtn">📱 Phone access</button>
     <button class="btn" id="shareBtn" title="Send a friend a link to the Wallet Finder">🔗 Share Finder</button>
     <button class="btn" id="sfxBtn">Sound off <kbd>S</kbd></button>
     <button class="btn" id="logoutBtn" hidden>Log out</button>
@@ -814,12 +823,18 @@ function render() {
   renderInventory(); renderChart(s.curve); renderHistory(); renderBoard(); renderLoadout(); renderAccount();
 }
 
+function livePrice(p){
+  const stale=p.priceStale||Date.now()>(p.priceValidUntil??0)||!pricesConnected,marketStale=p.marketStale||Date.now()>(p.marketValidUntil??0)||!pricesConnected;
+  const useMarket=p.marketWorth!=null&&p.paid>0&&(!marketStale||stale);
+  return {value:useMarket?p.marketWorth:p.worth,stale:useMarket?marketStale:stale,paid:p.paid};
+}
 function renderPnl(){
   const practice=S.paperWallet;$('paperFundsTop').hidden=S.mode!=='paper';$('paperFundsTop').textContent=practice?.enabled?`Paper funds: ${practice.availableSol.toFixed(4)} SOL`:'Paper funds · choose balance';
   $('score').textContent=fmt(S.summary.totalPnl)+' SOL';$('score').className='big '+cls(S.summary.totalPnl);
   $('scoreUsd').textContent=usdValue(S.summary.totalPnl)+' · realized'+(S.mode==='paper'?' · practice estimate':'');
-  const known=S.inventory.filter(p=>pricesConnected&&p.worth!=null&&!p.priceStale&&Date.now()<(p.priceValidUntil??0)),open=known.reduce((sum,p)=>sum+p.worth-p.paid,0);
-  $('openPnl').textContent=`${known.length<S.inventory.length?'Known open sell PnL':'Open sell PnL'}: ${fmt(open)} SOL · ${usdValue(open)}${known.length<S.inventory.length?' · some prices delayed':''}`;
+  // Use each coin's freshest price: the streaming market mark when live, else a fresh sell estimate.
+  const live=S.inventory.map(livePrice).filter(x=>x.value!=null&&!x.stale),open=live.reduce((sum,x)=>sum+x.value-x.paid,0);
+  $('openPnl').textContent=`${live.length<S.inventory.length?'Open PnL (prices known)':'Open PnL'}: ${fmt(open)} SOL · ${usdValue(open)}${live.length<S.inventory.length?' · some prices delayed':''}`;
   $('pnlCoverage').textContent=S.mode==='paper'&&S.summary.legacyPaperBuys?'Includes older unverified practice estimates. Reset PnL starts a fresh session; history stays.':'';
   $('pendingBuys').hidden=!(S.pendingBuys?.length);
   $('pendingBuys').textContent=(S.pendingBuys??[]).map(p=>`Buy confirming / receipt pending: ${p.mint.slice(0,6)}… · ${p.from}. Automatic sells are queued if the source exits.`).join(' | ');
@@ -889,7 +904,7 @@ $('slots').addEventListener('click', async (e) => {
   if(activeSells.has(mint))return;
   const pending=S.inventory.find(p=>p.mint===mint)?.pendingSell;
   const real = S.mode === 'live' ? ' This is a REAL trade with real SOL.' : '';
-  if (!pending&&!confirm(`Sell all of ${b.dataset.name} now?${real}`)) return;
+  // One tap sells: a confirmation dialog would cost seconds during fast exits.
   activeSells.add(mint);b.disabled=true;b.textContent=pending?'Checking…':'Selling…';
   const message=setTimeout(()=>{if(b.isConnected)b.textContent='Checking confirmation…';},4000);
   try { await api('/api/sell', { mint }, AbortSignal.timeout(15_000)); }
@@ -1680,6 +1695,22 @@ $('hypoBtn').onclick = () => openHypo(false);
 const CLUB = { host: true, api: (p, b) => api(`/api/club${p}`, b), img: (id, kind, v) => `/api/club/img/${encodeURIComponent(id)}/${kind}?v=${v}&t=${TOKEN}`, setSession() {} };
 
 /* ---------- share link: the Wallet Finder for a friend, as a web address ---------- */
+async function openPhone(){
+  const after=()=>'<p>Phone access stays on, even after SolBoy restarts. This quick link changes after each restart, so it works best at home.</p>';
+  const ts=st=>st.tailscale?.url?`<h4>🔒 Permanent link · for when you are away</h4><p>This link never changes, even after restarts. It only opens on your own devices with Tailscale switched on, and still needs your phone password.</p><input class="addrbox" aria-label="Permanent phone link" readonly value="${esc(st.tailscale.url)}">`
+    :`<h4>🔒 Get a permanent link (free, about 5 minutes)</h4><p>Use SolBoy from anywhere with a link that never changes. Tailscale connects only your own devices; nothing becomes public.</p>
+    <ol class="guide"><li><b>On this computer:</b> install <a href="https://tailscale.com/download/mac" target="_blank" rel="noopener">Tailscale for Mac</a> (Windows and Linux: <a href="https://tailscale.com/download" target="_blank" rel="noopener">tailscale.com/download</a>), open it and sign in.</li>
+    <li><b>On your phone:</b> install Tailscale (<a href="https://apps.apple.com/app/tailscale/id1470499037" target="_blank" rel="noopener">iPhone</a> · <a href="https://play.google.com/store/apps/details?id=com.tailscale.ipn" target="_blank" rel="noopener">Android</a>) and sign in with the <b>same account</b>. Leave it switched on.</li>
+    <li>Click <b>Check again</b> below. Your permanent link appears here. Open it on your phone and add it to your Home Screen.</li></ol>
+    ${st.tailscale?.error?`<p class="err">${esc(st.tailscale.error)}</p>`:''}<p><button class="btn" id="phoneTs">Check again</button></p>`;
+  const show=st=>{$('modalBody').innerHTML=`<h3>📱 SolBoy on your phone</h3><p>Your Mac runs the bot. Keep it awake and online. The phone can watch PnL, sell, pause copying and adjust copy settings. Wallet keys, withdrawals and mode changes stay on your Mac.</p>${st.state==='on'?`<p>Open this private link on your phone, then Share → Add to Home Screen.</p><input class="addrbox" aria-label="Phone link" readonly value="${esc(st.url)}">${after(st)}${ts(st)}<p><button class="btn danger" id="phoneStop">Turn off phone access</button></p>`:st.state==='reconnecting'||st.state==='starting'?`<p>Phone access is reconnecting${st.error?` (${esc(st.error)})`:''}. The new link appears here as soon as it is ready.</p>${ts(st)}<p><button class="btn danger" id="phoneStop">Turn off phone access</button></p>`:`<p>Choose a separate phone password (at least 12 characters).</p><input class="addrbox" id="phonePassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" aria-label="New phone password"><p><button class="btn primary" id="phoneStart">Create private phone link</button></p>`}<div class="err" id="phoneError"></div>`;$('modal').classList.add('on');
+    $('phoneStart')?.addEventListener('click',async()=>{const b=$('phoneStart');b.disabled=true;b.textContent='Connecting…';try{show(await api('/api/phone/start',{password:$('phonePassword').value}));}catch(e){$('phoneError').textContent=e.message;b.disabled=false;b.textContent='Create private phone link';}});
+    $('phoneStop')?.addEventListener('click',async()=>show(await api('/api/phone/stop',{})));
+    $('phoneTs')?.addEventListener('click',async()=>{const b=$('phoneTs');b.disabled=true;b.textContent='Checking…';try{const st=await api('/api/phone/tailscale',{});show(st);if(!st.tailscale?.found)$('phoneError').textContent='Tailscale was not found on this computer yet. Make sure it is installed, open, and signed in.';}catch(e){$('phoneError').textContent=e.message;b.disabled=false;b.textContent='Check again';}});
+  };try{show(await api('/api/phone/status'));}catch(e){toast('loss','Phone access',e.message);}
+}
+$('phoneBtn').onclick=openPhone;if(SERVER_MODE)$('phoneBtn').hidden=true;
+
 async function openShare() {
   const show = (st, busy) => {
     $('modalBody').innerHTML = `<h3>Share the Wallet Finder</h3>

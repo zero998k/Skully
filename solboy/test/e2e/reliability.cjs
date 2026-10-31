@@ -6,6 +6,8 @@ module.exports=async(p,F,E)=>{
  const output=path.join(E,'reliability.json');
  execFileSync(process.execPath,[path.join(__dirname,'reliability-unit.mjs'),output],{encoding:'utf8',timeout:30000});
  const R={reliability:JSON.parse(fs.readFileSync(output,'utf8'))};
+ R.venues=JSON.parse(execFileSync(process.execPath,[path.join(__dirname,'venues-unit.mjs')],{encoding:'utf8',timeout:60000}));
+ R.phoneUnit=JSON.parse(execFileSync(process.execPath,[path.join(__dirname,'phone-unit.mjs')],{encoding:'utf8',timeout:60000}).trim().split('\n').pop());
  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  const until=async(fn,ms=10000)=>{const end=Date.now()+ms;while(Date.now()<end){if(await fn())return true;await sleep(25);}return false;};
  const setting=(setting,value)=>p.evaluate(x=>api('/api/settings',x),{setting,value});

@@ -38,6 +38,26 @@ export function decodePool(info,mint){
   const virtual=d.length>=261?d.readBigUInt64LE(245)+(d.readBigInt64LE(253)<<64n):0n;
   return {base:new PublicKey(d.subarray(139,171)),quote:new PublicKey(d.subarray(171,203)),quoteMint:new PublicKey(d.subarray(75,107)).toBase58(),virtual};
 }
+// Raydium AMM v4 and CPMM pools hold their reserves in two token vaults. Amounts set aside
+// (AMM v4 pending PnL; CPMM protocol and fund fees) are not tradable and are subtracted.
+// Offsets were checked against live mainnet pools; the owner program and both mints must match.
+export const RAY_AMM=new PublicKey('675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8');
+export const RAY_CPMM=new PublicKey('CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C');
+const key32=(d,o)=>new PublicKey(d.subarray(o,o+32));
+export function decodeRaydiumAmm(info,mint){
+  const d=info?.data;if(!info?.owner?.equals?.(RAY_AMM)||!Buffer.isBuffer(d)||d.length<752)return null;
+  const baseMint=key32(d,400).toBase58(),quoteMint=key32(d,432).toBase58();
+  if(!((baseMint===mint&&quoteMint===WSOL)||(quoteMint===mint&&baseMint===WSOL)))return null;
+  const coinIsBase=baseMint===mint,pnl=[d.readBigUInt64LE(192),d.readBigUInt64LE(200)];
+  return {kind:'Raydium',coinVault:key32(d,coinIsBase?336:368),solVault:key32(d,coinIsBase?368:336),coinHeld:pnl[coinIsBase?0:1],solHeld:pnl[coinIsBase?1:0]};
+}
+export function decodeRaydiumCpmm(info,mint){
+  const d=info?.data;if(!info?.owner?.equals?.(RAY_CPMM)||!Buffer.isBuffer(d)||d.length<373)return null;
+  const m0=key32(d,168).toBase58(),m1=key32(d,200).toBase58();
+  if(!((m0===mint&&m1===WSOL)||(m1===mint&&m0===WSOL)))return null;
+  const coin0=m0===mint,held=[d.readBigUInt64LE(341)+d.readBigUInt64LE(357),d.readBigUInt64LE(349)+d.readBigUInt64LE(365)];
+  return {kind:'Raydium CPMM',coinVault:key32(d,coin0?72:104),solVault:key32(d,coin0?104:72),coinHeld:held[coin0?0:1],solHeld:held[coin0?1:0]};
+}
 function reserve(info,mint){
   const d=info?.data;if(!TOKEN_PROGRAMS.has(info?.owner?.toBase58?.())||!Buffer.isBuffer(d)||d.length<165||new PublicKey(d.subarray(0,32)).toBase58()!==mint)return null;
   return d.readBigUInt64LE(64);
@@ -144,6 +164,41 @@ export function createLivePrices({connection,book,readQuote,readMarket,canReques
       void connection.getAccountInfoAndContext(new PublicKey(c.address),{commitment:'processed'}).then(data=>{if(epoch===streamEpoch)apply(data.value,data.context.slot);}).catch(()=>{}).finally(()=>{c.reading=false;c.retryAt=now()+1000;});
     }
   }
+  // A coin that left Pump.fun is still streamed live when its sell route is a single Raydium
+  // or Meteora DLMM pool against SOL: the pool's own accounts update on every trade, with no
+  // extra quote requests. Auto-exits keep using executable sell quotes; this is a market mark.
+  function setVenue(e,worth,slot,source){
+    if(!current(e)||!(worth>=0)||!Number.isFinite(worth)||slot<(e.venueSlot??0))return;
+    e.venueSlot=slot;e.quoteMint=WSOL;e.marketRaw=null;e.market=worth;e.marketAt=now();e.marketSlot=slot;e.marketSource=source;e.marketVenue=e.venue.kind;
+    e.resyncNeeded=false;e.poolPending=false;e.poolInvalid=false;broadcast(true);
+  }
+  async function watchVenue(e,q){
+    const hop=(q?.routePlan??[]).length===1?q.routePlan[0].swapInfo:null;
+    if(!current(e)||e.venue||e.curve||e.foreignCurve||e.pool||now()-(e.venueCheckedAt??-Infinity)<60_000)return;
+    if(!hop?.ammKey||!((hop.inputMint===e.mint&&hop.outputMint===WSOL)||(hop.inputMint===WSOL&&hop.outputMint===e.mint)))return;
+    let key;try{key=new PublicKey(hop.ammKey);}catch{return;}
+    e.venueCheckedAt=now();const epoch=streamEpoch;let info;
+    try{info=await connection.getAccountInfo(key,'processed');}catch{return;}
+    if(!current(e)||epoch!==streamEpoch||e.venue||e.curve||e.pool)return;
+    if(info?.owner?.equals?.(DLMM)&&decodeDlmmSol(info,e.mint)!=null){
+      e.venue={kind:'Meteora DLMM'};
+      const apply=(i,slot)=>{const r=decodeDlmmSol(i,e.mint);if(r!=null)setVenue(e,r*Number(e.pos.tokens)/1e9,slot,'Meteora DLMM · processed');};
+      subscribe(e,key,apply);
+      e.venue.read=async()=>{e.venue.readAt=now();try{const x=await connection.getAccountInfoAndContext(key,{commitment:'processed'});apply(x.value,x.context.slot);}catch{}};
+      return e.venue.read();
+    }
+    const pool=decodeRaydiumAmm(info,e.mint)??decodeRaydiumCpmm(info,e.mint);if(!pool)return;
+    const decode=i=>i?.owner?.equals?.(RAY_AMM)?decodeRaydiumAmm(i,e.mint):decodeRaydiumCpmm(i,e.mint);
+    const st={held:pool,coin:null,sol:null};e.venue={kind:pool.kind};
+    const combine=()=>{if(!st.coin||!st.sol||st.coin.slot!==st.sol.slot)return;const coin=st.coin.n-st.held.coinHeld,sol=st.sol.n-st.held.solHeld;
+      if(coin>0n&&sol>=0n)setVenue(e,Number(sol)*Number(e.pos.tokens)/Number(coin)/1e9,st.coin.slot,`${pool.kind} reserves · processed`);};
+    const side=(which,mint)=>(i,slot)=>{const n=reserve(i,mint);if(n==null||slot<(st[which]?.slot??0))return;st[which]={n,slot};combine();};
+    const held=(i)=>{const p=decode(i);if(p&&p.coinVault.equals(pool.coinVault)&&p.solVault.equals(pool.solVault))st.held=p;};
+    subscribe(e,key,(i)=>{held(i);combine();});subscribe(e,pool.coinVault,side('coin',e.mint));subscribe(e,pool.solVault,side('sol',WSOL));
+    e.venue.read=async()=>{e.venue.readAt=now();try{const x=await connection.getMultipleAccountsInfoAndContext([key,pool.coinVault,pool.solVault],{commitment:'processed'});
+      held(x.value[0]);side('coin',e.mint)(x.value[1],x.context.slot);side('sol',WSOL)(x.value[2],x.context.slot);}catch{}};
+    return e.venue.read();
+  }
   async function discover(e){
     if(!current(e)||e.discovering||e.pool||now()-(e.discoverAt??-Infinity)<60_000||!streamHealthy())return;
     e.discovering=true;e.discoverAt=now();const epoch=streamEpoch;
@@ -209,7 +264,7 @@ export function createLivePrices({connection,book,readQuote,readMarket,canReques
     try{
       const q=await readQuote(e.mint,e.pos.tokens,AbortSignal.timeout(4000));
       if(!current(e))return;
-      observeRoute(q);
+      observeRoute(q);void watchVenue(e,q);
       const worth=Number(q.outAmount)/1e9;if(!Number.isFinite(worth)||worth<0)throw Error('Invalid price');
       // Quote age starts when requested, not when received. Use its chain slot to assess
       // recency; normal swap activity alone does not mean the quote service disconnected.
@@ -260,8 +315,9 @@ export function createLivePrices({connection,book,readQuote,readMarket,canReques
     for(const e of entries.values())if(e.poolPending&&e.readPool&&now()-(e.poolPendingAt??now())>=250&&now()-(e.lastPoolRead??0)>=2100)void e.readPool();
     for(const e of entries.values())if(e.bootstrapped&&!e.bootstrapping&&!e.curve&&!e.foreignCurve&&!e.pool)void discover(e);
     for(const e of entries.values())watchConversions(e);
+    for(const e of entries.values())if(e.venue?.read&&e.resyncNeeded&&streamHealthy()&&now()-(e.venue.readAt??0)>=2100)void e.venue.read();
     if(isTrading()||quoteTask||marketTask||now()<nextQuoteAt||!canRequest())return;
-    if(readMarket&&now()>=marketDue&&[...entries.values()].some(e=>(e.bootstrapped||e.bootstrapAttempted)&&!e.curve&&(!e.pool||e.quoteMint!==WSOL))){
+    if(readMarket&&now()>=marketDue&&[...entries.values()].some(e=>(e.bootstrapped||e.bootstrapAttempted)&&!e.curve&&(!e.pool||e.quoteMint!==WSOL)&&!(e.venue&&e.market!=null&&!e.resyncNeeded))){
       marketTask=refreshMarket().finally(()=>{marketTask=null;});return;
     }
     const e=[...entries.values()].filter(e=>(e.bootstrapped||e.bootstrapAttempted)&&!(e.curve&&!e.curve.complete&&streamHealthy())&&now()>=e.quoteDue).sort((a,b)=>(quotePriority(b.pos,marketView(b).worth??NaN)-quotePriority(a.pos,marketView(a).worth??NaN))||a.quoteDue-b.quoteDue)[0];

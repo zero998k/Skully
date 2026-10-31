@@ -18,10 +18,10 @@ const CLOUDFLARED = {
   'win32-arm64': 'cloudflared-windows-amd64.exe',
 };
 
-export function createShare({ port }) {
+export function createShare({ port, registerExit = true }) {
   let token = null, url = null, child = null, state = 'off', error = null, starting = null;
   const stopChild = () => { try { child?.kill(); } catch {} child = null; };
-  process.on('exit', stopChild);
+  if(registerExit)process.on('exit', stopChild);
 
   async function cloudflared() {
     const name = CLOUDFLARED[`${process.platform}-${process.arch}`];

@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import DASHBOARD_HTML, { GUEST_HTML } from './dashboard-html.js';
 import { createShare } from './share.js';
+import { createPhone } from './phone.js';
 import { createClub } from './club.js';
 import { log, onLog, readTrades } from './log.js';
 import { summarize, scoreboard } from './stats.js';
@@ -208,6 +209,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
     res.end(type === 'application/json' ? JSON.stringify(data) : data);
   };
 
+  let phone = null;
   let share = null; // the Finder share link, made once the port is known
   const club = finder ? createClub({ coinInfo: finder.coinInfo, hostStats: () => summarize(positions.counted(readTrades(book.tradeLogFile)), positions.dayStart()) }) : null;
 
@@ -359,6 +361,13 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         return send(res, 200, share.status());
       }
 
+      if(url.pathname.startsWith('/api/phone/')&&!serverMode){
+        try{if(req.method==='POST'&&url.pathname==='/api/phone/start')return send(res,200,await phone.start((await readBody(req)).password));
+        if(req.method==='POST'&&url.pathname==='/api/phone/stop')return send(res,200,phone.stop());
+        if(req.method==='POST'&&url.pathname==='/api/phone/tailscale')return send(res,200,await phone.checkTailscale());
+        return send(res,200,phone.status());}catch(e){return send(res,400,{error:e.message});}
+      }
+
       if(req.method==='POST'&&url.pathname==='/api/paper/balance'){
         try{
           const body=await readBody(req);if(body.unlimited!==true&&body.sol==null)throw new Error('Enter a starting paper balance in SOL.');
@@ -495,6 +504,9 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
   }
 
   share = createShare({ port });
+  // Phone access reopens by itself after a restart (with a new address, shown in Phone access).
+  phone = createPhone({ port, page, secret, stateFile: file('data/phone.json'), onLink: () => log('Phone access is on. Open Phone access on this computer to see the link.') });
+  if (!serverMode) phone.resume();
   const url = `http://localhost:${port}`;
   log(`Dashboard ready at ${url}`);
   if (cfg.dashboard.openBrowser && !serverMode) openInBrowser(url);

@@ -325,7 +325,8 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   Object.assign(R, await require('./rapid.cjs')(p, F, E));
   Object.assign(R, await require('./paper.cjs')(p, F, E, APP));
   Object.assign(R, await require('./reliability.cjs')(p, F, E));
+  Object.assign(R, await require('./phone.cjs')(p, BASE, E));
   R.errors = errors; R.fakeUnhandled = w2.log;
   console.log(JSON.stringify(R, null, 1));
   await b.close();
-})().catch((e) => { console.error('TEST CRASH', e.message.split('\n')[0]); console.log(JSON.stringify(global.R, null, 1)); process.exit(1); });
+})().catch((e) => { console.error('TEST CRASH', e.stack ?? e.message); console.log(JSON.stringify(global.R, null, 1)); process.exit(1); });

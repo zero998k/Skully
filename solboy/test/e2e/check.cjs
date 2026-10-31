@@ -169,6 +169,11 @@ check('sell recovery','the recovered button completes exactly one sell',fl.recov
 for(const [name,ok]of Object.entries(fl.reliability??{}))check('reliability',name,ok===true,ok);
 check('reliability','new failure and recovery regressions ran',Object.keys(fl.reliability??{}).length===31,fl.reliability);
 for(const name of ['cumulativeExitSellsOnce','sellAllOutageKeepsPosition','sellAllOutageDoesNotInventLoss','automaticExitRetryVisible','automaticExitRecoveredOnce','invalidWalletAmountRejected','slowMetadataCannotBlockDashboard'])check('reliability dashboard',name,fl[name]===true,fl[name]);
+for(const [name,ok]of Object.entries(fl.venues??{}))check('live prices',name,ok===true,ok);
+check('live prices','Raydium and Meteora streaming checks ran',Object.keys(fl.venues??{}).length===5,fl.venues);
+for(const [name,ok]of Object.entries(fl.phoneUnit??{}))check('phone access',name,ok===true,ok);
+check('phone access','restart and permanent-link checks ran',Object.keys(fl.phoneUnit??{}).length===6,fl.phoneUnit);
+for(const name of ['phoneGuideOrPermanentLink','phoneWebSocketLive','phoneSellsSamePosition','phoneSetupFits','phoneRejectsWeakPassword','phoneLinkCreated','phoneRequiresLogin','phoneApiPrivate','phoneWrongPasswordRejected','phoneLiveState','phoneFits','phoneManifest','phoneSecretsBlocked','phoneLiveModeBlocked','phoneAssistantBlocked','phoneCannotOpenAnotherTunnel','phoneOriginProtected','phoneControlsSameBot','phoneLogoutRevokesSession','phoneStopRevokesLink','phoneSetupApiPrivate'])check('phone access',name,fl[name]===true,fl[name]);
 
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
