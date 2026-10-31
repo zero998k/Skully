@@ -48,6 +48,21 @@ export class Positions {
   }
   todayPnl() { return this.data.pnlByDay[today()] ?? 0; }
 
+  /**
+   * When SolBoy last noted it was running, so a restart only rechecks the time it was closed.
+   * Kept in its own small file: the positions file only changes when a position does.
+   */
+  get runningFile() { return this.file.replace(/\.json$/, '') + '-running.json'; }
+  runningAt() {
+    try { return Date.parse(JSON.parse(fs.readFileSync(this.runningFile, 'utf8')).at) || null; } catch { return null; }
+  }
+  markRunning(at = Date.now()) {
+    fs.mkdirSync(path.dirname(this.runningFile), { recursive: true });
+    const tmp = `${this.runningFile}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({ at: new Date(at).toISOString() }));
+    fs.renameSync(tmp, this.runningFile);
+  }
+
   /** Start profit/loss from zero again: today's (so the daily loss limit refills) and the running totals. */
   resetPnl() {
     const now = new Date().toISOString();

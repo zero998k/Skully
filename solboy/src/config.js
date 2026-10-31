@@ -64,8 +64,14 @@ export function loadConfig(file = basePath('config.json')) {
     throw new Error('"research.provider" must be "groq", "gemini" or "anthropic".');
   }
   if (!['mirror', 'all'].includes(cfg.sellMode)) throw new Error('"sellMode" must be "mirror" or "all".');
-  if (!(cfg.buyAmountSol > 0)) throw new Error('"buyAmountSol" must be more than 0.');
+  cfg.buyAmountSol = checkedBuyAmount(cfg.buyAmountSol);
   return cfg;
+}
+
+export function checkedBuyAmount(value) {
+  const n = Number(value), lamports = Math.round(n * 1e9);
+  if (!Number.isFinite(n) || !Number.isSafeInteger(lamports) || lamports <= 0) throw new Error('SOL per trade must be a finite number above 0, with at least one lamport.');
+  return n;
 }
 
 /**
@@ -88,9 +94,7 @@ export function checkWallet({ address, label, buyAmountSol, retiring, paused }, 
 
   const entry = { label, address };
   if (buyAmountSol !== undefined && buyAmountSol !== null && buyAmountSol !== '') {
-    const n = Number(buyAmountSol);
-    if (!(n > 0)) throw new Error('SOL per trade must be a number above 0, like 0.05.');
-    entry.buyAmountSol = n;
+    entry.buyAmountSol = checkedBuyAmount(buyAmountSol);
   }
   if (retiring) entry.retiring = true;
   if (paused) entry.paused = true;

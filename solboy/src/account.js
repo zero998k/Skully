@@ -11,15 +11,24 @@ const FEE_LAMPORTS = 5000;
  * The SolBoy trading wallet: create it, show its balance, switch between paper and real money,
  * and send SOL back out. The key never leaves this computer.
  */
-export function createAccount({ cfg, connection, book, positionsFor }) {
+export function createAccount({ cfg, connection, book, positionsFor, balanceConnection = connection }) {
   let cached = { at: 0, sol: null };
+  let balanceTask = null, balanceSequence = 0, cachedSequence = 0;
   const address = () => book.keypair?.publicKey.toBase58() ?? null;
 
   async function balance(force = false) {
     if (!book.keypair) return null;
     if (!force && Date.now() - cached.at < 10_000) return cached.sol;
-    cached = { at: Date.now(), sol: (await connection.getBalance(book.keypair.publicKey)) / 1e9 };
-    return cached.sol;
+    if (!force && balanceTask) return balanceTask;
+    const sequence = ++balanceSequence;
+    const task = (async () => {
+      const sol = (await (force ? connection : balanceConnection).getBalance(book.keypair.publicKey)) / 1e9;
+      if (sequence >= cachedSequence) { cached = { at: Date.now(), sol }; cachedSequence = sequence; }
+      return cached.sol;
+    })();
+    if (force) return task;
+    balanceTask = task;
+    try { return await task; } finally { if (balanceTask === task) balanceTask = null; }
   }
 
   function ensureWallet() {
@@ -77,6 +86,7 @@ export function createAccount({ cfg, connection, book, positionsFor }) {
   return {
     address,
     balance,
+    cachedBalance: () => cached.sol,
     ensureWallet,
     setMode,
     withdraw,

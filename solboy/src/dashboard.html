@@ -851,6 +851,7 @@ function renderInventory() {
       <div class="row"><span>Sell PnL${useMarket?' (auto-exit)':''}</span><span class="${stale?'':cls(pnl)}">${percent(pnl)}${stale?' · delayed':''}<br>${pnl==null?'—':fmt(pnl)+' SOL'} · ${usdValue(pnl,p)}</span></div>
       <div class="meta">${S.quick?.takeProfitPct?`TP +${S.quick.takeProfitPct}% · `:''}${S.quick?.stopLossPct?`SL −${S.quick.stopLossPct}% · `:''}Market orders can fill beyond the trigger during fast moves.<br>${esc((useMarket?p.marketSource:p.priceSource)||'Waiting for price')}<br>Auto-exits use fresh estimated sell returns, including price impact. Fees and fills can differ.${referenceMarket?' Market reference refreshes within the free service limit; it is not a guaranteed fill.':''}</div>
       <div class="meta" data-copied-sell-status>${p.copiedSell?esc(p.pendingSell?'Copied sell submitted · checking its receipt':p.copiedSell.paused?'Copied sell retry paused · Follow sells is off':`Copied sell retry · attempt ${p.copiedSell.attempts} · ${Math.max(0,Math.ceil((p.copiedSell.nextAttemptAt-Date.now())/1000))}s`)+(p.copiedSell.lastError?'<br>'+esc(p.copiedSell.lastError):''):''}</div>
+      <div class="meta" data-auto-sell-status>${p.automaticSell?esc(p.pendingSell?'Automatic sell submitted · checking its receipt':`Automatic sell retry · attempt ${p.automaticSell.attempts} · ${Math.max(0,Math.ceil((p.automaticSell.nextAttemptAt-Date.now())/1000))}s`)+(p.automaticSell.lastError?'<br>'+esc(p.automaticSell.lastError):''):''}</div>
       <div class="actions">
         <a class="btn" href="https://dexscreener.com/solana/${encodeURIComponent(p.mint)}" target="_blank" rel="noopener">Chart</a>
         <button class="btn danger" data-sell="${esc(p.mint)}" data-name="${esc(p.name)}">${p.pendingSell?'Check sell':'Sell now'}</button>
@@ -1549,7 +1550,7 @@ function openPauseChoice() {
     await setPaused(true);
     try {
       const r = await api('/api/sell-all', {});
-      toast(r.failed.length ? 'loss' : 'info', 'Positions cleared', `${r.sold} sold${r.writtenOff ? `, ${r.writtenOff} dead coin(s) cleared` : ''}${r.failed.length ? `, ${r.failed.length} couldn't sell right now: try Sell now on ${r.failed.length === 1 ? 'it' : 'them'}` : ''}.`);
+      toast(r.failed.length ? 'loss' : 'info', r.failed.length ? 'Some positions are still open' : 'Positions sold', `${r.sold} sold${r.failed.length ? `, ${r.failed.length} couldn't sell right now: try Sell now on ${r.failed.length === 1 ? 'it' : 'them'}` : ''}.`);
     } catch (err) { toast('loss', 'Sell all failed', err.message); }
     closeModal(); refresh();
   };

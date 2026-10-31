@@ -166,5 +166,9 @@ check('sell recovery','live PnL keeps updating during a stalled sell',fl.pnlCont
 check('sell recovery','a stalled request shows an explanation and restores the button',fl.stalledSellButtonRecovers&&fl.stalledSellExplained,[fl.stalledSellButtonRecovers,fl.stalledSellExplained]);
 check('sell recovery','the recovered button completes exactly one sell',fl.recoveredButtonCanSell&&fl.recoveredSellOnlyOnce,[fl.recoveredButtonCanSell,fl.recoveredSellOnlyOnce]);
 
+for(const [name,ok]of Object.entries(fl.reliability??{}))check('reliability',name,ok===true,ok);
+check('reliability','new failure and recovery regressions ran',Object.keys(fl.reliability??{}).length===31,fl.reliability);
+for(const name of ['cumulativeExitSellsOnce','sellAllOutageKeepsPosition','sellAllOutageDoesNotInventLoss','automaticExitRetryVisible','automaticExitRecoveredOnce','invalidWalletAmountRejected','slowMetadataCannotBlockDashboard'])check('reliability dashboard',name,fl[name]===true,fl[name]);
+
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

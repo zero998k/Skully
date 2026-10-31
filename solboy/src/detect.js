@@ -55,10 +55,10 @@ export function parseTrades(tx, wallet, extraQuotes = []) {
     if (QUOTE_MINTS.has(mint) || extraQuotes.includes(mint)) continue;
     const delta = t.post - t.pre;
     if (delta > 0n && solDelta < 0n) {
-      trades.push({ side: 'buy', mint, solAmount: Number(-solDelta) / 1e9, tokenAmount: delta, heldBefore: t.pre * 10n > delta }); // dust left from an old trade doesn't count
+      trades.push({ side: 'buy', mint, solAmount: Number(-solDelta) / 1e9, tokenAmount: delta, sourceTokensBefore:String(t.pre), sourceTokensAfter:String(t.post), heldBefore: t.pre * 10n > delta }); // dust left from an old trade doesn't count
     } else if (delta < 0n && solDelta > 0n) {
       const fractionSold = t.pre > 0n ? Math.min(1, Number(-delta) / Number(t.pre)) : 1;
-      trades.push({ side: 'sell', mint, solAmount: Number(solDelta) / 1e9, tokenAmount: -delta, fractionSold });
+      trades.push({ side: 'sell', mint, solAmount: Number(solDelta) / 1e9, tokenAmount: -delta, sourceTokensBefore:String(t.pre), sourceTokensAfter:String(t.post), fractionSold });
     }
   }
   return trades;

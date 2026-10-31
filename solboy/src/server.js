@@ -6,7 +6,7 @@ import { createShare } from './share.js';
 import { createClub } from './club.js';
 import { log, onLog, readTrades } from './log.js';
 import { summarize, scoreboard } from './stats.js';
-import { tokenNames } from './tokens.js';
+import { tokenNames, cachedTokenName } from './tokens.js';
 import { settingsRows } from './ui.js';
 import { applySetting, settingValue } from './settings.js';
 import { file } from './paths.js';
@@ -105,6 +105,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
       inventory: positions.entries().filter(([,p])=>!p.pendingBuy).map(([mint, pos]) => ({ mint, name: names.get(mint) ?? mint,
         pendingSell: pos.pendingSell ? { sig: pos.pendingSell.sig, submittedAt: pos.pendingSell.submittedAt } : null,
         copiedSell:pos.copiedExit?{attempts:pos.copiedExit.attempts,nextAttemptAt:pos.copiedExit.nextAttemptAt,lastError:pos.copiedExit.lastError,paused:!cfg.followSells}:null,
+        automaticSell:pos.queuedExit?.trigger?.autoExit?{attempts:pos.queuedExit.attempts,nextAttemptAt:pos.queuedExit.nextAttemptAt,lastError:pos.queuedExit.lastError}:null,
         from: pos.sourceLabel, paid: pos.solSpent, openedAt: pos.openedAt, tokens: pos.tokens,
         ...(bot.priceOf?.(mint,pos)??{worth:null,priceStale:true}) })),
       trades: trades.slice(-50).reverse().map(t => ({ ...t, name: names.get(t.token) ?? t.token })),
@@ -115,9 +116,18 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
   async function accountState() {
     let balance = null;
     try {
-      balance = await account.balance();
+      balance = await quickMetadata(account.balance(), account.cachedBalance?.() ?? lastState?.account?.balance ?? null);
     } catch {}
     return { address: account.address(), balance, minLive: +(cfg.buyAmountSol + 0.02).toFixed(4), livePositions: account.livePositions() };
+  }
+
+  // Slow metadata must not make the dashboard look offline or occupy a trading
+  // request. Reads continue in the background and the next refresh uses the cache.
+  function quickMetadata(promise, fallback) {
+    return new Promise(resolve => {
+      const timer = setTimeout(() => resolve(fallback), 50);
+      Promise.resolve(promise).then(resolve, () => resolve(fallback)).finally(() => clearTimeout(timer));
+    });
   }
 
   async function state() {
@@ -125,12 +135,13 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
     const trades = readTrades(book.tradeLogFile);
     const open = positions.entries().filter(([,p])=>!p.pendingBuy);
     const recent = trades.slice(-50).reverse();
-    const name = await tokenNames([...open.map(([m]) => m), ...recent.map((t) => t.token)]);
+    const name = await quickMetadata(tokenNames([...open.map(([m]) => m), ...recent.map((t) => t.token)]), cachedTokenName);
     const inventory = open.map(([mint, pos]) => ({
         mint,
         name: name(mint),
         pendingSell: pos.pendingSell ? { sig: pos.pendingSell.sig, submittedAt: pos.pendingSell.submittedAt } : null,
         copiedSell:pos.copiedExit?{attempts:pos.copiedExit.attempts,nextAttemptAt:pos.copiedExit.nextAttemptAt,lastError:pos.copiedExit.lastError,paused:!cfg.followSells}:null,
+        automaticSell:pos.queuedExit?.trigger?.autoExit?{attempts:pos.queuedExit.attempts,nextAttemptAt:pos.queuedExit.nextAttemptAt,lastError:pos.queuedExit.lastError}:null,
         from: pos.sourceLabel,
         paid: pos.solSpent,
         tokens: pos.tokens,

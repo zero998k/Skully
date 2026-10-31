@@ -1,3 +1,16 @@
+## 1.15.2 — Fewer missed trades when your RPC is busy
+
+- Buys and sells now go to the front of the line when your free RPC plan is busy, and SolBoy waits as long as the provider asks instead of retrying too soon. Background checks no longer crowd out copying.
+- Switched-off wallets are now fully ignored: SolBoy stops listening to them, which saves your RPC allowance. If you still hold a coin copied from one, it keeps following that wallet's sells until you've sold.
+- "Sell when they sell out" now adds up partial sells, so a wallet that sells 90% over several trades counts as selling out.
+- Take-profit and stop-loss sells that fail are kept and retried, even after a restart. The dashboard shows "Automatic sell retry" while that happens.
+- After a reconnect or restart, SolBoy rechecks sells it missed while it was offline or closed, and only for that gap.
+- Sell All no longer records a made-up full loss when a price check fails. The position stays open and you're told which coins couldn't sell yet.
+- Pending buys recheck your daily loss limit, trade size and position limit right before sending.
+- The dashboard no longer waits for slow coin names or balances.
+
+Free RPC plans can still run out. When that happens, copies and prices can be delayed, and "delayed" warnings still show. Fills and speed are not guaranteed.
+
 ## 1.15.1 — Live conversion prices
 
 - Coins that trade through a Meteora/SOL pair can now stream their conversion directly from the chain, including the coin in the reported screenshot. Price changes reach the screen as they arrive instead of relying on repeated conversion-price requests.

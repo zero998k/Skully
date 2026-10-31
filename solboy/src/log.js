@@ -57,7 +57,7 @@ export function captureLibraryOutput() {
     if (/^ws error/i.test(text)) {
       if (Date.now() - lastNotice > 60_000) {
         lastNotice = Date.now();
-        log(c.yellow('Live connection to Solana dropped (internet blip?). Reconnecting automatically...'));
+        log(c.yellow('Live connection to Solana dropped. Reconnecting automatically; missed source trades will be rechecked.'));
       }
       return;
     }

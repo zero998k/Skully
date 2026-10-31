@@ -13,7 +13,7 @@ export const SETTINGS = {
   buySlippageBps: { label: 'Max buy slippage', hint: 'basis points, 100 = 1%', type: 'int', min: 50, max: 5000, fmt: pct },
   sellSlippageBps: { label: 'Max sell slippage', hint: 'basis points, 100 = 1%', type: 'int', min: 50, max: 9000, fmt: pct },
   onlyFirstBuy: { label: 'Copy only their first buy of a coin (not when they add more)', type: 'bool' },
-  sellOnlyOnFullExit: { label: 'Sell only when they sell out (90%+ of their coins; smaller partial sells are ignored)', type: 'bool' },
+  sellOnlyOnFullExit: { label: 'Sell only when they sell out (90%+ in one sale or across several sales)', type: 'bool' },
   followSells: { label: 'Sell when the copied wallet sells', type: 'bool' },
   sellMode: { label: 'When they sell, sell', type: 'enum', values: ['mirror', 'all'], fmt: (v) => (v === 'all' ? 'everything' : 'the same %') },
   skipIfMintAuthority: { label: 'Skip tokens whose creator can mint more', type: 'bool' },

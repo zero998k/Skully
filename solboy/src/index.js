@@ -92,8 +92,8 @@ async function main() {
 
   if (cfg.keepAwake) keepAwake();
 
-  const account = createAccount({ cfg, connection, book, positionsFor: book.positionsFor });
-  const bot = createBot({ cfg, connection, book, rpcFetch: rpc.fetch, priceConnection });
+  const account = createAccount({ cfg, connection, balanceConnection: scanConnection, book, positionsFor: book.positionsFor });
+  const bot = createBot({ cfg, connection, book, rpcFetch: rpc.fetch, backgroundRpcFetch: rpc.backgroundFetch, priceConnection });
   const finder = createFinder({ cfg, connection: scanConnection, bot });
   const walletPortfolio = createWalletPortfolio({ connection: scanConnection, book, account });
   bot.start();
