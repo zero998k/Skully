@@ -31,6 +31,14 @@ F('selling 90%+ counts as out (moon bag)', f.fullExitSold === 'wallet1 sold out'
 F('a first buy is copied even if they held dust', f.dustFirstBuyCopied === true, 'dustFirstBuyCopied');
 F('"every sell" mode mirrors a 50% sell', f.savedSellRule === false && /sold 50%/.test(f.afterHalfSell ?? ''), 'afterHalfSell');
 F('Sell now', f.afterSellNow === 0, 'afterSellNow');
+F('cockpit layout shows sidebar, balance, hold-to-sell, wallets, missed, goal and feed', f.cockpitParts === true, 'cockpitParts');
+F('dev-sell alert banner when a copied wallet sells', f.devAlertShown === true, 'devAlertShown');
+F('per-coin take profit override', f.coinTp === true, 'coinTp');
+F('one-tap 25% sell', f.quarterSold === true, 'quarterSold');
+F('per-wallet sell rule and SOL size save and clear', f.walletRuleSaved?.sellRule === 'first' && f.walletRuleSaved?.buyAmountSol === 0.07 && f.walletRuleCleared === true, 'walletRuleSaved');
+F('daily goal saves', f.goalSaved === 5 && /5 SOL/.test(f.goalBarText ?? ''), 'goalSaved');
+F('phone bottom tab bar', f.phoneTabBar === true, 'phoneTabBar');
+F('cockpit fits a phone with a coin open', f.cockpitPhoneFits === true, 'cockpitPhoneFits');
 F('daily loss limit stops buys', f.koSkip >= 1, 'koSkip');
 F('Reset PnL zeroes the total', f.totalAfterReset === 0 && f.inlineResetButton === 1, 'totalAfterReset');
 F('buying resumes after reset', f.buysAgainAfterReset === true, 'buysAgainAfterReset');
@@ -158,7 +166,7 @@ for(const [name,ok]of Object.entries(fills))check('fill accuracy',name,ok===true
 check('fill accuracy','receipt and non-SOL accounting tests ran',Object.keys(fills).length===9,fills);
 const rapid=json('rapid.json');
 for(const [name,ok]of Object.entries(rapid.checks??{}))check('rapid copy',name,ok===true,ok);
-check('rapid copy','24 repeated cycles from 25ms to five seconds in paper and simulated live mode',rapid.cycles===24&&rapid.samples?.every(x=>x.sellSubmitMs<1000)&&Object.keys(rapid.checks??{}).length===37,rapid);
+check('rapid copy','24 repeated cycles from 25ms to five seconds in paper and simulated live mode',rapid.cycles===24&&rapid.samples?.every(x=>x.sellSubmitMs<1000)&&Object.keys(rapid.checks??{}).length===44,rapid);
 check('PnL display','top and open trades show SOL, USD and percent',fl.pnlSolUsdTop&&fl.pnlSolUsdTrade&&fl.liveTopPnlChangesWithTicks,[fl.pnlSolUsdTop,fl.pnlSolUsdTrade,fl.liveTopPnlChangesWithTicks]);
 check('copy decisions','copy and skip explanations are visible',fl.copyReasonsVisible,fl.copyReasonsVisible);
 check('sell recovery','a failed sell reports its error and restores the button without losing the position',fl.failedSellButtonRecovers&&fl.failedSellExplained&&fl.failedSellKeepsPosition,[fl.failedSellButtonRecovers,fl.failedSellExplained]);

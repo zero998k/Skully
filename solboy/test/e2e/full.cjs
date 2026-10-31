@@ -80,6 +80,22 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await emit('sell', 0.5); await sleep(3000);
   R.afterHalfSell = (await S()).inventory.length ? `held, last: ${(await lastTrade()).reason}` : 'position gone';
   await key('Escape');
+  // ---- 1.17.0 Cockpit: dev-sell alert, per-coin take profit, one-tap 25%, wallet rules, daily goal ----
+  R.cockpitParts = await p.evaluate(() => ['side', 'topBal', 'sellAllHold', 'walletMini', 'missed', 'goalBar', 'feed'].every((id) => document.getElementById(id)?.offsetParent));
+  R.devAlertShown = await until(async () => p.locator('#devAlert').isVisible());
+  await p.locator('[data-coin-tp="30"]').first().click(); R.coinTp = await until(async () => (await p.evaluate(() => S.inventory[0]?.takeProfitPct)) === 30);
+  const tokensBefore = await p.evaluate(() => S.inventory[0].tokens);
+  await p.locator('[data-sell-part="0.25"]').first().click();
+  R.quarterSold = await until(async () => p.evaluate((b) => S.inventory.length === 1 && BigInt(S.inventory[0].tokens) * 4n <= BigInt(b) * 3n + 4n, tokensBefore));
+  const wl = cfg().wallets[0].label;
+  await p.locator(`#walletMini [data-wedit="${wl}"]`).click(); await p.selectOption('#ruleSel', 'first'); await p.fill('#ruleSize', '0.07'); await p.click('#ruleForm button[type=submit]'); await sleep(900);
+  R.walletRuleSaved = (({ sellRule, buyAmountSol }) => ({ sellRule, buyAmountSol }))(cfg().wallets[0]);
+  await p.locator(`#walletMini [data-wedit="${wl}"]`).click(); await p.selectOption('#ruleSel', ''); await p.fill('#ruleSize', ''); await p.click('#ruleForm button[type=submit]'); await sleep(900);
+  R.walletRuleCleared = cfg().wallets[0].sellRule === undefined && cfg().wallets[0].buyAmountSol === undefined;
+  await p.click('#goalEdit'); await p.fill('#goalSol', '5'); await p.click('#goalForm button[type=submit]'); await sleep(900);
+  R.goalSaved = cfg().dailyGoalSol; R.goalBarText = await p.textContent('#goalBar');
+  await p.screenshot({ path: `${E}/21-cockpit.png` });
+  await p.setViewportSize({ width: 390, height: 844 }); await sleep(400); await p.screenshot({ path: `${E}/22-cockpit-phone.png` }); R.cockpitPhoneFits = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth); await p.setViewportSize({ width: 1440, height: 1000 }); await sleep(300);
   await p.locator('[data-sell]').first().click(); await sleep(2500);
   R.afterSellNow = (await S()).inventory.length;
   await key('3'); await sleep(300);
@@ -319,6 +335,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   await p.setViewportSize({ width: 390, height: 900 }); await key('3'); await sleep(500);
   await p.screenshot({ path: `${E}/5-phone-loadout.png`, fullPage: true });
   R.phoneOverflow = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+  R.phoneTabBar = await p.locator('#phoneTabs').isVisible();
   R.noPulseLink = (await p.locator('#pulseLink').count()) === 0 && (await fetch(BASE + '/pulse')).status === 404;
   Object.assign(R, await require('./wallet.cjs')(p, BASE, E));
   Object.assign(R, await require('./prices.cjs')(p, F, E));

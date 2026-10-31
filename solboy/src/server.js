@@ -11,6 +11,7 @@ import { tokenNames, cachedTokenName } from './tokens.js';
 import { settingsRows } from './ui.js';
 import { applySetting, settingValue } from './settings.js';
 import { file } from './paths.js';
+import { saveConfigValue } from './config.js';
 import { createAssistant } from './assistant.js';
 import { AiError } from './ai.js';
 import { createAuth } from './auth.js';
@@ -85,6 +86,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         address: w.address,
         buyAmountSol: w.buyAmountSol ?? cfg.buyAmountSol,
         customAmount: Boolean(w.buyAmountSol),
+        sellRule: w.sellRule ?? null,
         retiring: Boolean(w.retiring),
         paused: Boolean(w.paused),
         holding: positions.entries().filter(([, p]) => p.source === w.address).length,
@@ -147,6 +149,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
         paid: pos.solSpent,
         tokens: pos.tokens,
         openedAt: pos.openedAt,
+        takeProfitPct: pos.takeProfitPct ?? null,
         ...(bot.priceOf?.(mint,pos)??{worth:null,priceStale:true}),
       }));
     const next = {
@@ -171,6 +174,8 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
       update: updater?.status() ?? null,
       quick: Object.fromEntries(QUICK.map((k) => [k, settingValue(cfg, k) ?? null])),
       tradeLogFile: book.tradeLogFile,
+      sellAlerts: bot.sellAlerts?.() ?? [],
+      goal: { sol: cfg.dailyGoalSol ?? null, pauseAtGoal: Boolean(cfg.pauseAtGoal) },
     };
     lastState = next;
     return next;
@@ -379,10 +384,32 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
       }
 
       if (req.method === 'POST' && url.pathname === '/api/sell') {
-        const { mint } = await readBody(req);
+        const { mint, fraction } = await readBody(req);
         if (!positions.has(mint)) return send(res, 404, { error: "You don't hold that token anymore." });
-        await bot.sellNow(mint);
+        await bot.sellNow(mint, fraction ?? 1);
         return send(res, 200, { ok: true });
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/coin/tp') {
+        const { mint, pct } = await readBody(req);
+        try { return send(res, 200, bot.setCoinTakeProfit(mint, pct)); } catch (e) { return send(res, 400, { error: e.message }); }
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/wallets/update') {
+        const { key, buyAmountSol, sellRule } = await readBody(req);
+        try { const w = bot.updateWallet(key, { buyAmountSol, sellRule }); return send(res, 200, { label: w.label, buyAmountSol: w.buyAmountSol ?? null, sellRule: w.sellRule ?? null }); }
+        catch (e) { return send(res, 400, { error: e.message }); }
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/goal') {
+        const body = await readBody(req);
+        const goal = body.sol === null || body.sol === '' || body.sol === undefined ? null : Number(body.sol);
+        if (goal !== null && !(Number.isFinite(goal) && goal > 0 && goal <= 1000)) return send(res, 400, { error: 'Daily goal must be between 0 and 1000 SOL.' });
+        cfg.dailyGoalSol = goal; cfg.pauseAtGoal = Boolean(body.pauseAtGoal);
+        saveConfigValue('dailyGoalSol', goal); saveConfigValue('pauseAtGoal', cfg.pauseAtGoal);
+        bot.checkGoal?.();
+        log(goal === null ? 'Daily goal switched off.' : `Daily goal set to ${goal} SOL${cfg.pauseAtGoal ? ', pausing new buys when reached' : ''}.`);
+        return send(res, 200, { sol: goal, pauseAtGoal: cfg.pauseAtGoal });
       }
 
       if (req.method === 'GET' && url.pathname === '/api/account/portfolio') {

@@ -1,3 +1,14 @@
+## 1.17.0 — The Cockpit
+
+- New Cockpit layout: menu on the left with the mascot and keyboard shortcuts, your balance in SOL and dollars at the top, open coins in the middle, and your wallets and live feed on the right. On a phone there's a tab bar at the bottom.
+- Each coin card has one-tap 25%, 50% and Sell now buttons, plus its own take profit (+15%, +30%, +50% or your normal setting).
+- "Hold to sell everything" at the top: hold it for 1 second to sell every coin, so a stray click can't do it.
+- Each wallet can have its own sell rule (sell all on their first sell, match their %, or wait for 90%) and its own SOL size. Tap a wallet's name to set it.
+- A yellow banner pops up when a wallet you copied sells a coin you hold, with Sell 50%, Sell all now or Keep.
+- The wallets list shows what each wallet has made you, with on/off switches.
+- Daily goal bar, with an option to pause new buys when you hit it. Sells keep following.
+- "Missed today" shows why trades were skipped. Plus badges, journal tags on your trades, and a Compact mode (press C).
+
 ## 1.16.0 — Live prices, phone access and a new look
 
 - Coins trading on Raydium or Meteora now update live from their pools, like Pump.fun coins, without extra price requests. Open PnL at the top uses each coin's freshest price.

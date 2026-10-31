@@ -4,7 +4,7 @@ import { PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { parseTrades, looksLikeSwap, pumpTradesFromLogs, WSOL } from './detect.js';
 import { getQuote, buildSwap, getMarketPrices, backgroundPriceReady } from './jupiter.js';
 import { log, short, recordTrade, notify, c } from './log.js';
-import { checkWallet, saveWallets, checkedBuyAmount } from './config.js';
+import { checkWallet, saveWallets, checkedBuyAmount, checkSellRule } from './config.js';
 import { recordCopy } from './finder.js';
 import { transactionFill } from './fills.js';
 import { createLivePrices, positionPriceKey, decodeCurve } from './live-prices.js';
@@ -45,9 +45,19 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
   const prices=priceConnection?createLivePrices({connection:priceConnection,book,isTrading:()=>buysInFlight>0||locks.size>0,
     readQuote:(mint,tokens,signal)=>quoteFor({inputMint:mint,outputMint:WSOL,amount:tokens,slippageBps:cfg.sellSlippageBps,signal,background:true}),
     readMarket:getMarketPrices,canRequest:backgroundPriceReady,
-    quotePriority:(pos,worth)=>{const pct=(worth/pos.solSpent-1)*100;return (cfg.takeProfitPct&&pct>=cfg.takeProfitPct)||(cfg.stopLossPct&&pct<=-Math.abs(cfg.stopLossPct))?1:0;},
+    quotePriority:(pos,worth)=>{const pct=(worth/pos.solSpent-1)*100,tp=pos?.takeProfitPct??cfg.takeProfitPct;return (tp&&pct>=tp)||(cfg.stopLossPct&&pct<=-Math.abs(cfg.stopLossPct))?1:0;},
     onCurve:(mint,curve)=>rememberCurve(mint,curve)}):null;
   const tag = () => (cfg.dryRun ? 'PAPER ' : '');
+  // A wallet's own sell rule wins over the main settings; a coin's own take profit wins over the main one.
+  const exitRule=w=>w?.sellRule==='first'?{onlyFull:false,all:true}:w?.sellRule==='match'?{onlyFull:false,all:false}:w?.sellRule==='wait90'?{onlyFull:true,all:false}
+    :{onlyFull:cfg.sellOnlyOnFullExit,all:cfg.sellMode==='all'};
+  const tpOf=pos=>pos?.takeProfitPct??cfg.takeProfitPct;
+  const sellAlerts=[];let goalDay=null;
+  function checkGoal(){
+    const day=String(positions.dayStart());
+    if(!cfg.pauseAtGoal||!(cfg.dailyGoalSol>0)||goalDay===day||positions.todayPnl()<cfg.dailyGoalSol)return;
+    goalDay=day;buyingPaused=true;log(`Daily goal reached (${positions.todayPnl().toFixed(4)} SOL today). Copying PAUSED. Sells still follow the copied wallets.`);
+  }
 
   function decision(w,t,status,reason){
     activity.push({at:Date.now(),wallet:w.label,address:w.address,mint:t?.mint??null,side:t?.side??null,status,reason,signature:t?.signature??null});
@@ -174,8 +184,8 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
     if (positions.count() + [...buyReservations].filter(m => !positions.has(m)).length > cfg.maxOpenPositions) throw new Error('Buy skipped: the position limit changed while checking this trade');
     const exit = sourceSells.get(sourceKey(w, t.mint));
     if (cfg.followSells && newer(exit?.order, t.order)) {
-      const fraction = await sourceFraction(w, exit);
-      if (fraction >= 0.9 || (!cfg.sellOnlyOnFullExit && cfg.sellMode === 'all')) {
+      const fraction = await sourceFraction(w, exit), rule = exitRule(w);
+      if (fraction >= 0.9 || (!rule.onlyFull && rule.all)) {
         throw new Error('Buy skipped: the developer already exited before our order was sent');
       }
     }
@@ -516,13 +526,15 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
       ...quantityProgress,
       lastSourceExitOrder:newer(pos.lastSourceExitOrder,t.order)?pos.lastSourceExitOrder:t.order,
       queuedSourceExit:pos.queuedSourceExit?.signature===t.signature?null:pos.queuedSourceExit??null};
-    const out=t.fractionSold>=.9||remaining<=.1000000001;
-    if(cfg.sellOnlyOnFullExit&&!out){positions.update(t.mint,progress);return log(`  not selling yet: ${w.label} sold ${Math.round(t.fractionSold*100)}% this trade (${((1-remaining)*100).toFixed(1)}% cumulatively). Waiting for a 90% exit.`);}
-    const fraction=cfg.sellOnlyOnFullExit||cfg.sellMode==='all'?1:Math.min(1,Math.max(0,t.fractionSold));
+    const out=t.fractionSold>=.9||remaining<=.1000000001,rule=exitRule(w);
+    sellAlerts.push({at:Date.now(),wallet:w.label,mint:t.mint,pct:Math.round(t.fractionSold*100),action:rule.onlyFull&&!out?'waiting for 90%':rule.onlyFull||rule.all?'selling all':'matching their %'});
+    if(sellAlerts.length>20)sellAlerts.shift();
+    if(rule.onlyFull&&!out){positions.update(t.mint,progress);return log(`  not selling yet: ${w.label} sold ${Math.round(t.fractionSold*100)}% this trade (${((1-remaining)*100).toFixed(1)}% cumulatively). Waiting for a 90% exit.`);}
+    const fraction=rule.onlyFull||rule.all?1:Math.min(1,Math.max(0,t.fractionSold));
     if(!(fraction>0)){positions.update(t.mint,progress);return;}
     const previous=pos.copiedExit,held=BigInt(pos.tokens),base=previous?BigInt(previous.targetRemaining)<held?BigInt(previous.targetRemaining):held:held;
     const target=fraction>=.98?0n:base-base*BigInt(Math.round(fraction*10000))/10000n;
-    const reason=previous?.targetRemaining==='0'?previous.reason:out&&cfg.sellOnlyOnFullExit?`${w.label} sold out`:`${w.label} sold ${Math.round(t.fractionSold*100)}%`;
+    const reason=previous?.targetRemaining==='0'?previous.reason:out&&rule.onlyFull?`${w.label} sold out`:`${w.label} sold ${Math.round(t.fractionSold*100)}%`;
     // The seen signature, cumulative progress and durable sell target must be one
     // save, so a restart cannot remember an exit without remembering to execute it.
     positions.update(t.mint,{...progress,copiedExit:{id,targetRemaining:String(target),reason,trigger:{seenAt:t.seenAt,side:'sell',signature:t.signature,curve:t.curve},attempts:0,
@@ -622,6 +634,7 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
     const settled=cfg.dryRun&&book.paperWallet?.settleSell(mint,next,outRaw,pnl);
     if(!settled){positions.recordPnl(pnl);if(full)positions.close(mint);else positions.update(mint,next);}
     if(full)finishRetiring(pos.source);
+    checkGoal();
 
     const pnlText = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL`;
     recordTrade(book.tradeLogFile, { action: `${tag()}sell`, mint, wallet: pos.sourceLabel, sol: solOut.toFixed(6), pnl: pnl.toFixed(6), reason, tx: sig });
@@ -705,10 +718,10 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
           }
           continue;
         }
-        if(!(cfg.takeProfitPct||cfg.stopLossPct))continue;
+        const tp=tpOf(pos);if(!(tp||cfg.stopLossPct))continue;
         const mark=prices.get(mint,pos);if(!mark||mark.priceStale||mark.worth==null||!(pos.solSpent>0))continue;
         const pct=(mark.worth-pos.solSpent)/pos.solSpent*100;
-        if(!((cfg.takeProfitPct&&pct>=cfg.takeProfitPct)||(cfg.stopLossPct&&pct<=-cfg.stopLossPct)))continue;
+        if(!((tp&&pct>=tp)||(cfg.stopLossPct&&pct<=-cfg.stopLossPct)))continue;
         const key=positionPriceKey(book.mode,mint,pos);if(exitQueued.has(key))continue;exitQueued.add(key);
         // Recheck the CURRENT position and CURRENT price after acquiring the same lock as manual/copied sells.
         void withLock(mint,async()=>{
@@ -716,13 +729,13 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
           const latest=prices.get(mint,current);if(!latest||latest.priceStale||latest.worth==null||!(current.solSpent>0))return;
           const value=(latest.worth-current.solSpent)/current.solSpent*100;
           const trigger={seenAt:Date.now(),side:'sell',autoExit:true};
-          if(cfg.takeProfitPct&&value>=cfg.takeProfitPct)await sellPosition(mint,1,`take-profit hit (+${value.toFixed(1)}%)`,null,false,null,trigger);
+          if(tpOf(current)&&value>=tpOf(current))await sellPosition(mint,1,`take-profit hit (+${value.toFixed(1)}%)`,null,false,null,trigger);
           else if(cfg.stopLossPct&&value<=-cfg.stopLossPct)await sellPosition(mint,1,`stop-loss hit (${value.toFixed(1)}%)`,null,false,null,trigger);
         }).finally(()=>exitQueued.delete(key)).catch(()=>{});
       }
       return;
     }
-    if(!(cfg.takeProfitPct||cfg.stopLossPct))return;
+    if(!(cfg.takeProfitPct||cfg.stopLossPct||positions.entries().some(([,p])=>p.takeProfitPct)))return;
     checking = true;
     try {
       for (const [mint, pos] of positions.entries()) {
@@ -738,7 +751,7 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
           const value = await valueOf(mint, pos.tokens);
           if (value == null) throw new Error('no price yet');
           const pct = ((Number(value) / LAMPORTS - pos.solSpent) / pos.solSpent) * 100;
-          if (cfg.takeProfitPct && pct >= cfg.takeProfitPct) {
+          if (tpOf(pos) && pct >= tpOf(pos)) {
             await withLock(mint, () => sellPosition(mint, 1, `take-profit hit (+${pct.toFixed(0)}%)`,null,false,null,{seenAt:Date.now(),side:'sell',autoExit:true}));
           } else if (cfg.stopLossPct && pct <= -cfg.stopLossPct) {
             await withLock(mint, () => sellPosition(mint, 1, `stop-loss hit (${pct.toFixed(0)}%)`,null,false,null,{seenAt:Date.now(),side:'sell',autoExit:true}));
@@ -940,13 +953,38 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
       return w;
     },
     sellAll,
-    sellNow(mint) {
+    sellNow(mint, fraction = 1) {
       if (manualSells.has(mint)) return manualSells.get(mint);
-      const task = withLock(mint, () => sellPosition(mint, 1, 'sold by you from the dashboard', null, true));
+      const part = Number(fraction);
+      if (!(part > 0 && part <= 1)) throw new Error('Pick how much to sell: 25%, 50% or all.');
+      const task = withLock(mint, () => sellPosition(mint, part, part < 1 ? `${Math.round(part * 100)}% sold by you from the dashboard` : 'sold by you from the dashboard', null, true));
       manualSells.set(mint, task);
       task.finally(() => { if (manualSells.get(mint) === task) manualSells.delete(mint); }).catch(() => {});
       return task;
     },
+    setCoinTakeProfit(mint, pct) {
+      const pos = positions.get(mint);
+      if (!pos) throw new Error("You don't hold that token anymore.");
+      const value = pct === null || pct === undefined || pct === '' || pct === 'default' ? null : Number(pct);
+      if (value !== null && !(Number.isFinite(value) && value >= 1 && value <= 10000)) throw new Error('Take profit must be between 1% and 10000%.');
+      positions.update(mint, { takeProfitPct: value });
+      log(value === null ? `Take profit for ${short(mint)} back to the main setting.` : `Take profit for ${short(mint)} set to +${value}%.`);
+      return { takeProfitPct: value };
+    },
+    updateWallet(key, { buyAmountSol, sellRule } = {}) {
+      const k = String(key ?? '').trim().toLowerCase();
+      const w = cfg.wallets.find((x) => x.address.toLowerCase() === k || x.label.toLowerCase() === k);
+      if (!w) throw new Error(`No wallet called "${String(key).slice(0, 44)}".`);
+      const amount = buyAmountSol === undefined ? w.buyAmountSol : buyAmountSol === null || buyAmountSol === '' || buyAmountSol === 'default' ? undefined : checkedBuyAmount(buyAmountSol);
+      const rule = sellRule === undefined ? w.sellRule ?? null : checkSellRule(sellRule);
+      if (amount === undefined) delete w.buyAmountSol; else w.buyAmountSol = amount;
+      if (rule) w.sellRule = rule; else delete w.sellRule;
+      saveWallets(cfg.wallets);
+      log(`${w.label}: ${w.buyAmountSol ?? cfg.buyAmountSol} SOL per copy, sell rule ${rule ?? 'main settings'}.`);
+      return w;
+    },
+    sellAlerts: () => [...sellAlerts].reverse(),
+    checkGoal,
     valueOf,
     priceOf:(mint,pos)=>prices?.get(mint,pos)??null,
     onPrices:fn=>prices?.subscribe(fn)??(()=>{}),

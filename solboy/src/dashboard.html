@@ -586,35 +586,125 @@ button:active:not(:disabled) { transform: translateY(1px); }
 /* Retro arcade colorway (1.16.0): deep purple, hot pink, cyan wins, same sticker style. */
 :root{--bg:#1a1033;--panel:#241646;--panel-2:#2e1d57;--edge:#40297a;--ink:#fbefff;--ink-2:#d2c6ec;--ink-3:#b3a2d6;--accent:#ff4fd8;--pink:#ff8ae6;--sky:#31e1ff;--sun:#ffe14f;--grape:#a98bff;--win:#31e1ff}
 .hud{background:rgba(26,16,51,.94)}
+/* Cockpit layout (1.17.0): sidebar · main · wallets + feed, and a bottom tab bar on phones. */
+.cockpit{max-width:1680px;display:grid;grid-template-columns:210px minmax(0,1fr) 310px;gap:16px;align-items:start}
+.cockpit .side{position:sticky;top:12px;display:flex;flex-direction:column;gap:12px;padding:14px 12px;background:var(--panel);border:2px solid var(--accent);border-right-width:5px;border-bottom-width:5px;border-radius:var(--r);max-height:calc(100vh - 24px);overflow:auto}
+.cockpit .side .brand{flex-direction:column;gap:4px}
+.cockpit .side .mascot{margin:0;width:88px;height:88px}
+.cockpit .side .logo{font-size:25px;max-width:100%}
+.cright .feed li{grid-template-columns:auto 1fr;gap:4px 8px}.cright .feed li>span:last-child{grid-column:1/-1}
+.sidenav{display:flex;flex-direction:column;gap:4px}
+.sidenav button{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:8px 10px;border-radius:10px;border:2px solid transparent;background:none;color:var(--ink);font:700 14px var(--body);cursor:pointer;text-align:left}
+.sidenav button:hover{border-color:var(--edge)}
+.sidenav button.on{background:var(--accent);color:#3d0033;border-color:#000;font-weight:800}
+.sidenav kbd,.side-keys kbd{font:11px var(--mono);padding:1px 5px;border:1px solid currentColor;border-radius:4px;opacity:.75}
+.sidetools{display:flex;flex-direction:column;gap:6px}.sidetools .btn{width:100%;text-align:left;font-size:12px;padding:7px 10px}
+.side-keys{color:var(--ink-3);font-size:11px;line-height:1.8}
+.badges{display:flex;flex-wrap:wrap;gap:5px}.badges span{font:800 11px var(--body);padding:3px 8px;border-radius:10px;border:2px solid #000;background:var(--sun);color:#332b00}
+.cmain{min-width:0}.cmain>.hud{top:12px}
+.cright{display:flex;flex-direction:column;gap:12px;position:sticky;top:12px;min-width:0;max-height:calc(100vh - 24px);overflow:auto}
+.cright .panel{padding:14px}.cright h2{font-size:16px;flex-wrap:wrap}.cright .feed{max-height:420px;overflow:auto}
+.wmini-panel{border-color:var(--sky)!important}.missed-panel{border-color:var(--loss)!important}.feed-panel{border-color:var(--sun)!important}
+.wmini-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--edge)}
+.wmini-row button.wname{all:unset;cursor:pointer;font-weight:800;font-size:13px}.wmini-row button.wname:hover{color:var(--pink)}
+.wmini-row small{display:block;color:var(--ink-3);font-size:11px}.wmini-row .pnl{font:12px var(--mono)}
+.wmini-foot{display:flex;gap:6px;margin-top:10px}.wmini-foot .btn{flex:1;font-size:12px;padding:6px}
+.missed-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;color:var(--ink-2)}.missed-row b{color:var(--loss);font-family:var(--mono)}
+.topbal{display:grid;line-height:1.15;padding:2px 12px;border-left:2px solid var(--edge)}.topbal small{color:var(--ink-3);font-size:11px}.topbal b{font:800 18px var(--display)}.topbal span{color:var(--ink-3);font-size:11px}
+.holdbtn{position:relative;overflow:hidden;background:var(--loss);color:#33000c;border-color:#000;user-select:none;-webkit-user-select:none;touch-action:none}
+.holdbtn i{position:absolute;inset:0 auto 0 0;width:0;background:rgba(0,0,0,.3)}.holdbtn span{position:relative}
+.holdbtn.holding i{width:100%;transition:width 1s linear}
+.devalert{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 0;padding:12px 14px;background:#2b2408;border:2px solid var(--sun);border-right-width:5px;border-bottom-width:5px;border-radius:14px;font-weight:800}
+.devalert .spacer{flex:1}.devalert .btn{font-size:12px;padding:6px 11px}
+.goal{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:-4px 0 14px;padding:10px 14px;background:var(--panel);border:2px solid var(--grape);border-radius:14px;font-size:13px}
+.goal .gbar{flex:1;min-width:140px;height:12px;border:2px solid #000;border-radius:7px;background:var(--panel-2);overflow:hidden}.goal .gbar i{display:block;height:100%;background:var(--sun)}
+.goal .btn{font-size:12px;padding:5px 10px}
+.cockpit .slots{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.slot .tp-row{display:flex;gap:4px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--ink-3);margin-top:8px}
+.slot .tp-row button{font:800 11px var(--body);padding:2px 7px;border-radius:8px;border:2px solid var(--edge);background:var(--panel);color:var(--ink);cursor:pointer}
+.slot .tp-row button.on{background:var(--accent);color:#3d0033;border-color:#000}
+.slot .tpbar{position:relative;height:10px;border:2px solid #000;border-radius:6px;background:var(--panel);margin:8px 0 2px;overflow:hidden}.slot .tpbar i{position:absolute;inset:0 auto 0 0}.slot .tpbar b{position:absolute;top:0;bottom:0;width:2px;background:var(--ink)}
+.slot .actions .btn[data-sell-part]{flex:.6}
+.slot.devsell{border-color:var(--sun);box-shadow:0 0 0 2px var(--sun)}
+body.compact .slot .row,body.compact .slot .meta:not([data-price-status]):not([data-copied-sell-status]):not([data-auto-sell-status]),body.compact .slot .tpbar{display:none}
+body.compact .slot{padding:10px}body.compact .slot .pnl{font-size:20px}body.compact .cockpit .slots{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.tagbtn{font:11px var(--body);padding:2px 7px;border-radius:8px;border:1px dashed var(--edge);background:none;color:var(--ink-3);cursor:pointer;white-space:nowrap}.tagbtn.on{border-style:solid;color:var(--ink);background:var(--panel-2)}
+.phone-tabs{display:none}
+@media (max-width:1250px){.cockpit{grid-template-columns:190px minmax(0,1fr)}.cright{grid-column:2;position:static;max-height:none}.cright .feed{max-height:360px}}
+@media (max-width:760px){
+  .cockpit{grid-template-columns:minmax(0,1fr);padding:10px 10px 96px}
+  .cockpit .side{position:static;flex-direction:row;align-items:center;flex-wrap:nowrap;overflow-x:auto;max-height:none;padding:8px 10px}
+  .cockpit .side .brand{flex-direction:row}.cockpit .side .mascot{width:44px;height:44px}
+  .sidenav,.side-keys,.badges{display:none}.sidetools{flex-direction:row}.sidetools .btn{width:auto;white-space:nowrap}
+  .cright{grid-column:auto}
+  .topbal{order:-1;width:100%;border:2px solid var(--accent);border-radius:14px;padding:10px 12px}.topbal b{font-size:26px}
+  .cockpit .slots{grid-template-columns:minmax(0,1fr)}
+  .phone-tabs{display:flex;position:fixed;left:8px;right:8px;bottom:8px;z-index:30;justify-content:space-around;padding:6px;background:var(--panel);border:2px solid var(--accent);border-right-width:5px;border-bottom-width:5px;border-radius:16px}
+  .phone-tabs button{display:grid;justify-items:center;gap:2px;background:none;border:0;color:var(--ink-2);font:700 11px var(--body);cursor:pointer;padding:4px 6px}.phone-tabs button b{font-size:17px}.phone-tabs button.on{color:var(--accent)}
+  .ask-fab{bottom:90px}
+  /* phone: short and thumb-friendly, like the prototype */
+  .cockpit .hud{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;position:static}
+  .cockpit .hud>.topbal{grid-column:1/-1}.cockpit .hud .spacer,.cockpit .hud .status,.cockpit .hud .speed{display:none}
+  .cockpit .hud .btn,.cockpit .hud .balchip,.cockpit .hud .chip{font-size:12px;padding:7px 8px;justify-content:center;text-align:center}
+  .cockpit .hud #sellAllHold{grid-column:1/-1}
+  .cockpit .ticker,.cockpit .overview-curve{display:none}
+  .cockpit .stats{grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+  .cockpit .stats .card{padding:12px}.cockpit .stats .big{font-size:22px}
+  .cockpit .stats .card:nth-child(2){grid-column:1/-1;order:3}.cockpit .stats .card:nth-child(n+4){display:none}
+  .cockpit .stats .card .sub:not(#scoreUsd):not(#wl):not(#hpText){display:none}
+  .cockpit .goal{margin:0 0 12px}
+  .cockpit .slot .row,.cockpit .slot .meta:not([data-price-status]):not([data-copied-sell-status]):not([data-auto-sell-status]),.cockpit .slot .tpbar{display:none}
+  .cockpit .slot{padding:11px}.cockpit .slot .pnl{font-size:22px}.cockpit .slot .actions .btn{padding:9px 4px}
+  .cockpit .tabs{flex-wrap:nowrap;overflow-x:auto;margin:14px 0 10px}.cockpit .tabs .tab{white-space:nowrap}
+}
 </style>
 </head>
 <body>
 <div class="bg"></div><div class="flash" id="flash"></div>
-<div class="wrap">
-  <header class="hud">
+<div class="wrap cockpit">
+  <aside class="side" id="side">
     <div class="brand">
       <img class="mascot" id="mascot" src="__MASCOT__" alt="SolBoy mascot">
       <div class="logo" id="logo" data-text="SOLBOY">SOL<b>BOY</b></div>
     </div>
+    <nav class="sidenav" id="sideNav" aria-label="Sections">
+      <button data-nav="trade" class="on">📈 Trade <kbd>T</kbd></button>
+      <button data-nav="board">👛 Wallets <kbd>2</kbd></button>
+      <button data-nav="finder">🔍 Finder <kbd>5</kbd></button>
+      <button data-nav="lobby">💬 Lobby <kbd>L</kbd></button>
+      <button data-nav="history">🕘 History <kbd>1</kbd></button>
+      <button data-nav="loadout">⚙ Settings <kbd>3</kbd></button>
+    </nav>
+    <div class="sidetools">
+      <button class="btn wallet-top-link" id="myWalletTop" title="Your personal wallet, PnL calendar and funds" aria-current="false">✦ My wallet</button>
+      <button class="btn clubBtn" id="clubBtn" title="Chat with friends, profiles and coin calls">💬 Social Lobby</button>
+      <button class="btn" id="hypoBtn" title="What each copy made, and what it would have made">🧮 Hypothetical PnL</button>
+      <button class="btn" id="phoneBtn">📱 Phone access</button>
+      <button class="btn" id="shareBtn" title="Send a friend a link to the Wallet Finder">🔗 Share Finder</button>
+      <button class="btn" id="compactBtn" title="Smaller position cards">▤ Compact <kbd>C</kbd></button>
+      <button class="btn" id="sfxBtn">Sound off <kbd>S</kbd></button>
+      <button class="btn" id="checkUpdBtn" title="Look for a newer SolBoy right now">⟳ Check for updates</button>
+      <button class="btn" id="logoutBtn" hidden>Log out</button>
+    </div>
+    <div class="side-keys"><kbd>P</kbd> pause · <kbd>A</kbd> add wallet · <kbd>/</kbd> ask SolBoy</div>
+    <div class="badges" id="badges"></div>
+  </aside>
+  <main class="cmain">
+  <header class="hud">
     <span class="chip" id="mode">...</span>
     <button class="balchip" id="paperFundsTop" title="Choose your practice starting balance" hidden>Paper funds</button>
     <span class="status"><span class="dot" id="dot"></span><span id="conn">CONNECTING</span></span>
     <button class="balchip" id="balChip" title="Open your account">◎ Set up wallet</button>
-    <button class="btn wallet-top-link" id="myWalletTop" title="Your personal wallet, PnL calendar and funds" aria-current="false">✦ My wallet</button>
+    <div class="topbal" id="topBal"><small>Balance</small><b>…</b><span></span></div>
     <span class="spacer"></span>
     <button class="btn update" id="updateBtn" hidden>⬆ Update</button>
-    <button class="btn" id="checkUpdBtn" title="Look for a newer SolBoy right now">⟳ Check for updates</button>
     <button class="btn primary" id="addWalletBtn">+ Add wallet <kbd>A</kbd></button>
     <span class="speed" id="copySpeed" hidden></span>
     <button class="btn" id="pauseBtn" title="Stop copying new buys. Sells keep following.">Pause copying <kbd>P</kbd></button>
-    <button class="btn clubBtn" id="clubBtn" title="Chat with friends, profiles and coin calls">💬 Social Lobby</button>
-    <button class="btn" id="hypoBtn" title="What each copy made, and what it would have made">🧮 Hypothetical PnL</button>
-    <button class="btn" id="phoneBtn">📱 Phone access</button>
-    <button class="btn" id="shareBtn" title="Send a friend a link to the Wallet Finder">🔗 Share Finder</button>
-    <button class="btn" id="sfxBtn">Sound off <kbd>S</kbd></button>
-    <button class="btn" id="logoutBtn" hidden>Log out</button>
+    <button class="btn holdbtn" id="sellAllHold" title="Hold for 1 second to sell every open coin"><i></i><span>🔥 Hold to sell everything</span></button>
   </header>
   <div class="ticker" aria-hidden="true"><div class="track" id="ticker"></div></div>
+  <div class="devalert" id="devAlert" hidden></div>
 
   <section class="stats">
     <div class="card cut"><div class="label"><span class="ic">$</span>Total PnL</div><div class="big" id="score">0</div><div class="sub" id="scoreUsd">USD quote loading…</div><div class="sub" id="openPnl"></div><div class="sub" id="pnlCoverage"></div><div class="sub" id="today">today 0</div></div>
@@ -623,23 +713,14 @@ button:active:not(:disabled) { transform: translateY(1px); }
     <div class="card cut"><div class="label"><span class="ic">↯</span>Streak</div><div class="big" id="streak">-</div><div class="sub" id="streakSub">no closed trades yet</div></div>
     <div class="card cut"><div class="label"><span class="ic">★</span>Level</div><div class="big" id="level">LVL 1</div><div class="bar xp"><i id="xp"></i></div><div class="sub" id="xpText">0 / 10 XP</div></div>
   </section>
+  <div class="goal" id="goalBar"></div>
 
   <div id="pendingBuys" class="hint" hidden></div>
-  <div class="grid">
-    <section class="panel cut">
-      <h2><span class="ic" style="background:var(--accent)">🎒</span>Positions <span class="count" id="slotCount"></span></h2>
-      <div class="slots" id="slots"></div>
-      <div class="hint">Market PnL follows your entry in SOL. Auto-exits use fresh estimated sell PnL; delayed data is flagged.</div>
-    </section>
-    <section class="panel cut">
-      <h2><span class="ic" style="background:var(--sky)">⚡</span>Live feed
-        <span class="filters" id="filters">
-          <button data-f="all" class="on">All</button><button data-f="trades">Trades</button><button data-f="alerts">Alerts</button>
-        </span>
-      </h2>
-      <ul class="feed" id="feed"></ul>
-    </section>
-  </div>
+  <section class="panel cut" id="positionsPanel">
+    <h2><span class="ic" style="background:var(--accent)">🎒</span>Open positions <span class="count" id="slotCount"></span></h2>
+    <div class="slots" id="slots"></div>
+    <div class="hint">One tap, no confirm. Market PnL follows your entry in SOL. Auto-exits use fresh estimated sell PnL; delayed data is flagged.</div>
+  </section>
 
   <section class="panel cut overview-curve" style="margin-top:12px">
     <h2><span class="ic" style="background:var(--sun)">📈</span>PnL curve <span class="count">total profit over time, in SOL</span></h2>
@@ -664,7 +745,24 @@ button:active:not(:disabled) { transform: translateY(1px); }
     <div class="frecent" id="finderRecent"></div>
     <div class="fview" id="finderView"></div>
   </section>
+  </main>
+  <aside class="cright">
+    <section class="panel cut wmini-panel"><h2><span class="ic" style="background:var(--sky)">👛</span>Wallets <span class="count" id="walletMiniCount"></span></h2><div id="walletMini"></div>
+      <div class="wmini-foot"><button class="btn" data-nav="board">Show all</button><button class="btn" data-mini-add>+ Add</button></div></section>
+    <section class="panel cut missed-panel"><h2><span class="ic" style="background:var(--loss)">✗</span>Missed today <span class="count" id="missedCount"></span></h2><div id="missed"></div></section>
+    <section class="panel cut feed-panel">
+      <h2><span class="ic" style="background:var(--sun)">⚡</span>Live feed
+        <span class="filters" id="filters">
+          <button data-f="all" class="on">All</button><button data-f="trades">Trades</button><button data-f="alerts">Alerts</button>
+        </span>
+      </h2>
+      <ul class="feed" id="feed"></ul>
+    </section>
+  </aside>
 </div>
+<nav class="phone-tabs" id="phoneTabs" aria-label="Sections">
+  <button data-nav="trade" class="on"><b>📈</b>Trade</button><button data-nav="board"><b>👛</b>Wallets</button><button data-nav="finder"><b>🔍</b>Finder</button><button data-nav="lobby"><b>💬</b>Lobby</button><button data-nav="history"><b>🕘</b>History</button>
+</nav>
 
 <div class="modal" id="modal"><div class="box"><div id="modalBody"></div><div class="foot"><button class="btn" id="modalClose">Close <kbd>Esc</kbd></button></div></div></div>
 <div class="toasts" id="toasts"></div>
@@ -820,7 +918,7 @@ function render() {
   $('xpText').textContent = `${closed % 10} / 10 closed trades to next level`;
 
   renderUpdate();
-  renderInventory(); renderChart(s.curve); renderHistory(); renderBoard(); renderLoadout(); renderAccount();
+  renderInventory(); renderChart(s.curve); renderHistory(); renderBoard(); renderLoadout(); renderAccount(); renderCockpit();
 }
 
 function livePrice(p){
@@ -864,12 +962,15 @@ function renderInventory() {
       <div class="row"><span>Paid</span><span>${p.paid.toFixed(4)} SOL · ${usdValue(p.paid,p)}</span></div>
       <div class="row"><span>Est. sell return</span><span>${p.worth == null ? 'n/a' : p.worth.toFixed(4) + ' SOL · '+usdValue(p.worth,p)}${stale?' · delayed':''}</span></div>
       <div class="row"><span>Sell PnL${useMarket?' (auto-exit)':''}</span><span class="${stale?'':cls(pnl)}">${percent(pnl)}${stale?' · delayed':''}<br>${pnl==null?'—':fmt(pnl)+' SOL'} · ${usdValue(pnl,p)}</span></div>
-      <div class="meta">${S.quick?.takeProfitPct?`TP +${S.quick.takeProfitPct}% · `:''}${S.quick?.stopLossPct?`SL −${S.quick.stopLossPct}% · `:''}Market orders can fill beyond the trigger during fast moves.<br>${esc((useMarket?p.marketSource:p.priceSource)||'Waiting for price')}<br>Auto-exits use fresh estimated sell returns, including price impact. Fees and fills can differ.${referenceMarket?' Market reference refreshes within the free service limit; it is not a guaranteed fill.':''}</div>
+      <div class="meta">${(p.takeProfitPct??S.quick?.takeProfitPct)?`TP +${p.takeProfitPct??S.quick.takeProfitPct}%${p.takeProfitPct!=null?' (this coin)':''} · `:''}${S.quick?.stopLossPct?`SL −${S.quick.stopLossPct}% · `:''}Market orders can fill beyond the trigger during fast moves.<br>${esc((useMarket?p.marketSource:p.priceSource)||'Waiting for price')}<br>Auto-exits use fresh estimated sell returns, including price impact. Fees and fills can differ.${referenceMarket?' Market reference refreshes within the free service limit; it is not a guaranteed fill.':''}</div>
       <div class="meta" data-copied-sell-status>${p.copiedSell?esc(p.pendingSell?'Copied sell submitted · checking its receipt':p.copiedSell.paused?'Copied sell retry paused · Follow sells is off':`Copied sell retry · attempt ${p.copiedSell.attempts} · ${Math.max(0,Math.ceil((p.copiedSell.nextAttemptAt-Date.now())/1000))}s`)+(p.copiedSell.lastError?'<br>'+esc(p.copiedSell.lastError):''):''}</div>
       <div class="meta" data-auto-sell-status>${p.automaticSell?esc(p.pendingSell?'Automatic sell submitted · checking its receipt':`Automatic sell retry · attempt ${p.automaticSell.attempts} · ${Math.max(0,Math.ceil((p.automaticSell.nextAttemptAt-Date.now())/1000))}s`)+(p.automaticSell.lastError?'<br>'+esc(p.automaticSell.lastError):''):''}</div>
+      ${tpBar(p,main==null?null:main/p.paid*100)}
+      <div class="tp-row">Take profit for this coin ${[15,30,50].map(v=>`<button data-coin-tp="${v}" data-mint="${esc(p.mint)}" class="${p.takeProfitPct===v?'on':''}">+${v}%</button>`).join('')}<button data-coin-tp="default" data-mint="${esc(p.mint)}" class="${p.takeProfitPct==null?'on':''}">Default ${S.quick?.takeProfitPct?'+'+S.quick.takeProfitPct+'%':'(off)'}</button></div>
       <div class="actions">
-        <a class="btn" href="https://dexscreener.com/solana/${encodeURIComponent(p.mint)}" target="_blank" rel="noopener">Chart</a>
+        ${p.pendingSell?'':`<button class="btn" data-sell-part="0.25" data-mint="${esc(p.mint)}">25%</button><button class="btn" data-sell-part="0.5" data-mint="${esc(p.mint)}">50%</button>`}
         <button class="btn danger" data-sell="${esc(p.mint)}" data-name="${esc(p.name)}">${p.pendingSell?'Check sell':'Sell now'}</button>
+        <a class="btn" href="https://dexscreener.com/solana/${encodeURIComponent(p.mint)}" target="_blank" rel="noopener">Chart</a>
         ${p.pendingSell?`<a class="btn" href="https://solscan.io/tx/${encodeURIComponent(p.pendingSell.sig)}" target="_blank" rel="noopener">Pending transaction ↗</a>`:''}
       </div></div>`;
   });
@@ -899,6 +1000,9 @@ function renderInventory() {
   desired.forEach((node,i)=>{if(slots.children[i]!==node)slots.insertBefore(node,slots.children[i]??null);});
 }
 $('slots').addEventListener('click', async (e) => {
+  const part=e.target.closest('[data-sell-part]'),tp=e.target.closest('[data-coin-tp]');
+  if(part)return sellPart(part.dataset.mint,Number(part.dataset.sellPart),part);
+  if(tp){try{await api('/api/coin/tp',{mint:tp.dataset.mint,pct:tp.dataset.coinTp});toast('info','Take profit set',tp.dataset.coinTp==='default'?'This coin uses your main take profit again.':`This coin sells at +${tp.dataset.coinTp}%.`);}catch(err){toast('loss','Error',err.message);}return void refresh();}
   const b = e.target.closest('[data-sell]'); if (!b) return;
   const mint=b.dataset.sell;
   if(activeSells.has(mint))return;
@@ -916,6 +1020,117 @@ $('slots').addEventListener('click', async (e) => {
   }
 
 });
+
+/* ---------- cockpit (1.17.0): balance, hold-to-sell, wallets list, missed, alerts, goal, badges ---------- */
+function tpBar(p,pct){
+  const sl=Number(S.quick?.stopLossPct)||25,tp=p.takeProfitPct??(Number(S.quick?.takeProfitPct)||100),at=pct==null?sl:Math.max(0,Math.min(tp+sl,pct+sl));
+  return `<div class="tpbar" title="Stop loss −${sl}% · entry · take profit +${tp}%"><i style="width:${at/(tp+sl)*100}%;background:${pct>=0?'var(--win)':'var(--loss)'}"></i><b style="left:${sl/(tp+sl)*100}%"></b></div>`;
+}
+async function sellPart(mint,fraction,b){
+  if(activeSells.has(mint))return;activeSells.add(mint);if(b){b.disabled=true;b.textContent='Selling…';}
+  try{await api('/api/sell',{mint,fraction},AbortSignal.timeout(15_000));toast('info','Sold',`${fraction>=1?'All':Math.round(fraction*100)+'%'} of ${S.inventory.find(p=>p.mint===mint)?.name??'that coin'} sold.`);}
+  catch(err){toast('loss',err.name==='TimeoutError'?'Sell status delayed':'Sell failed',err.name==='TimeoutError'?'SolBoy is still checking it. Look at the card in a moment.':err.message);}
+  finally{activeSells.delete(mint);void refresh();}
+}
+async function sellEverything(){
+  try{const r=await api('/api/sell-all',{});toast(r.failed.length?'loss':'info',r.failed.length?'Some positions are still open':'Everything sold',`${r.sold} sold${r.failed.length?`, ${r.failed.length} couldn't sell right now`:''}.`);}
+  catch(err){toast('loss','Sell all failed',err.message);}
+  refresh();
+}
+{ // hold for 1 second so a stray click can't dump every coin
+  const b=$('sellAllHold');let timer=null;
+  const start=e=>{if(timer||e.button>0)return;if(!S?.inventory.length)return toast('info','Nothing to sell','You have no open coins.');b.classList.add('holding');timer=setTimeout(()=>{timer=null;b.classList.remove('holding');sellEverything();},1000);};
+  const stop=()=>{if(!timer)return;clearTimeout(timer);timer=null;b.classList.remove('holding');};
+  b.addEventListener('pointerdown',start);['pointerup','pointerleave','pointercancel'].forEach(k=>b.addEventListener(k,stop));
+  b.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!e.repeat){e.preventDefault();start(e);}});b.addEventListener('keyup',stop);
+  b.addEventListener('click',e=>e.preventDefault());
+}
+const RULES={'':'Main settings',first:'Sell all on their first sell',match:'Match their sell %',wait90:'Wait for a 90% exit'};
+function openWalletRules(label){
+  const w=S.wallets.find(x=>x.label===label);if(!w)return;
+  $('modalBody').innerHTML=`<h3>${esc(w.label)} · copy rules</h3><form class="form" id="ruleForm">
+    <label>When ${esc(w.label)} sells <small>Overrides your main sell setting for this wallet only.</small><select id="ruleSel">${Object.entries(RULES).map(([v,l])=>`<option value="${v}" ${(w.sellRule??'')===v?'selected':''}>${l}</option>`).join('')}</select></label>
+    <label>SOL per copied buy <small>Empty = your default (${esc(S.defaultBuy)} SOL).</small><input id="ruleSize" inputmode="decimal" value="${w.customAmount?esc(w.buyAmountSol):''}" placeholder="${esc(S.defaultBuy)}"></label>
+    <div class="err" id="ruleErr"></div><div><button class="btn primary" type="submit">Save</button></div></form>`;
+  $('modal').classList.add('on');
+  $('ruleForm').onsubmit=async e=>{e.preventDefault();$('ruleErr').textContent='';
+    try{await api('/api/wallets/update',{key:w.label,sellRule:$('ruleSel').value||'default',buyAmountSol:$('ruleSize').value.trim()});closeModal();toast('info','Saved',`${w.label}: ${RULES[$('ruleSel').value]??'Main settings'}.`);refresh();}
+    catch(err){$('ruleErr').textContent=err.message;}};
+}
+function openGoal(){
+  $('modalBody').innerHTML=`<h3>Daily goal</h3><form class="form" id="goalForm">
+    <label>Goal for today in SOL <small>Empty switches the goal off.</small><input id="goalSol" inputmode="decimal" value="${S.goal?.sol??''}" placeholder="1"></label>
+    <label class="check"><input type="checkbox" id="goalPause" ${S.goal?.pauseAtGoal?'checked':''}> Pause new buys when I hit it (sells keep following)</label>
+    <div class="err" id="goalErr"></div><div><button class="btn primary" type="submit">Save</button></div></form>`;
+  $('modal').classList.add('on');
+  $('goalForm').onsubmit=async e=>{e.preventDefault();try{S.goal=await api('/api/goal',{sol:$('goalSol').value.trim()||null,pauseAtGoal:$('goalPause').checked});closeModal();renderCockpit();refresh();}catch(err){$('goalErr').textContent=err.message;}};
+}
+const alertSeen=new Set();let navOn='trade';
+function nav(name){
+  if(name==='lobby'){openClub();return;}
+  navOn=name;document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('on',b.dataset.nav===name));
+  if(name==='trade'){window.scrollTo({top:0,behavior:'smooth'});return;}
+  openTab(name);$('tabs').scrollIntoView({behavior:'smooth',block:'start'});
+}
+document.addEventListener('click',e=>{const n=e.target.closest('[data-nav]');if(n)nav(n.dataset.nav);});
+function renderCockpit(){
+  // balance in SOL and USD: cash plus what the open coins are worth now
+  const open=S.inventory.map(livePrice).filter(x=>x.value!=null).reduce((a,x)=>a+x.value,0);
+  const cash=S.mode==='paper'?(S.paperWallet?.enabled?S.paperWallet.availableSol:null):S.account?.balance??null;
+  const on=S.wallets.filter(w=>!w.paused&&!w.retiring).length;
+  $('topBal').innerHTML=cash==null?`<small>Open coins worth</small><b>${open.toFixed(3)} SOL</b><span>${usdValue(open)} · ${on} wallet${on===1?'':'s'} on</span>`
+    :`<small>Balance · cash + open coins</small><b>${(cash+open).toFixed(3)} SOL</b><span>${usdValue(cash+open)} · ${cash.toFixed(3)} SOL free · ${on} wallet${on===1?'':'s'} on</span>`;
+  // wallets with what each one made you (the scoreboard), plus on/off switches
+  $('walletMiniCount').textContent=`${on} of ${S.wallets.length} on`;
+  $('walletMini').innerHTML=S.wallets.slice(0,8).map(w=>`<div class="wmini-row"><div><button class="wname" data-wedit="${esc(w.label)}" title="Sell rule and size">${esc(w.label)}</button>
+    <small><span class="pnl ${cls(w.pnl)}">${fmt(w.pnl??0)} SOL</span> · ${w.closed??0} trades${w.closed?' · '+Math.round(w.wins/w.closed*100)+'% wins':''}</small><small>${esc(RULES[w.sellRule??''])} · ${w.buyAmountSol} SOL</small></div>
+    ${w.retiring?'<span class="state retiring">Sells only</span>':`<button class="switch${w.paused?'':' on'}" data-wmini-toggle="${esc(w.label)}" data-paused="${w.paused?1:0}" aria-label="Copy ${esc(w.label)}"><i></i></button>`}</div>`).join('')||'<div class="empty-msg">No wallets yet.</div>';
+  // missed today: the skip and fail reasons, counted
+  const midnight=new Date().setHours(0,0,0,0),missed={};
+  for(const a of S.copyActivity??[])if(a.status!=='Copied'&&a.at>=midnight)missed[a.reason]=(missed[a.reason]??0)+1;
+  const rows=Object.entries(missed).sort((a,b)=>b[1]-a[1]);
+  $('missedCount').textContent=rows.reduce((n,[,c])=>n+c,0)||'';
+  $('missed').innerHTML=rows.slice(0,6).map(([r,c])=>`<div class="missed-row"><span>${esc(r)}</span><b>${c}</b></div>`).join('')||'<div class="missed-row"><span>Nothing missed today.</span></div>';
+  // a copied wallet just sold a coin you hold
+  const al=(S.sellAlerts??[]).find(a=>Date.now()-a.at<90_000&&!alertSeen.has(a.at+a.mint)&&S.inventory.some(p=>p.mint===a.mint));
+  $('devAlert').hidden=!al;
+  if(al){const name=S.inventory.find(p=>p.mint===al.mint)?.name??al.mint.slice(0,6);
+    const html=`<span>⚠ ${esc(al.wallet)} just sold ${al.pct}% of ${esc(name)} · SolBoy is ${esc(al.action)}</span><span class="spacer"></span><button class="btn" data-alert-sell="0.5" data-mint="${esc(al.mint)}">Sell 50%</button><button class="btn danger" data-alert-sell="1" data-mint="${esc(al.mint)}">Sell all now</button><button class="btn" data-alert-keep="${esc(al.at+al.mint)}">Keep</button>`;
+    if($('devAlert').innerHTML!==html){$('devAlert').innerHTML=html;if(!$('devAlert').dataset.k||$('devAlert').dataset.k!==al.at+al.mint){$('devAlert').dataset.k=al.at+al.mint;SFX.loss?.();}}}
+  // daily goal
+  const g=S.goal?.sol,today=S.todayPnl??0;
+  $('goalBar').innerHTML=g?`<b>🎯 Daily goal</b><span class="${cls(today)}">${fmt(today)} / ${g} SOL</span><div class="gbar"><i style="width:${Math.max(0,Math.min(100,today/g*100))}%"></i></div><span>${today>=g?'Goal hit!':''}${S.goal.pauseAtGoal?' Pauses at goal':''}</span><button class="btn" id="goalEdit">Edit</button>`
+    :`<b>🎯 Daily goal</b><span class="addr">Set a goal for today. SolBoy can pause new buys when you hit it.</span><span class="spacer"></span><button class="btn" id="goalEdit">Set goal</button>`;
+  // badges, from your own record
+  const sm=S.summary,big=(S.trades??[]).some(t=>t.action.endsWith('sell')&&Number(t.pnl_sol)>0&&Number(t.pnl_sol)>=0.5*(Number(t.sol)-Number(t.pnl_sol)));
+  const got=[[S.trades?.length,'First copy'],[sm.wins>0,'First win'],[sm.streak>=3,'Hot streak'],[sm.sells>=10,'10 trades'],[big,'Big win'],[g&&today>=g,'Goal hit']].filter(([ok])=>ok).map(([,n])=>n);
+  $('badges').innerHTML=got.map(n=>`<span>★ ${n}</span>`).join('');
+}
+$('goalBar').addEventListener('click',e=>{if(e.target.closest('#goalEdit'))openGoal();});
+$('devAlert').addEventListener('click',e=>{
+  const s=e.target.closest('[data-alert-sell]'),k=e.target.closest('[data-alert-keep]');
+  if(k){alertSeen.add(k.dataset.alertKeep);$('devAlert').hidden=true;return;}
+  if(s){alertSeen.add($('devAlert').dataset.k);$('devAlert').hidden=true;sellPart(s.dataset.mint,Number(s.dataset.alertSell),null);}
+});
+$('walletMini').closest('.panel').addEventListener('click',async e=>{
+  if(e.target.closest('[data-mini-add]'))return openAddWallet();
+  const ed=e.target.closest('[data-wedit]');if(ed)return openWalletRules(ed.dataset.wedit);
+  const tg=e.target.closest('[data-wmini-toggle]');if(!tg)return;
+  const turnOff=tg.dataset.paused!=='1';tg.disabled=true;
+  try{await api('/api/wallets/toggle',{key:tg.dataset.wminiToggle,paused:turnOff});toast('info',turnOff?`${tg.dataset.wminiToggle} switched off`:`${tg.dataset.wminiToggle} switched on`,turnOff?'No new buys from this wallet. Sells of coins you hold from it still follow.':'Copying its buys again.');}
+  catch(err){toast('loss','Error',err.message);}
+  refresh();
+});
+let compact=store.get('compact','off')==='on';
+function renderCompact(){document.body.classList.toggle('compact',compact);$('compactBtn').innerHTML=`▤ Compact ${compact?'on':'off'} <kbd>C</kbd>`;}
+$('compactBtn').onclick=()=>{compact=!compact;store.set('compact',compact?'on':'off');renderCompact();};
+renderCompact();
+// trade journal: tap a tag on a trade to remember why you took it (saved in this browser)
+const JTAGS=['＋ tag','✅ Plan','😬 FOMO','🎯 Sniped','🐢 Late','💎 Held'];
+let jtags={};try{jtags=JSON.parse(store.get('jtags','{}'))||{};}catch{}
+const jkey=t=>`${t.time}|${t.token}|${t.action}`;
+$('history').addEventListener('click',e=>{const b=e.target.closest('[data-jtag]');if(!b)return;const k=b.dataset.jtag,n=(JTAGS.indexOf(jtags[k]??JTAGS[0])+1)%JTAGS.length;
+  if(n)jtags[k]=JTAGS[n];else delete jtags[k];store.set('jtags',JSON.stringify(jtags));b.textContent=JTAGS[n];b.classList.toggle('on',n>0);});
 
 /* ---------- chart: one series, cumulative profit ---------- */
 function renderChart(curve) {
@@ -986,9 +1201,9 @@ const skipAlerts = {};
 
 function renderHistory() {
   if (!S.trades.length) { $('history').innerHTML = '<div class="empty-msg">No trades yet. They show up here as soon as SolBoy copies something.</div>'; return; }
-  $('history').innerHTML = `<table><tr><th>When</th><th>Action</th><th>Token</th><th>SOL</th><th>PnL</th><th>Why</th></tr>${S.trades.map((t) => {
+  $('history').innerHTML = `<table><tr><th>When</th><th>Action</th><th>Token</th><th>SOL</th><th>PnL</th><th>Why</th><th>Journal</th></tr>${S.trades.map((t) => {
     const sell = t.action.endsWith('sell'), pnl = t.pnl_sol === '' ? null : Number(t.pnl_sol);
-    return `<tr><td>${ago(t.time)}</td><td><span class="tag ${sell ? 'sell' : 'buy'}">${sell ? 'SELL' : 'BUY'}</span></td><td>${esc(t.name)}</td><td class="num">${Number(t.sol).toFixed(4)}</td><td class="num ${cls(pnl)}">${pnl == null ? '' : fmt(pnl)}</td><td>${esc(t.reason)}</td></tr>`;
+    return `<tr><td>${ago(t.time)}</td><td><span class="tag ${sell ? 'sell' : 'buy'}">${sell ? 'SELL' : 'BUY'}</span></td><td>${esc(t.name)}</td><td class="num">${Number(t.sol).toFixed(4)}</td><td class="num ${cls(pnl)}">${pnl == null ? '' : fmt(pnl)}</td><td>${esc(t.reason)}</td><td><button class="tagbtn${jtags[jkey(t)]?' on':''}" data-jtag="${esc(jkey(t))}">${esc(jtags[jkey(t)]??JTAGS[0])}</button></td></tr>`;
   }).join('')}</table><div class="hint">Full history: <code>${esc(S.tradeLogFile)}</code></div>`;
 }
 
@@ -997,7 +1212,7 @@ function renderBoard() {
   const rows = S.wallets.map((w, i) => `<tr>
       <td><span class="rank r${i + 1}">#${i + 1}</span></td>
       <td><b>${esc(w.label)}</b><br><a class="addr" href="https://solscan.io/account/${encodeURIComponent(w.address)}" target="_blank" rel="noopener">${esc(w.address.slice(0, 4))}...${esc(w.address.slice(-4))}</a></td>
-      <td class="num">${w.buyAmountSol} SOL${w.customAmount ? '' : ' <span class="addr">(default)</span>'}</td>
+      <td class="num">${w.buyAmountSol} SOL${w.customAmount ? '' : ' <span class="addr">(default)</span>'}<br><button class="mini" data-wedit="${esc(w.label)}" title="Sell rule and SOL size for this wallet">${esc(RULES[w.sellRule ?? ''])} ✎</button></td>
       <td class="num">${w.copies}</td><td class="num">${w.closed}</td>
       <td class="num">${w.closed ? Math.round((w.wins / w.closed) * 100) + '%' : '-'}</td>
       <td class="num ${cls(w.pnl)}">${fmt(w.pnl)} SOL</td>
@@ -1013,6 +1228,7 @@ function renderBoard() {
 }
 $('board').addEventListener('click', async (e) => {
   if (e.target.closest('[data-add]')) return openAddWallet();
+  const ed = e.target.closest('[data-wedit]'); if (ed) return openWalletRules(ed.dataset.wedit);
   const tg = e.target.closest('[data-wtoggle]');
   if (tg) {
     const turnOff = tg.dataset.paused !== '1';
@@ -2234,6 +2450,9 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'p' || e.key === 'P') togglePause();
   else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); openAddWallet(); }
   else if (e.key === 's' || e.key === 'S') $('sfxBtn').click();
+  else if (e.key === 't' || e.key === 'T') nav('trade');
+  else if (e.key === 'l' || e.key === 'L') nav('lobby');
+  else if (e.key === 'c' || e.key === 'C') $('compactBtn').click();
   else if (TABS[e.key]) openTab(TABS[e.key]);
 });
 

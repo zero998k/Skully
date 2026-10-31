@@ -17,6 +17,8 @@ export const DEFAULTS = {
   sellOnlyOnFullExit: true,
   takeProfitPct: null,
   stopLossPct: null,
+  dailyGoalSol: null,
+  pauseAtGoal: false,
   priceCheckSeconds: 20,
   dailyLossLimitSol: 0.5,
   skipIfMintAuthority: true,
@@ -78,7 +80,15 @@ export function checkedBuyAmount(value) {
  * Validate one wallet entry against the ones already added, and fill in a nickname.
  * Throws a plain-English error the dashboard and terminal can show as-is.
  */
-export function checkWallet({ address, label, buyAmountSol, retiring, paused }, existing) {
+// Per-wallet sell rule. Missing means "use the main settings".
+export const SELL_RULES = { first: 'Sell all on their first sell', match: 'Match their sell %', wait90: 'Wait for a 90% exit' };
+export function checkSellRule(rule) {
+  if (rule === undefined || rule === null || rule === '' || rule === 'default') return null;
+  if (!SELL_RULES[rule]) throw new Error('Pick a sell rule: first, match or wait90.');
+  return rule;
+}
+
+export function checkWallet({ address, label, buyAmountSol, retiring, paused, sellRule }, existing) {
   address = String(address ?? '').trim();
   if (!address || address.startsWith('PASTE_')) throw new Error('Paste a wallet address.');
   try {
@@ -98,6 +108,7 @@ export function checkWallet({ address, label, buyAmountSol, retiring, paused }, 
   }
   if (retiring) entry.retiring = true;
   if (paused) entry.paused = true;
+  if (checkSellRule(sellRule)) entry.sellRule = sellRule;
   return entry;
 }
 
@@ -112,7 +123,7 @@ export function saveConfigValue(key, value, file = basePath('config.json')) {
 /** Write the wallet list back to config.json, leaving every other setting untouched. */
 export function saveWallets(wallets, file = basePath('config.json')) {
   const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-  raw.wallets = wallets.map(({ label, address, buyAmountSol, retiring, paused }) => ({ label, address, ...(buyAmountSol ? { buyAmountSol } : {}), ...(retiring ? { retiring } : {}), ...(paused ? { paused } : {}) }));
+  raw.wallets = wallets.map(({ label, address, buyAmountSol, retiring, paused, sellRule }) => ({ label, address, ...(buyAmountSol ? { buyAmountSol } : {}), ...(retiring ? { retiring } : {}), ...(paused ? { paused } : {}), ...(sellRule ? { sellRule } : {}) }));
   fs.writeFileSync(`${file}.tmp`, JSON.stringify(raw, null, 2) + '\n');
   fs.renameSync(`${file}.tmp`, file);
 }

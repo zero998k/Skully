@@ -229,5 +229,38 @@ for(const phase of ['safetyGate','buildGate']){
  const f=setup(true),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');f.buildError=true;await f.emit(mint,'sell');f.quoteError=true;f.bot=createBot({cfg:f.cfg,connection:f.connection,book:f.book});
  const all=await f.bot.sellAll();assert.equal(all.writtenOff,0);assert(all.failed.length===1);assert(f.positions.get(mint).copiedExit);results.sellAllCannotWriteOffAPositionWithACopiedExitStillQueued=true;
 }
+{
+ // 1.17.0: per-wallet sell rules beat the main settings.
+ const f=setup(),mint=Keypair.generate().publicKey.toBase58();f.cfg.wallets[0].sellRule='first';await f.emit(mint,'buy');f.sourceLeft=30_000_000_000_000n;await f.emit(mint,'sell');await until(()=>!f.positions.has(mint));
+ assert.equal(f.bot.sellAlerts()[0].action,'selling all');results.walletRuleFirstSellSellsEverything=true;
+}
+{
+ const f=setup(),mint=Keypair.generate().publicKey.toBase58();f.cfg.wallets[0].sellRule='match';await f.emit(mint,'buy');const held=BigInt(f.positions.get(mint).tokens);f.sourceLeft=30_000_000_000_000n;await f.emit(mint,'sell');
+ await until(()=>BigInt(f.positions.get(mint)?.tokens??0)===held/2n);results.walletRuleMatchMirrorsTheirPercentEvenWhenMainSettingWaits=true;
+}
+{
+ const f=setup(),mint=Keypair.generate().publicKey.toBase58();f.cfg.sellOnlyOnFullExit=false;f.cfg.wallets[0].sellRule='wait90';await f.emit(mint,'buy');const held=f.positions.get(mint).tokens;f.sourceLeft=30_000_000_000_000n;await f.emit(mint,'sell');
+ assert.equal(f.positions.get(mint).tokens,held);assert.equal(f.bot.sellAlerts()[0].action,'waiting for 90%');assert.equal(f.bot.sellAlerts()[0].pct,50);
+ f.sourceLeft=0n;await f.emit(mint,'sell');await until(()=>!f.positions.has(mint));results.walletRuleWait90HoldsUntilTheyExit=true;
+}
+{
+ const f=setup(),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');const held=BigInt(f.positions.get(mint).tokens);await f.bot.sellNow(mint,.25);
+ assert.equal(BigInt(f.positions.get(mint).tokens),held-held/4n);assert.throws(()=>f.bot.sellNow(mint,2));await f.bot.sellNow(mint,1);assert(!f.positions.has(mint));results.oneTapPartialSellsSellTheChosenShare=true;
+}
+{
+ const f=setup(),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');f.bot.setCoinTakeProfit(mint,15);assert.equal(f.positions.get(mint).takeProfitPct,15);
+ assert.throws(()=>f.bot.setCoinTakeProfit(mint,0));f.bot.setCoinTakeProfit(mint,'default');assert.equal(f.positions.get(mint).takeProfitPct,null);results.coinTakeProfitOverrideSavesAndResets=true;
+}
+{
+ fs.writeFileSync('config.json',JSON.stringify(base));const f=setup();f.cfg.wallets[0].label=base.wallets[0].label;
+ const w=f.bot.updateWallet(base.wallets[0].label,{sellRule:'first',buyAmountSol:'0.2'});assert.equal(w.sellRule,'first');assert.equal(w.buyAmountSol,.2);
+ const saved=JSON.parse(fs.readFileSync('config.json','utf8')).wallets[0];assert.equal(saved.sellRule,'first');assert.equal(saved.buyAmountSol,.2);
+ assert.throws(()=>f.bot.updateWallet(base.wallets[0].label,{sellRule:'yolo'}));f.bot.updateWallet(base.wallets[0].label,{sellRule:'default',buyAmountSol:''});
+ assert.equal(JSON.parse(fs.readFileSync('config.json','utf8')).wallets[0].sellRule,undefined);results.walletSellRuleAndSizeSaveToConfig=true;
+}
+{
+ const f=setup(),mint=Keypair.generate().publicKey.toBase58();f.cfg.dailyGoalSol=1e-9;f.cfg.pauseAtGoal=true;await f.emit(mint,'buy');f.positions.recordPnl(1);f.bot.checkGoal();
+ assert.equal(f.bot.isBuyingPaused(),true);f.bot.setBuyingPaused(false);f.bot.checkGoal();assert.equal(f.bot.isBuyingPaused(),false);results.pauseAtDailyGoalPausesOncePerDay=true;
+}
 const report={checks:results,simulated:true,samples,cycles:samples.length,maxSellSubmitMs:Math.max(...samples.map(x=>x.sellSubmitMs)),maxExitCompleteMs:Math.max(...samples.map(x=>x.exitCompleteMs))};
 if(output)fs.writeFileSync(output,JSON.stringify(report,null,2));console.log(JSON.stringify(report));
