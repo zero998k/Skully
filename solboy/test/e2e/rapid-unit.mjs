@@ -262,5 +262,10 @@ for(const phase of ['safetyGate','buildGate']){
  const f=setup(),mint=Keypair.generate().publicKey.toBase58();f.cfg.dailyGoalSol=1e-9;f.cfg.pauseAtGoal=true;await f.emit(mint,'buy');f.positions.recordPnl(1);f.bot.checkGoal();
  assert.equal(f.bot.isBuyingPaused(),true);f.bot.setBuyingPaused(false);f.bot.checkGoal();assert.equal(f.bot.isBuyingPaused(),false);results.pauseAtDailyGoalPausesOncePerDay=true;
 }
+{
+ const f=setup(),mint=Keypair.generate().publicKey.toBase58();await f.emit(mint,'buy');assert(f.positions.has(mint));f.route=false;await sleep(2100);
+ await assert.rejects(f.bot.sellNow(mint),/no route/i);assert(f.positions.has(mint)&&f.positions.get(mint).noMarketSince);
+ f.positions.update(mint,{noMarketSince:Date.now()-61_000,sourceRemainingFraction:0});await f.bot.sellNow(mint);assert(!f.positions.has(mint));results.paperCoinWithNoMarketIsWrittenOff=true;
+}
 const report={checks:results,simulated:true,samples,cycles:samples.length,maxSellSubmitMs:Math.max(...samples.map(x=>x.sellSubmitMs)),maxExitCompleteMs:Math.max(...samples.map(x=>x.exitCompleteMs))};
 if(output)fs.writeFileSync(output,JSON.stringify(report,null,2));console.log(JSON.stringify(report));

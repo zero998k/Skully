@@ -1,3 +1,9 @@
+## 1.18.1 — Dead coins stop getting stuck
+
+- Paper mode: when a coin dies and nobody can sell it any more, SolBoy no longer keeps retrying the sell forever. Once the wallet you copied has sold out and there has been no market for a minute, the coin is closed as a total loss and moves to History. If the wallet still holds it, SolBoy waits 10 minutes first.
+- Fixed a confusing "Cannot destructure vSol" sell error. Coins without a price now say "no route" instead.
+- Real-money positions are not changed: they keep their tokens and keep retrying.
+
 ## 1.18.0 — Realistic paper trading
 
 - Paper trades now act like real ones. Each trade waits the natural time a real one takes to land, then fills at the live price of that moment, so the bots that got in first are already in the price.

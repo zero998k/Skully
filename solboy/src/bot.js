@@ -272,7 +272,7 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
     // Only bypass a quote when it just explicitly said there is no route AND a fresh Pump event
     // tells us the curve is active. Routed coins keep their existing path and settings.
     const activeCurve = curves.get(mint);
-    if (side === 'sell' && Date.now() - (noRoutes.get(mint) ?? 0) < 2000 && activeCurve && Date.now() - activeCurve.at < 2000) {
+    if (side === 'sell' && Date.now() - (noRoutes.get(mint) ?? 0) < 2000 && activeCurve?.curve && Date.now() - activeCurve.at < 2000) {
       return curveSwap(side, mint, amountRaw, slippageBps, activeCurve.curve, prioLamports, hooks);
     }
     let quote;
@@ -668,6 +668,18 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
       return finishSell(mint, pos, { amount: String(amount), held: String(held), full, fraction, reason, trigger }, timing);
 
     } catch (e) {
+      // A paper coin nobody can sell any more (no route, no curve) is worth nothing. Once the copied
+      // wallet is out and the market has stayed gone for a minute, close it as a total loss instead
+      // of retrying forever. Real-money positions keep their tokens and keep retrying.
+      if(cfg.dryRun&&/no route|could not find any route/i.test(e.message)&&positions.has(mint)&&!positions.get(mint).pendingSell){
+        const now=positions.get(mint),since=now.noMarketSince??Date.now();
+        if(!now.noMarketSince)positions.update(mint,{noMarketSince:since});
+        const sourceOut=now.sourceRemainingFraction===0||now.copiedExit?.targetRemaining==='0';
+        if(Date.now()-since>=(sourceOut?60_000:600_000)){
+          const left=positions.get(mint);
+          return finishSell(mint,left,{amount:left.tokens,held:left.tokens,full:true,fraction:1,reason:'no buyers left, the coin is dead (counted as a total loss)',trigger},{outRaw:0n,sig:null,sentAt:Date.now(),confirmedAt:null});
+        }
+      }
       if ((e.code === 'BALANCE_PENDING' || trigger.autoExit) && positions.has(mint)) {
         const attempts = (positions.get(mint).queuedExit?.attempts ?? 0) + 1;
         const delay = e.code === 'BALANCE_PENDING' ? 0 : Math.max(e.retryAfterMs ?? 0, Math.min(300 * 2 ** Math.min(attempts - 1, 5), 8000));
@@ -705,7 +717,7 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
         compare[m]={sol:proceeds,pnl:proceeds-spent};shadows[m]={tokens:String(whole?0n:held-part),cost:v.cost-spent};
       }
     }else if(r)for(const [m,res]of Object.entries(r.modes))if(!res.skipped){const proceeds=Number(res.out-res.fees)/LAMPORTS;compare[m]={sol:proceeds,pnl:proceeds-cost};}
-    const next=full?null:{...pos,solSpent:pos.solSpent-cost,tokens:String(remaining),pendingSell:null,queuedExit:keepAuto,copiedExit:keepExit,
+    const next=full?null:{...pos,solSpent:pos.solSpent-cost,tokens:String(remaining),pendingSell:null,queuedExit:keepAuto,copiedExit:keepExit,noMarketSince:null,
       fillVerified:Boolean(timing.sig),balanceAt:Date.now(),boughtTotal:pos.boughtTotal??pos.solSpent,soldTotal:(pos.soldTotal??0)+solOut,...(shadows?{reality:shadows}:{})};
     const settled=cfg.dryRun&&book.paperWallet?.settleSell(mint,next,outRaw,pnl);
     if(!settled){positions.recordPnl(pnl);if(full)positions.close(mint);else positions.update(mint,next);}

@@ -166,7 +166,7 @@ for(const [name,ok]of Object.entries(fills))check('fill accuracy',name,ok===true
 check('fill accuracy','receipt and non-SOL accounting tests ran',Object.keys(fills).length===9,fills);
 const rapid=json('rapid.json');
 for(const [name,ok]of Object.entries(rapid.checks??{}))check('rapid copy',name,ok===true,ok);
-check('rapid copy','24 repeated cycles from 25ms to five seconds in paper and simulated live mode',rapid.cycles===24&&rapid.samples?.every(x=>x.sellSubmitMs<1000)&&Object.keys(rapid.checks??{}).length===44,rapid);
+check('rapid copy','24 repeated cycles from 25ms to five seconds in paper and simulated live mode',rapid.cycles===24&&rapid.samples?.every(x=>x.sellSubmitMs<1000)&&Object.keys(rapid.checks??{}).length===45,rapid);
 check('PnL display','top and open trades show SOL, USD and percent',fl.pnlSolUsdTop&&fl.pnlSolUsdTrade&&fl.liveTopPnlChangesWithTicks,[fl.pnlSolUsdTop,fl.pnlSolUsdTrade,fl.liveTopPnlChangesWithTicks]);
 check('copy decisions','copy and skip explanations are visible',fl.copyReasonsVisible,fl.copyReasonsVisible);
 check('sell recovery','a failed sell reports its error and restores the button without losing the position',fl.failedSellButtonRecovers&&fl.failedSellExplained&&fl.failedSellKeepsPosition,[fl.failedSellButtonRecovers,fl.failedSellExplained]);
