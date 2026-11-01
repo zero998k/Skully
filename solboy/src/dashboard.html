@@ -588,7 +588,8 @@ button:active:not(:disabled) { transform: translateY(1px); }
 .hud{background:rgba(26,16,51,.94)}
 /* Cockpit layout (1.17.0): sidebar · main · wallets + feed, and a bottom tab bar on phones. */
 .cockpit{max-width:1680px;display:grid;grid-template-columns:210px minmax(0,1fr) 310px;gap:16px;align-items:start}
-.cockpit .side{position:sticky;top:12px;display:flex;flex-direction:column;gap:12px;padding:14px 12px;background:var(--panel);border:2px solid var(--accent);border-right-width:5px;border-bottom-width:5px;border-radius:var(--r);max-height:calc(100vh - 24px);overflow:auto}
+.cockpit .side{position:sticky;top:12px;display:flex;flex-direction:column;gap:12px;padding:14px 12px;background:var(--panel);border:2px solid var(--accent);border-right-width:5px;border-bottom-width:5px;border-radius:var(--r);max-height:calc(100vh - 104px);overflow:auto}
+/* The sidebar stops above the floating Ask SolBoy button, so it never covers the bottom buttons. */
 .cockpit .side .brand{flex-direction:column;gap:4px}
 .cockpit .side .mascot{margin:0;width:88px;height:88px}
 .cockpit .side .logo{font-size:25px;max-width:100%}

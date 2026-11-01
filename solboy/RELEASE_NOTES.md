@@ -1,3 +1,7 @@
+## 1.18.3 — Update button uncovered
+
+- The floating Ask SolBoy button no longer covers the bottom sidebar buttons, including Check for updates. The sidebar now ends above it and scrolls if needed.
+
 ## 1.18.2 — An honest "$100 setup" estimate
 
 - The 🚀 $100 setup paper mode is no longer instant. Before, it filled at the exact price SolBoy saw, which made it look better than any real setup can be.
