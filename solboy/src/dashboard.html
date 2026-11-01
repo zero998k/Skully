@@ -375,7 +375,7 @@ td { padding: 11px 10px; border-bottom: 1px solid #1f1f1f; }
 td.num { font-family: var(--mono); }
 tr:hover td { background: var(--panel-2); }
 .tag { font-family: var(--display); font-size: 11px; font-weight: 800; padding: 2px 9px; border-radius: 999px; border: 1.5px solid #000; color: #0a0a0a; }
-.tag.buy { background: var(--sun); } .tag.sell { background: var(--sky); }
+.tag.buy { background: var(--sun); } .tag.sell { background: var(--sky); } .tag.loss { background: var(--loss, #ff5a5a); color:#fff; }
 .rank { display: inline-grid; place-items: center; min-width: 34px; height: 28px; font-family: var(--display); font-weight: 800; border-radius: 10px; background: var(--panel-2); border: 2px solid var(--edge); }
 .rank.r1 { background: var(--sun); color: #0a0a0a; border-color: #000; } .rank.r2 { background: #e5e5e5; color: #0a0a0a; border-color: #000; } .rank.r3 { background: #e0915a; color: #0a0a0a; border-color: #000; }
 .kv { display: grid; grid-template-columns: 260px 1fr; }
@@ -657,6 +657,14 @@ body.compact .slot{padding:10px}body.compact .slot .pnl{font-size:20px}body.comp
   .cockpit .slot{padding:11px}.cockpit .slot .pnl{font-size:22px}.cockpit .slot .actions .btn{padding:9px 4px}
   .cockpit .tabs{flex-wrap:nowrap;overflow-x:auto;margin:14px 0 10px}.cockpit .tabs .tab{white-space:nowrap}
 }
+  .reality .rgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .reality .rtile{border:2px solid var(--line,#333);border-radius:14px;padding:10px 12px;display:grid;gap:4px;min-width:0}
+  .reality .rtile.on{border-color:var(--accent)}
+  .reality .rtile span{font-weight:700;font-size:13px}.reality .rtile b{font-size:20px}.reality .rtile small{color:var(--ink-3);font-size:11px}
+  .reality .rfacts{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px;font-size:13px}
+  #history small.ways{display:block;color:var(--ink-3);font-size:11px;margin-top:2px}
+  @media (max-width:560px){.reality .rgrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.reality .rtile{padding:8px;border-radius:12px}
+    .reality .rtile span{font-size:11px}.reality .rtile b{font-size:15px;overflow-wrap:anywhere}.reality .rtile .mini{font-size:11px;padding:4px 6px}.reality .rfacts{font-size:12px}}
 </style>
 </head>
 <body>
@@ -714,6 +722,7 @@ body.compact .slot{padding:10px}body.compact .slot .pnl{font-size:20px}body.comp
     <div class="card cut"><div class="label"><span class="ic">★</span>Level</div><div class="big" id="level">LVL 1</div><div class="bar xp"><i id="xp"></i></div><div class="sub" id="xpText">0 / 10 XP</div></div>
   </section>
   <div class="goal" id="goalBar"></div>
+  <section class="panel cut reality" id="realityPanel" hidden></section>
 
   <div id="pendingBuys" class="hint" hidden></div>
   <section class="panel cut" id="positionsPanel">
@@ -926,7 +935,24 @@ function livePrice(p){
   const useMarket=p.marketWorth!=null&&p.paid>0&&(!marketStale||stale);
   return {value:useMarket?p.marketWorth:p.worth,stale:useMarket?marketStale:stale,paid:p.paid};
 }
+// Reality check: the same paper trades with no lag, on your setup, and on a faster paid setup (an estimate).
+const REALISM={home:['🏠','My setup'],pro:['🚀','$100 setup'],perfect:['✨','Perfect']};
+function renderReality(){
+  const box=$('realityPanel'),r=S.reality,mode=S.quick?.paperRealism??'home';box.hidden=S.mode!=='paper';if(box.hidden)return;
+  const sig=JSON.stringify([r,mode]);if(box.dataset.sig===sig)return;box.dataset.sig=sig;
+  const tile=m=>`<div class="rtile${m===mode?' on':''}"><span>${REALISM[m][0]} ${REALISM[m][1]}${m==='pro'?' <small>estimate</small>':''}</span><b class="${cls(r?.[m]??0)}">${r?.trades?fmt(r[m])+' SOL':'–'}</b>${r?.trades?`<small>${usdValue(r[m])}</small>`:''}<button class="mini" data-realism="${m}" ${m===mode?'disabled':''}>${m===mode?'✓ In use':'Use this'}</button></div>`;
+  const lagCost=r?.trades?r.perfect-r.home-r.fees:0;
+  box.innerHTML=`<h2><span class="ic" style="background:var(--win)">🔍</span>Reality check <small style="font-weight:400;font-size:12px;color:var(--ink-3)">same trades, 3 ways</small></h2>
+    <div class="rgrid">${['perfect','home','pro'].map(tile).join('')}</div>
+    ${r?.trades?`<div class="rfacts"><span>⏱️ Typical lag <b>${r.lagMedianMs==null?'–':(r.lagMedianMs/1000).toFixed(2)+'s'}</b></span><span>📉 Lag + price moves cost <b>${fmt(-Math.max(0,lagCost))} SOL</b></span><span>💸 Fees <b>${fmt(-r.fees)} SOL</b></span><span>❌ Would have failed <b>${r.failedBuys} buys · ${r.failedSells} sells</b></span></div>`
+      :'<p class="hint">Starts with your next paper trade. Each one lands after your natural delay at the live price, pays real fees, and fails only if the price moves past your slippage limit.</p>'}
+    <p class="hint">🚀 is an estimate of a server + paid RPC + Jito tip setup. 🏠 uses your real lag. Real trades can still differ; a tiny real-money test is the final check.</p>`;
+  box.querySelectorAll('[data-realism]').forEach(b=>b.onclick=async()=>{
+    try{const out=await api('/api/settings',{setting:'paperRealism',value:b.dataset.realism});toast('win','Paper pricing changed',out.summary);quickSig=null;refresh();}catch(e){toast('loss',"Couldn't change it",e.message);}
+  });
+}
 function renderPnl(){
+  renderReality();
   const practice=S.paperWallet;$('paperFundsTop').hidden=S.mode!=='paper';$('paperFundsTop').textContent=practice?.enabled?`Paper funds: ${practice.availableSol.toFixed(4)} SOL`:'Paper funds · choose balance';
   $('score').textContent=fmt(S.summary.totalPnl)+' SOL';$('score').className='big '+cls(S.summary.totalPnl);
   $('scoreUsd').textContent=usdValue(S.summary.totalPnl)+' · realized'+(S.mode==='paper'?' · practice estimate':'');
@@ -1202,8 +1228,10 @@ const skipAlerts = {};
 function renderHistory() {
   if (!S.trades.length) { $('history').innerHTML = '<div class="empty-msg">No trades yet. They show up here as soon as SolBoy copies something.</div>'; return; }
   $('history').innerHTML = `<table><tr><th>When</th><th>Action</th><th>Token</th><th>SOL</th><th>PnL</th><th>Why</th><th>Journal</th></tr>${S.trades.map((t) => {
-    const sell = t.action.endsWith('sell'), pnl = t.pnl_sol === '' ? null : Number(t.pnl_sol);
-    return `<tr><td>${ago(t.time)}</td><td><span class="tag ${sell ? 'sell' : 'buy'}">${sell ? 'SELL' : 'BUY'}</span></td><td>${esc(t.name)}</td><td class="num">${Number(t.sol).toFixed(4)}</td><td class="num ${cls(pnl)}">${pnl == null ? '' : fmt(pnl)}</td><td>${esc(t.reason)}</td><td><button class="tagbtn${jtags[jkey(t)]?' on':''}" data-jtag="${esc(jkey(t))}">${esc(jtags[jkey(t)]??JTAGS[0])}</button></td></tr>`;
+    const sell = t.action.endsWith('sell'), failed = / failed /.test(` ${t.action} `), pnl = t.pnl_sol === '' ? null : Number(t.pnl_sol);
+    const ways = t.realism && !failed ? ['perfect','home','pro'].map(m => { const v = sell ? t[m+'_pnl'] : t[m+'_sol']; return v === '' || v == null ? '' : `${REALISM[m][0]} ${v === 'failed' ? 'failed' : sell ? fmt(Number(v)) : Number(v).toFixed(4)}`; }).filter(Boolean).join(' · ') : '';
+    const extra = t.realism ? `<small class="ways">${ways}${ways ? ' · ' : ''}${t.lag_ms ? `lag ${(Number(t.lag_ms)/1000).toFixed(2)}s` : ''}${t.fees_sol ? ` · fees ${Number(t.fees_sol).toFixed(4)}` : ''}</small>` : '';
+    return `<tr><td>${ago(t.time)}</td><td><span class="tag ${failed ? 'loss' : sell ? 'sell' : 'buy'}">${failed ? 'FAILED' : sell ? 'SELL' : 'BUY'}</span></td><td>${esc(t.name)}</td><td class="num">${Number(t.sol).toFixed(4)}</td><td class="num ${cls(pnl)}">${pnl == null ? '' : fmt(pnl)}</td><td>${esc(t.reason)}${extra}</td><td><button class="tagbtn${jtags[jkey(t)]?' on':''}" data-jtag="${esc(jkey(t))}">${esc(jtags[jkey(t)]??JTAGS[0])}</button></td></tr>`;
   }).join('')}</table><div class="hint">Full history: <code>${esc(S.tradeLogFile)}</code></div>`;
 }
 
@@ -1282,7 +1310,11 @@ const QUICK_FIELDS = [
   ['buyAmountSol', 'SOL per copied buy', 'Wallets with their own amount keep it.', '0.05'],
   ['dailyLossLimitSol', 'Daily loss limit (SOL)', 'No new buys for the day after losing this much.', '0.5'],
   ['maxOpenPositions', 'Max tokens held at once', 'New buys wait until one is sold.', '5'],
+  ['buySlippageBps', 'Buy slippage (%)', 'Most the price may move before a buy fails.', '25', 100],
+  ['sellSlippageBps', 'Sell slippage (%)', 'Most the price may move before a sell fails.', '30', 100],
+  ['proTipSol', '🚀 tip per trade (SOL)', 'What the $100-setup estimate pays Jito each trade.', '0.001'],
 ];
+const SCALED = Object.fromEntries(QUICK_FIELDS.filter(f => f[4]).map(f => [f[0], f[4]]));
 let quickSig = null, quickError = '';
 function renderLoadout() {
   if (document.activeElement?.matches?.('#quick input, #quick select, #paperFundsForm input')) return; // don't wipe what you're typing
@@ -1290,7 +1322,7 @@ function renderLoadout() {
   if (sig === quickSig) return;
   quickSig = sig;
   const q = S.quick ?? {};
-  const field = ([k, label, hint, ph]) => `<label>${esc(label)} <small>${esc(hint)}</small><input name="${k}" inputmode="decimal" autocomplete="off" placeholder="${q[k] == null ? 'off' : ph}" value="${q[k] == null ? '' : esc(q[k])}"></label>`;
+  const field = ([k, label, hint, ph, scale = 1]) => `<label>${esc(label)} <small>${esc(hint)}</small><input name="${k}" inputmode="decimal" autocomplete="off" placeholder="${q[k] == null ? 'off' : ph}" value="${q[k] == null ? '' : esc(q[k] / scale)}"></label>`;
   const practice=S.paperWallet;
   $('loadout').innerHTML = `<div class="box2 quick" id="paperFunds" style="margin-bottom:20px;border-color:var(--sun)"><h3>🎮 Paper funds · practice only</h3>
       <p>${practice?.enabled?`Available: <b>${practice.availableSol.toFixed(4)} SOL</b> · ${usdValue(practice.availableSol)}<br>Started with ${practice.startingSol} SOL${practice.reservedSol?' · '+practice.reservedSol.toFixed(4)+' SOL reserved for buys':''}.`:'Choose a realistic starting balance. Practice is unlimited until you set one.'}</p>
@@ -1303,7 +1335,10 @@ function renderLoadout() {
         <div class="row2">${QUICK_FIELDS.slice(0, 2).map(field).join('')}</div>
         <div class="row2">${QUICK_FIELDS.slice(2, 4).map(field).join('')}</div>
         <div class="row2">${field(QUICK_FIELDS[4])}
-</div>
+          <label>Paper trades are priced as <small>How realistic practice is. See the Reality check.</small><select name="paperRealism">
+            ${[['home','🏠 My setup: real lag, fees, slippage'],['pro','🚀 $100 setup (estimate)'],['perfect','✨ Perfect: no lag, no fees']].map(([v,l])=>`<option value="${v}" ${(q.paperRealism??'home')===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
+        <div class="row2">${QUICK_FIELDS.slice(5, 7).map(field).join('')}</div>
+        <div class="row2">${field(QUICK_FIELDS[7])}</div>
         <div class="row2">
           <label>Copy their buys <small>Adding to a coin they already hold isn't copied.</small><select name="onlyFirstBuy">
             <option value="true" ${q.onlyFirstBuy !== false ? 'selected' : ''}>Only their first buy of a coin</option>
@@ -1328,7 +1363,8 @@ function renderLoadout() {
     $('quickErr').textContent = '';
     const now = S.quick ?? {}, done = [], errors = [];
     for (const [k, v] of new FormData(e.target)) {
-      const raw = String(v).trim();
+      let raw = String(v).trim();
+      if (SCALED[k] && raw !== '' && Number.isFinite(Number(raw.replace('%', '')))) raw = String(Math.round(Number(raw.replace('%', '')) * SCALED[k]));
       const before = now[k] == null ? '' : String(now[k]);
       if (raw === before) continue;
       try { done.push((await api('/api/settings', { setting: k, value: raw })).summary); }

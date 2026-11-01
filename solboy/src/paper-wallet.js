@@ -34,11 +34,11 @@ export function createPaperWallet(book){
       const id=randomUUID();reserved.set(id,{amount});return id;
     },
     release(id){if(id)reserved.delete(id);},
-    commitBuy(id,mint,pos,amount){
+    commitBuy(id,mint,pos,amount,fees=0n){
       if(book.mode!=='paper')throw new Error('Practice funds cannot be used for real-money trades.');
       if(!cash()?.enabled){store().open(mint,pos);return;}
       amount=BigInt(amount);if(!id||reserved.get(id)?.amount!==amount)throw new Error('Paper buy has no matching cash reservation.');
-      store().settlePaper(mint,pos,-amount);reserved.delete(id);
+      store().settlePaper(mint,pos,-(amount+BigInt(fees)));reserved.delete(id);
     },
     settleSell(mint,pos,proceeds,pnl){
       if(book.mode!=='paper'||!cash()?.enabled)return false;

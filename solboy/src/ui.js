@@ -36,6 +36,8 @@ export function settingsRows(cfg) {
     ['Sell when they sell', !cfg.followSells ? 'no' : cfg.sellOnlyOnFullExit ? 'only when they sell out (90% or more)' : cfg.sellMode === 'all' ? 'yes, everything' : 'yes, the same % they sell'],
     ['Take profit at', cfg.takeProfitPct ? `+${cfg.takeProfitPct}%` : 'off'],
     ['Stop loss at', cfg.stopLossPct ? `-${cfg.stopLossPct}%` : 'off'],
+    ['Slippage limit', `buys ${cfg.buySlippageBps / 100}%, sells ${cfg.sellSlippageBps / 100}%`],
+    ['Paper trades priced as', ({ home: 'my setup: real lag, real fees, real slippage limit', pro: '$100 setup estimate (server, paid RPC, Jito tip)', perfect: 'perfect: no lag, no fees' })[cfg.paperRealism ?? 'perfect']],
     ['Stop buying after losing', `${cfg.dailyLossLimitSol} SOL in a day`],
     ['Skip risky tokens', `mint authority: ${yes(cfg.skipIfMintAuthority)}, freeze authority: ${yes(cfg.skipIfFreezeAuthority)}`],
     ['Max slippage', `buys ${cfg.buySlippageBps / 100}%, sells ${cfg.sellSlippageBps / 100}%`],

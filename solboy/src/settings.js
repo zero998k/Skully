@@ -19,6 +19,8 @@ export const SETTINGS = {
   skipIfMintAuthority: { label: 'Skip tokens whose creator can mint more', type: 'bool' },
   skipIfFreezeAuthority: { label: 'Skip tokens whose creator can freeze holders', type: 'bool' },
   maxCopyDelaySeconds: { label: 'Skip buys slower to load than', type: 'int', min: 1, max: 120, unit: 's' },
+  paperRealism: { label: 'Paper trades are priced as', type: 'enum', values: ['home', 'pro', 'perfect'], fmt: (v) => ({ home: 'my setup (real lag and fees)', pro: '$100 setup (estimate)', perfect: 'perfect (no lag, no fees)' })[v] },
+  proTipSol: { label: '$100 setup tip per trade', type: 'number', min: 0, max: 0.1, unit: ' SOL' },
 };
 
 export function parseValue(spec, raw) {

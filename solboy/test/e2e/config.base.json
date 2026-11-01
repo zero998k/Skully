@@ -12,6 +12,7 @@
   "buySlippageBps": 1500,
   "sellSlippageBps": 2000,
   "priorityFeeMaxLamports": 1000000,
+  "paperRealism": "perfect",
   "followSells": true,
   "sellMode": "mirror",
   "takeProfitPct": null,

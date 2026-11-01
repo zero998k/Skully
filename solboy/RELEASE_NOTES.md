@@ -1,3 +1,16 @@
+## 1.18.0 — Realistic paper trading
+
+- Paper trades now act like real ones. Each trade waits the natural time a real one takes to land, then fills at the live price of that moment, so the bots that got in first are already in the price.
+- Real costs are counted: network fee, priority fee, and the one-time token account a first buy of a coin needs. Your paper balance and PnL include them.
+- Your slippage limit is applied exactly as set. A trade only fails if the price moved past it during the delay, and a failed trade still pays its network fee, like on Solana. Failed trades show as FAILED in History.
+- New Reality check card: the same trades three ways. ✨ Perfect (no lag, no fees), 🏠 My setup (your real lag and fees) and 🚀 $100 setup (an estimate with a server, paid RPC and a Jito tip). It also shows your typical lag, what lag and fees cost you, and how many trades would have failed. Pick which one runs your paper wallet.
+- Buy and sell slippage, the paper pricing mode and the 🚀 tip are now in Quick settings.
+- History shows each trade's three results, its lag and its fees. Older trade history keeps working.
+- Once you make real-money trades, paper uses your real measured landing times instead of an estimate.
+- Fixed: a dev's full sell could be read as a 50% sell when the RPC was a moment behind. SolBoy now waits until the RPC has caught up with that trade.
+
+🚀 is an estimate. 🏠 is much closer to real, but real trades can still differ. A tiny real-money test is the final check.
+
 ## 1.17.0 — The Cockpit
 
 - New Cockpit layout: menu on the left with the mascot and keyboard shortcuts, your balance in SOL and dollars at the top, open coins in the middle, and your wallets and live feed on the right. On a phone there's a tab bar at the bottom.

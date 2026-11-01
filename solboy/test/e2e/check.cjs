@@ -181,6 +181,8 @@ for(const [name,ok]of Object.entries(fl.venues??{}))check('live prices',name,ok=
 check('live prices','Raydium and Meteora streaming checks ran',Object.keys(fl.venues??{}).length===5,fl.venues);
 for(const [name,ok]of Object.entries(fl.phoneUnit??{}))check('phone access',name,ok===true,ok);
 check('phone access','restart and permanent-link checks ran',Object.keys(fl.phoneUnit??{}).length===6,fl.phoneUnit);
+for(const [name,ok]of Object.entries(fl.realityUnit??{}))check('realistic paper',name,ok===true,ok);
+check('realistic paper','lag, fee, slippage and three-way checks ran',Object.keys(fl.realityUnit??{}).length===10,fl.realityUnit);
 for(const name of ['phoneGuideOrPermanentLink','phoneWebSocketLive','phoneSellsSamePosition','phoneSetupFits','phoneRejectsWeakPassword','phoneLinkCreated','phoneRequiresLogin','phoneApiPrivate','phoneWrongPasswordRejected','phoneLiveState','phoneFits','phoneManifest','phoneSecretsBlocked','phoneLiveModeBlocked','phoneAssistantBlocked','phoneCannotOpenAnotherTunnel','phoneOriginProtected','phoneControlsSameBot','phoneLogoutRevokesSession','phoneStopRevokesLink','phoneSetupApiPrivate'])check('phone access',name,fl[name]===true,fl[name]);
 
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');

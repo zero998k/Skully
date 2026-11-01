@@ -11,6 +11,8 @@ export const DEFAULTS = {
   buySlippageBps: 1500,
   sellSlippageBps: 2000,
   priorityFeeMaxLamports: 1_000_000,
+  paperRealism: 'home', // paper trades land with your real delay and fees ('pro' estimates a faster paid setup, 'perfect' = old paper)
+  proTipSol: 0.001, // the per-trade Jito tip the 'pro' estimate pays
   followSells: true,
   sellMode: 'mirror',
   onlyFirstBuy: true,
@@ -66,6 +68,7 @@ export function loadConfig(file = basePath('config.json')) {
     throw new Error('"research.provider" must be "groq", "gemini" or "anthropic".');
   }
   if (!['mirror', 'all'].includes(cfg.sellMode)) throw new Error('"sellMode" must be "mirror" or "all".');
+  if (!['home', 'pro', 'perfect'].includes(cfg.paperRealism)) throw new Error('"paperRealism" must be "home", "pro" or "perfect".');
   cfg.buyAmountSol = checkedBuyAmount(cfg.buyAmountSol);
   return cfg;
 }

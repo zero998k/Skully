@@ -8,6 +8,8 @@ import { checkWallet, saveWallets, checkedBuyAmount, checkSellRule } from './con
 import { recordCopy } from './finder.js';
 import { transactionFill } from './fills.js';
 import { createLivePrices, positionPriceKey, decodeCurve } from './live-prices.js';
+import { createPaperReality } from './paper-reality.js';
+import path from 'node:path';
 
 const LAMPORTS = 1e9;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -17,6 +19,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * The book says whether we're paper or real-money trading, and holds the trading keypair.
  */
 const PUMP_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
+const TOKEN_2022 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 
 export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch, priceConnection }) {
   const positions = book.positions;
@@ -47,6 +50,9 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
     readMarket:getMarketPrices,canRequest:backgroundPriceReady,
     quotePriority:(pos,worth)=>{const pct=(worth/pos.solSpent-1)*100,tp=pos?.takeProfitPct??cfg.takeProfitPct;return (tp&&pct>=tp)||(cfg.stopLossPct&&pct<=-Math.abs(cfg.stopLossPct))?1:0;},
     onCurve:(mint,curve)=>rememberCurve(mint,curve)}):null;
+  // Paper trades land after the natural delay at the live price, with real costs (see paper-reality.js).
+  const reality=createPaperReality({cfg,connection,clock:()=>prices?.clock?.(),file:book.tradeLogFile?path.join(path.dirname(book.tradeLogFile),'paper-reality.json'):null});
+  const mintPrograms=new Map();
   const tag = () => (cfg.dryRun ? 'PAPER ' : '');
   // A wallet's own sell rule wins over the main settings; a coin's own take profit wins over the main one.
   const exitRule=w=>w?.sellRule==='first'?{onlyFull:false,all:true}:w?.sellRule==='match'?{onlyFull:false,all:false}:w?.sellRule==='wait90'?{onlyFull:true,all:false}
@@ -151,7 +157,7 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
       if (map.size > 5000) map.delete(map.keys().next().value);
       // Start the source balance read now, overlapping our buy's confirmation rather than delaying the exit.
       if (t.side === 'sell' && t.fractionSold == null && (positions.has(t.mint) || locks.has(t.mint))) {
-        t.left = walletBalance(w.address, t.mint).catch(() => null);
+        t.left = walletBalance(w.address, t.mint, t.order?.slot).catch(() => null);
       }
     }
     await Promise.all(trades.map(t => withLock(t.mint, async () => {
@@ -170,7 +176,7 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
       t.sourceTokensBefore=exact.sourceTokensBefore;t.sourceTokensAfter=exact.sourceTokensAfter;
       return t.fractionSold = exact.fractionSold;
     }
-    const left = await (t.left ?? walletBalance(w.address, t.mint).catch(() => null));
+    const left = await (t.left ?? walletBalance(w.address, t.mint, t.order?.slot).catch(() => null));
     if (left == null) throw new Error('Could not verify the developer token balance; sell was not submitted');
     t.sourceTokensBefore=String(left+t.tokenAmount);t.sourceTokensAfter=String(left);
     return t.fractionSold = Math.min(1, Number(t.tokenAmount) / Number(left + t.tokenAmount));
@@ -211,8 +217,9 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
       // Launch logs arrive at processed. A confirmed-only mint lookup can still be null at that instant.
       let info;
       for(let attempt=0;attempt<3;attempt++){
-        info=(await connection.getParsedAccountInfo(new PublicKey(mint),'processed')).value?.data?.parsed?.info;
-        if(info)break;
+        const value=(await connection.getParsedAccountInfo(new PublicKey(mint),'processed')).value;
+        info=value?.data?.parsed?.info;
+        if(info){mintPrograms.set(mint,value.owner?.toBase58?.()===TOKEN_2022?'token2022':'token');if(mintPrograms.size>500)mintPrograms.delete(mintPrograms.keys().next().value);break;}
         if(attempt<2)await sleep(75);
       }
       if (!info) return log('  skip: could not read token info'), true;
@@ -276,11 +283,11 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
       const c = await curveOf(mint);
       if (!c) throw e;
       await hooks.beforeSubmit?.();
-      if (cfg.dryRun) return { outRaw: curveOut(side, c, amountRaw), sig: null, via: 'curve', sentAt: Date.now(), confirmedAt: null };
+      if (cfg.dryRun) return { outRaw: curveOut(side, c, amountRaw), sig: null, via: 'curve', sentAt: Date.now(), confirmedAt: null, state0: { kind: 'curve', curve: c } };
       return pumpPortalSwap(side, mint, amountRaw, slippageBps, prioLamports, hooks);
     }
     await hooks.beforeSubmit?.();
-    if (cfg.dryRun) return { outRaw: BigInt(quote.outAmount), sig: null, via: 'jupiter', sentAt: Date.now(), confirmedAt: null };
+    if (cfg.dryRun) return { outRaw: BigInt(quote.outAmount), sig: null, via: 'jupiter', sentAt: Date.now(), confirmedAt: null, state0: { kind: 'quote', amount: BigInt(amountRaw), out: BigInt(quote.outAmount) } };
     const { signature, sentAt, confirm } = await executeSwap(quote, prioLamports, hooks);
     return receiptFill(side,mint,{sig:signature,via:'jupiter',sentAt},hooks,confirm);
   }
@@ -288,7 +295,7 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
   /** Trade straight on a Pump.fun curve: priced from the curve in paper mode, built by PumpPortal with real money. */
   async function curveSwap(side, mint, amountRaw, slippageBps, curve, prioLamports = null, hooks = {}) {
     await hooks.beforeSubmit?.();
-    if (cfg.dryRun) return { outRaw: curveOut(side, curve, amountRaw), sig: null, via: 'curve', sentAt: Date.now(), confirmedAt: null };
+    if (cfg.dryRun) return { outRaw: curveOut(side, curve, amountRaw), sig: null, via: 'curve', sentAt: Date.now(), confirmedAt: null, state0: { kind: 'curve', curve } };
     return pumpPortalSwap(side, mint, amountRaw, slippageBps, prioLamports, hooks);
   }
 
@@ -318,6 +325,46 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
     const k = vSol * vTokens;
     if (side === 'buy') return BigInt(Math.floor((vTokens - k / (vSol + (Number(amountRaw) / LAMPORTS) * 0.99)) * 1e6));
     return BigInt(Math.floor((vSol - k / (vTokens + Number(amountRaw) / 1e6)) * 0.99 * LAMPORTS));
+  }
+
+  // Paper only: let the trade land after its natural delay and price it three ways (paper-reality.js).
+  // A trade that would have failed for real fails here too, and still pays its network fee.
+  async function paperLand(side, mint, amountRaw, slippageBps, timing, seenAt, pos = null) {
+    if (!cfg.dryRun || !timing.state0 || reality.mode() === 'perfect') return timing;
+    const account = timing.via === 'curve' ? PublicKey.findProgramAddressSync([Buffer.from('bonding-curve'), new PublicKey(mint).toBuffer()], PUMP_PROGRAM)[0] : null;
+    const readState = async () => {
+      if (timing.via === 'curve') {
+        // A held coin's curve is already streamed live, so a sell usually needs no extra request.
+        const streamed = pos && prices?.get(mint, pos), hit = curves.get(mint);
+        if (streamed && !streamed.priceStale && /curve/i.test(streamed.priceSource ?? '') && hit?.curve) return { kind: 'curve', curve: hit.curve };
+        const c = decodeCurve(await connection.getAccountInfo(account, 'processed'));
+        if (c && !c.complete) return { kind: 'curve', curve: { vSol: Number(c.sol) / LAMPORTS, vTokens: Number(c.tokens) / 1e6 } };
+        if (!c?.complete) return null;
+      }
+      const [inputMint, outputMint] = side === 'buy' ? [WSOL, mint] : [mint, WSOL];
+      const q = await getQuote({ inputMint, outputMint, amount: String(amountRaw), slippageBps });
+      return { kind: 'quote', amount: BigInt(amountRaw), out: BigInt(q.outAmount) };
+    };
+    try {
+      const landed = await reality.land({ side, mint, amount: BigInt(amountRaw), state0: timing.state0, readState, via: timing.via, slippageBps, sentAt: timing.sentAt, seenAt, pos, account, tokenProgram: mintPrograms.get(mint) });
+      return landed ? { ...timing, reality: landed } : timing;
+    } catch (e) {
+      if (e.realityFailure) chargePaperFee(mint, e.feesLamports, side, pos?.sourceLabel, e.message);
+      throw e;
+    }
+  }
+  function chargePaperFee(mint, lamports, side, wallet, why) {
+    const sol = Number(lamports) / LAMPORTS, current = positions.get(mint) ?? null;
+    if (!(book.paperWallet?.status().enabled && book.positions.settlePaper)) positions.recordPnl(-sol);
+    else positions.settlePaper(mint, current, -BigInt(lamports), -sol);
+    recordTrade(book.tradeLogFile, { action: `${tag()}failed ${side}`, mint, wallet: wallet ?? '', sol: sol.toFixed(6), pnl: (-sol).toFixed(6), reason: why, realism: reality.mode(), fees_sol: sol.toFixed(6) });
+  }
+  // The comparison columns a realistic paper trade adds to the trade log.
+  function realityColumns(r, extra = {}) {
+    if (!r) return {};
+    const col = {}, fix = (v) => (v == null ? '' : Number(v).toFixed(6));
+    for (const m of ['perfect', 'home', 'pro']) { col[`${m}_sol`] = r.modes[m]?.failed && r.side === 'buy' ? 'failed' : fix(extra[m]?.sol); col[`${m}_pnl`] = fix(extra[m]?.pnl); }
+    return { ...col, realism: r.driver, lag_ms: String(r.lagMs), fees_sol: fix(Number(r.modes[r.driver].fees) / LAMPORTS) };
   }
 
   async function pumpPortalSwap(side, mint, amountRaw, slippageBps, prioLamports = null, hooks = {}) {
@@ -419,12 +466,20 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
   }
 
   // The watched wallet's balance of a coin right now ("processed": includes the trade just seen).
-  async function walletBalance(owner, mint) {
-    const res = await connection.getParsedTokenAccountsByOwner(new PublicKey(owner), { mint: new PublicKey(mint) }, 'processed');
-    return res.value.reduce((sum, a) => sum + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
+  // Pass the copied trade's slot: an RPC node a moment behind would report the balance from before
+  // that trade, which turned a dev's full sell into a "50%" one. Such a read is retried until it catches up.
+  async function walletBalance(owner, mint, minSlot = null) {
+    for (let i = 0; ; i++) {
+      const res = await connection.getParsedTokenAccountsByOwner(new PublicKey(owner), { mint: new PublicKey(mint) }, 'processed');
+      if (minSlot && res.context?.slot != null && res.context.slot < minSlot) {
+        if (i >= 9) throw new Error('The RPC has not caught up with this trade yet');
+        await sleep(100); continue;
+      }
+      return res.value.reduce((sum, a) => sum + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
+    }
   }
   async function heldBeforeBuy(w, t) {
-    const after=await walletBalance(w.address,t.mint);t.sourceTokensAfter=String(after);
+    const after=await walletBalance(w.address,t.mint,t.order?.slot);t.sourceTokensAfter=String(after);
     const before = after - t.tokenAmount;
     return before * 10n > t.tokenAmount; // dust left from an old trade doesn't count
   }
@@ -435,7 +490,9 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
     const complete = Math.max(sent, (Date.now() - t.seenAt) / 1000);
     speeds.push({ sent, confirmed, complete, side: t.side, paper: cfg.dryRun });
     if (speeds.length > 20) speeds.shift();
-    return ` ⚡ sent in ${sent.toFixed(2)}s` + (confirmed == null ? ' (paper)' : `, confirmation observed in ${confirmed.toFixed(2)}s`);
+    if (!cfg.dryRun && timing.confirmedAt != null) reality.noteLanding(timing.confirmedAt - timing.sentAt);
+    const landed = timing.reality ? `, landed after ${(timing.reality.lagMs / 1000).toFixed(2)}s (${timing.reality.landingSource})` : '';
+    return ` ⚡ sent in ${sent.toFixed(2)}s` + (confirmed == null ? ` (paper)${landed}` : `, confirmation observed in ${confirmed.toFixed(2)}s`);
   }
 
   async function sendCopyBuy(w, t, lamports, quote) {
@@ -451,7 +508,8 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
         }),
         onFailed:()=>positions.close(t.mint),
       };
-      const timing = t.curve ? await curveSwap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, t.curve, null, hooks) : await swap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, quote, null, hooks);
+      const swapped = t.curve ? await curveSwap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, t.curve, null, hooks) : await swap('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, quote, null, hooks);
+      const timing = await paperLand('buy', t.mint, BigInt(lamports), cfg.buySlippageBps, swapped, t.seenAt);
       finishBuy(w,t,timing,lamports,paperReservation);
 
     } catch (e) {
@@ -461,15 +519,20 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
   }
 
   function finishBuy(w,t,timing,expectedLamports,paperReservation=null) {
-    const sol=Number(timing.costRaw??expectedLamports)/LAMPORTS;
-    const opened={source:w.address,sourceLabel:w.label,sourceTrade:t.order,solSpent:sol,boughtTotal:sol,soldTotal:0,tokens:String(timing.outRaw),fillVerified:Boolean(timing.sig),balanceAt:Date.now(),openedAt:positions.get(t.mint)?.openedAt??new Date().toISOString()};
+    // A realistic paper buy costs what it would for real: the SOL in plus network fees (and a first-time token account).
+    const r=timing.reality,drive=r?.modes[r.driver],paid=m=>Number(BigInt(expectedLamports)*(m.failed?0n:1n)+m.fees)/LAMPORTS;
+    const sol=r?paid(drive):Number(timing.costRaw??expectedLamports)/LAMPORTS,tokens=r?drive.out:timing.outRaw;
+    const opened={source:w.address,sourceLabel:w.label,sourceTrade:t.order,solSpent:sol,boughtTotal:sol,soldTotal:0,tokens:String(tokens),fillVerified:Boolean(timing.sig),balanceAt:Date.now(),openedAt:positions.get(t.mint)?.openedAt??new Date().toISOString()};
+    if(r)opened.reality=Object.fromEntries(Object.entries(r.modes).map(([m,v])=>[m,{tokens:String(v.out),cost:paid(v)}]));
     const sourceTokens=t.sourceTokensAfter!=null&&BigInt(t.sourceTokensAfter)>0n?t.sourceTokensAfter:t.tokenAmount??positions.get(t.mint)?.sourceExitBaselineTokens;
     if(sourceTokens!=null&&BigInt(sourceTokens)>0n){opened.sourceExitBaselineTokens=String(sourceTokens);opened.sourceRemainingTokens=String(sourceTokens);}
-    if(cfg.dryRun&&book.paperWallet)book.paperWallet.commitBuy(paperReservation,t.mint,opened,expectedLamports);else positions.open(t.mint,opened);
+    if(cfg.dryRun&&book.paperWallet)book.paperWallet.commitBuy(paperReservation,t.mint,opened,expectedLamports,drive?.fees??0n);else positions.open(t.mint,opened);
     if(t.curve)prices?.seedCurve(t.mint,t.curve,t.order?.slot,t.seenAt);
-    recordTrade(book.tradeLogFile,{action:`${tag()}buy`,mint:t.mint,wallet:w.label,sol,reason:`copied ${w.label}${cfg.dryRun?' (simulation estimate)':' (receipt verified, including network costs)'}`,tx:timing.sig});
-    decision(w,t,'Copied',cfg.dryRun?'Practice buy priced as an estimate':'Buy receipt verified');
-    recordCopy({mint:t.mint,wallet:w.label,source:w.address,sol,tokens:String(timing.outRaw)});
+    const landedNote=r?`, landed after ${(r.lagMs/1000).toFixed(2)}s with real fees`:'';
+    recordTrade(book.tradeLogFile,{action:`${tag()}buy`,mint:t.mint,wallet:w.label,sol,reason:`copied ${w.label}${cfg.dryRun?` (simulation estimate${landedNote})`:' (receipt verified, including network costs)'}`,tx:timing.sig,
+      ...realityColumns(r&&{...r,side:'buy'},r?Object.fromEntries(Object.entries(r.modes).map(([m,v])=>[m,{sol:paid(v)}])):{})});
+    decision(w,t,'Copied',cfg.dryRun?`Practice buy priced as an estimate${landedNote}`:'Buy receipt verified');
+    recordCopy({mint:t.mint,wallet:w.label,source:w.address,sol,tokens:String(tokens)});
     log(c.green(`  ${tag()}BOUGHT ${sol} SOL of ${short(t.mint)}`)+noteSpeed(t,timing)+(timing.sig?`  tx: ${timing.sig}`:''));
     notify(`${tag()}BUY ${sol} SOL of ${t.mint}\ncopied ${w.label}\nhttps://dexscreener.com/solana/${t.mint}`);
   }
@@ -599,8 +662,9 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
       } }) };
       // A fresh copied Pump sell already supplies the active venue and reserves: no quote detour.
       const freshCurve = trigger.curve && Date.now() - trigger.seenAt < 2000;
-      const timing = freshCurve ? await curveSwap('sell', mint, amount, slippageBps ?? cfg.sellSlippageBps, trigger.curve, prioLamports, hooks) :
+      const swapped = freshCurve ? await curveSwap('sell', mint, amount, slippageBps ?? cfg.sellSlippageBps, trigger.curve, prioLamports, hooks) :
         await swap('sell', mint, amount, slippageBps ?? cfg.sellSlippageBps, null, prioLamports, hooks);
+      const timing = await paperLand('sell', mint, amount, slippageBps ?? cfg.sellSlippageBps, swapped, trigger.seenAt, positions.get(mint));
       return finishSell(mint, pos, { amount: String(amount), held: String(held), full, fraction, reason, trigger }, timing);
 
     } catch (e) {
@@ -621,7 +685,9 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
   }
 
   function finishSell(mint, pos, intent, timing) {
-    const { outRaw, sig } = timing;
+    // A realistic paper sell pays its network fees out of the proceeds, like a real one.
+    const r = timing.reality, drive = r?.modes[r.driver];
+    const outRaw = r ? drive.out - drive.fees : timing.outRaw, { sig } = timing;
     const { reason, trigger } = intent, held=BigInt(pos.tokens||intent.held), actual=BigInt(timing.filledTokens??intent.amount),amount=actual>held?held:actual,full=amount>=held,fraction=Number(amount)/Number(held);
     const solOut = Number(outRaw) / LAMPORTS;
     const cost = pos.solSpent * (full ? 1 : Number(amount) / Number(held));
@@ -629,18 +695,29 @@ export function createBot({ cfg, connection, book, rpcFetch, backgroundRpcFetch,
     const remaining=held-amount,exit=pos.copiedExit;
     const keepExit=exit&&remaining>BigInt(exit.targetRemaining)?{...exit,nextAttemptAt:Date.now(),lastError:null}:null;
     const keepAuto=pos.queuedExit?.trigger?.autoExit?{...pos.queuedExit,nextAttemptAt:Date.now(),lastError:null}:null;
+    // The two comparison modes sell the same share of their own coins.
+    const compare={};let shadows=null;
+    if(r&&pos.reality){
+      shadows={};
+      for(const [m,v]of Object.entries(pos.reality)){
+        const res=r.modes[m],held=BigInt(v.tokens),part=res?.part??0n,whole=held<=part||full,share=whole?1:held>0n?Number(part)/Number(held):0;
+        const proceeds=res&&!res.skipped?Number(res.out-res.fees)/LAMPORTS:0,spent=v.cost*share;
+        compare[m]={sol:proceeds,pnl:proceeds-spent};shadows[m]={tokens:String(whole?0n:held-part),cost:v.cost-spent};
+      }
+    }else if(r)for(const [m,res]of Object.entries(r.modes))if(!res.skipped){const proceeds=Number(res.out-res.fees)/LAMPORTS;compare[m]={sol:proceeds,pnl:proceeds-cost};}
     const next=full?null:{...pos,solSpent:pos.solSpent-cost,tokens:String(remaining),pendingSell:null,queuedExit:keepAuto,copiedExit:keepExit,
-      fillVerified:Boolean(timing.sig),balanceAt:Date.now(),boughtTotal:pos.boughtTotal??pos.solSpent,soldTotal:(pos.soldTotal??0)+solOut};
+      fillVerified:Boolean(timing.sig),balanceAt:Date.now(),boughtTotal:pos.boughtTotal??pos.solSpent,soldTotal:(pos.soldTotal??0)+solOut,...(shadows?{reality:shadows}:{})};
     const settled=cfg.dryRun&&book.paperWallet?.settleSell(mint,next,outRaw,pnl);
     if(!settled){positions.recordPnl(pnl);if(full)positions.close(mint);else positions.update(mint,next);}
     if(full)finishRetiring(pos.source);
     checkGoal();
 
     const pnlText = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL`;
-    recordTrade(book.tradeLogFile, { action: `${tag()}sell`, mint, wallet: pos.sourceLabel, sol: solOut.toFixed(6), pnl: pnl.toFixed(6), reason, tx: sig });
+    if(r)compare[r.driver]={sol:solOut,pnl};
+    recordTrade(book.tradeLogFile, { action: `${tag()}sell`, mint, wallet: pos.sourceLabel, sol: solOut.toFixed(6), pnl: pnl.toFixed(6), reason, tx: sig, ...realityColumns(r&&{...r,side:'sell'},compare) });
     log(c.yellow(`  ${tag()}SOLD ${full ? 'all' : `${Math.round(fraction * 100)}%`} of ${short(mint)} for ${solOut.toFixed(4)} SOL`) + ` (${(pnl >= 0 ? c.green : c.red)(pnlText)}) - ${reason}` + noteSpeed(trigger, timing) + (sig ? `  tx: ${sig}` : ''));
     notify(`${tag()}SELL ${short(mint)} for ${solOut.toFixed(4)} SOL (${pnlText})\n${reason}`);
-    return { ok: true, side: 'sell', sol: Number(timing.outRaw) / LAMPORTS, sig: timing.sig };
+    return { ok: true, side: 'sell', sol: Number(outRaw) / LAMPORTS, sig: timing.sig };
   }
 
   async function reconcileSell(mint) {

@@ -116,7 +116,9 @@ export function createLivePrices({connection,book,readQuote,readMarket,canReques
     for(const fn of listeners)try{fn(message);}catch{}
   }
   function loseStream(){if(lost)return;lost=true;streamEpoch++;for(const e of entries.values()){e.resyncNeeded=true;e.bootstrapped=false;e.poolPending=true;for(const v of Object.values(e.vaults))v.dirty=false;}broadcast(true);}
-  function heartbeat(ctx){latestSlot=Math.max(latestSlot,ctx?.slot??0);if(heartbeatAt&&now()-heartbeatAt>=heartbeatMaxAge)loseStream();heartbeatAt=now();lost=false;}
+  // Measured slot pace, so realistic paper trades wait the network's real block time.
+  const slotTimes=[];
+  function heartbeat(ctx){if((ctx?.slot??0)>latestSlot){slotTimes.push([ctx.slot,now()]);if(slotTimes.length>60)slotTimes.shift();}latestSlot=Math.max(latestSlot,ctx?.slot??0);if(heartbeatAt&&now()-heartbeatAt>=heartbeatMaxAge)loseStream();heartbeatAt=now();lost=false;}
   function setCurve(e,info,slot,at=now()){
     if(!current(e)||slot<(e.curveSlot??0))return;
     e.curveVersion=(e.curveVersion??0)+1;
@@ -336,6 +338,7 @@ export function createLivePrices({connection,book,readQuote,readMarket,canReques
       e.market=curve.vSol*Number(e.pos.tokens)/1e6/curve.vTokens;e.marketAt=observedAt;e.marketSlot=slot??null;e.marketSource='Pump curve · trade event';
       broadcast(true);
     },
+    clock(){const a=slotTimes[0],b=slotTimes.at(-1);return {slot:latestSlot,slotMs:a&&b&&b[0]-a[0]>=10?(b[1]-a[1])/(b[0]-a[0]):null};},
     observeRoute,sync,tick,get(mint,pos){const e=entries.get(mint);return e&&current(e)&&e.key===positionPriceKey(book.mode,mint,pos)?view(e):null;},
     subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn);},
   };

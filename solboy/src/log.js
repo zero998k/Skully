@@ -69,12 +69,29 @@ export function captureLibraryOutput() {
 
 export const short = (s) => (s ? `${s.slice(0, 4)}...${s.slice(-4)}` : '');
 
+// Realistic paper trades add how the same trade came out with no lag ("perfect"), on your setup ("home")
+// and on a faster paid setup ("pro"), plus the delay and fees. Older logs gain these columns, empty.
+const REALITY_COLUMNS = ['realism', 'lag_ms', 'fees_sol', 'perfect_sol', 'home_sol', 'pro_sol', 'perfect_pnl', 'home_pnl', 'pro_pnl'];
+const HEADER = ['time', 'action', 'token', 'copied_wallet', 'sol', 'pnl_sol', 'reason', 'tx', ...REALITY_COLUMNS].join(',');
+
 /** Append one row to a CSV trade log you can open in Excel or Google Sheets. */
 export function recordTrade(file, row) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  if (!fs.existsSync(file)) fs.writeFileSync(file, 'time,action,token,copied_wallet,sol,pnl_sol,reason,tx\n');
-  const cells = [new Date().toISOString(), row.action, row.mint, row.wallet, row.sol, row.pnl ?? '', row.reason ?? '', row.tx ?? ''];
+  if (!fs.existsSync(file)) fs.writeFileSync(file, `${HEADER}\n`);
+  else upgradeHeader(file);
+  const cells = [new Date().toISOString(), row.action, row.mint, row.wallet, row.sol, row.pnl ?? '', row.reason ?? '', row.tx ?? '', ...REALITY_COLUMNS.map((k) => row[k] ?? '')];
   fs.appendFileSync(file, cells.map((c) => `"${String(c).replaceAll('"', '""')}"`).join(',') + '\n');
+}
+
+const upgraded = new Set();
+function upgradeHeader(file) {
+  if (upgraded.has(file)) return;
+  const text = fs.readFileSync(file, 'utf8'), end = text.indexOf('\n'), header = end < 0 ? text : text.slice(0, end);
+  if (header !== HEADER && header === 'time,action,token,copied_wallet,sol,pnl_sol,reason,tx') {
+    fs.writeFileSync(`${file}.tmp`, HEADER + text.slice(header.length));
+    fs.renameSync(`${file}.tmp`, file);
+  }
+  upgraded.add(file);
 }
 
 /** Read the trade log back as objects (oldest first). */

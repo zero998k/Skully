@@ -6,7 +6,7 @@ import { createShare } from './share.js';
 import { createPhone } from './phone.js';
 import { createClub } from './club.js';
 import { log, onLog, readTrades } from './log.js';
-import { summarize, scoreboard } from './stats.js';
+import { summarize, scoreboard, reality } from './stats.js';
 import { tokenNames, cachedTokenName } from './tokens.js';
 import { settingsRows } from './ui.js';
 import { applySetting, settingValue } from './settings.js';
@@ -19,7 +19,7 @@ import { createSolRate } from './sol-rate.js';
 import { RESTART_CODE } from './update.js';
 
 // Settings the dashboard's Quick settings card can change while SolBoy runs.
-const QUICK = ['takeProfitPct', 'stopLossPct', 'buyAmountSol', 'dailyLossLimitSol', 'maxOpenPositions', 'onlyFirstBuy', 'sellOnlyOnFullExit'];
+const QUICK = ['takeProfitPct', 'stopLossPct', 'buyAmountSol', 'dailyLossLimitSol', 'maxOpenPositions', 'onlyFirstBuy', 'sellOnlyOnFullExit', 'buySlippageBps', 'sellSlippageBps', 'paperRealism', 'proTipSol'];
 
 function classify(text) {
   if (/BOUGHT/.test(text)) return 'buy';
@@ -103,7 +103,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
     return {
       solRate:solRate.get(),copyActivity:bot.copyActivity?.()??[],pendingBuys:positions.entries().filter(([,p])=>p.pendingBuy).map(([mint,p])=>({mint,from:p.sourceLabel,sig:p.pendingBuy.sig})),
       paperWallet:book.paperWallet?.status()??null,portfolioRevision, mode: book.mode, paused: bot.isBuyingPaused(), copySpeed: bot.copySpeed(),
-      summary: summarize(counted, positions.dayStart()), todayPnl: positions.todayPnl(),
+      summary: summarize(counted, positions.dayStart()), todayPnl: positions.todayPnl(), reality: book.mode === 'paper' ? reality(counted) : null,
       dayResetAt: positions.resetToday(), dailyLossLimit: cfg.dailyLossLimitSol, maxSlots: cfg.maxOpenPositions,
       inventory: positions.entries().filter(([,p])=>!p.pendingBuy).map(([mint, pos]) => ({ mint, name: names.get(mint) ?? mint,
         pendingSell: pos.pendingSell ? { sig: pos.pendingSell.sig, submittedAt: pos.pendingSell.submittedAt } : null,
@@ -161,6 +161,7 @@ export async function startDashboard({ cfg, bot, book, account, updater, finder,
       paused: bot.isBuyingPaused(),
       copySpeed: bot.copySpeed(),
       summary: summarize(positions.counted(trades), positions.dayStart()),
+      reality: book.mode === 'paper' ? reality(positions.counted(trades)) : null,
       dayResetAt: positions.resetToday(),
       todayPnl: positions.todayPnl(),
       dailyLossLimit: cfg.dailyLossLimitSol,
