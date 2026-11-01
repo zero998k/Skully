@@ -105,6 +105,14 @@ const near=(a,b,eps=1e-6)=>Math.abs(Number(a)-Number(b))<eps;
  assert.equal(row.realism,'pro');assert(near(f.positions.get(m).solSpent,0.05+fees+0.002));assert(near(row.home_sol,0.05+fees));
  results.proSetupEstimateDrivesTheWalletWhenChosen=true;
 }
+// 6b. 🚀 is not instant: it lands sooner than 🏠 but still at a later price than the decision.
+{
+ const f=setup({buySlippageBps:5000}),m=mint(),t0=Date.now();
+ f.connection.getAccountInfo=async()=>{f.curveReads++;const up=BigInt(1000+Math.round((Date.now()-t0)/50));return curveAccount(SOL0*up/1000n,TOK0*1000n/up);};
+ await f.emit(m,'buy');const r=f.positions.get(m).reality,perfect=BigInt(r.perfect.tokens),pro=BigInt(r.pro.tokens),home=BigInt(r.home.tokens);
+ assert(pro<perfect,`$100 setup pays for its delay too (${pro} vs ${perfect})`);assert(pro>=home,'$100 setup lands no later than yours');
+ results.proSetupFillsAtItsOwnLandingPrice=true;
+}
 // 7. A dev's full sell read from an RPC node a moment behind no longer looks like a 50% sell.
 {
  const f=setup({paperRealism:'perfect',sellOnlyOnFullExit:true}),m=mint();await f.emit(m,'buy',{slot:100});

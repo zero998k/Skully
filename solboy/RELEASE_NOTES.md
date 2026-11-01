@@ -1,3 +1,10 @@
+## 1.18.2 — An honest "$100 setup" estimate
+
+- The 🚀 $100 setup paper mode is no longer instant. Before, it filled at the exact price SolBoy saw, which made it look better than any real setup can be.
+- Now it lands like a fast real setup would: about 0.45 s after sending most of the time, sometimes 1 or 2 slots later, and never later than your own setup. It pays the live price at that moment, plus fees and the Jito tip.
+- Its trades can now fail when the price moves past your slippage limit, the same as real trades.
+- Still an estimate: a paid setup also spots the copied wallet's trade a little sooner, and paper can't measure that yet. A tiny real-money test is still the only real proof.
+
 ## 1.18.1 — Dead coins stop getting stuck
 
 - Paper mode: when a coin dies and nobody can sell it any more, SolBoy no longer keeps retrying the sell forever. Once the wallet you copied has sold out and there has been no market for a minute, the coin is closed as a total loss and moves to History. If the wallet still holds it, SolBoy waits 10 minutes first.

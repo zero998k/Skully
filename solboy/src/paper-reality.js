@@ -6,7 +6,9 @@ import path from 'node:path';
  *   perfect: the price SolBoy saw when it decided (what paper mode always showed), no costs.
  *   home:    your setup. The trade "lands" after the natural delay, at the live price of that moment,
  *            pays real network costs, and fails exactly when that price moved past your slippage limit.
- *   pro:     an estimate of a server + paid RPC + Jito setup: the decision price, real costs plus a tip.
+ *   pro:     an estimate of a server + paid RPC + Jito setup. It lands sooner (fast send, usually the next
+ *            slot thanks to the tip) but still not instantly: it fills at the live price of its own landing,
+ *            pays real costs plus the tip, and fails past your slippage limit like any real trade.
  * One of them (cfg.paperRealism) drives the paper wallet; the other two are kept beside it for comparison.
  * Real-money trading never comes through here.
  */
@@ -64,6 +66,13 @@ export function createPaperReality({ cfg, connection, clock = () => null, file, 
     return { ms: Math.round(150 + slots * slotMs()), slots, source: beat == null ? 'network estimate' : 'live network' };
   }
 
+  // The $100 setup: a server next to the validators sends in ~50ms and a Jito tip usually gets the trade
+  // into the next slot, sometimes one or two later. It never lands later than your own setup would.
+  function proLanding(homeMs) {
+    const r = random(), slots = 1 + (r < .6 ? 0 : r < .9 ? 1 : 2);
+    return Math.min(homeMs, Math.round(50 + slots * slotMs()));
+  }
+
   // Coins out (buy) or lamports out (sell) for `amount`, from a curve or a quote of a nearby amount.
   function outFor(state, side, amount) {
     if (!state) return null;
@@ -91,12 +100,15 @@ export function createPaperReality({ cfg, connection, clock = () => null, file, 
   async function land({ side, mint, amount, state0, readState, via, slippageBps, sentAt, seenAt, pos = null, account = null, tokenProgram = 'token' }) {
     const driver = mode();
     if (driver === 'perfect') return null;
-    const wait = await landing(account, via), landAt = sentAt + wait.ms;
-    if (landAt > now()) await sleep(landAt - now());
-    let state1 = null;
-    try { state1 = await readState(); } catch {}
-    state1 ??= state0;
-    const lagMs = Math.max(0, Math.round(landAt - (seenAt ?? sentAt))), limit = Number(slippageBps) / 10000;
+    const wait = await landing(account, via), proMs = proLanding(wait.ms);
+    // Read the market when each setup's trade would land: the $100 one first, then yours.
+    const readAt = async (ms) => {
+      if (sentAt + ms > now()) await sleep(sentAt + ms - now());
+      try { return (await readState()) ?? state0; } catch { return state0; }
+    };
+    const statePro = await readAt(proMs), state1 = wait.ms > proMs ? await readAt(wait.ms) : statePro;
+    const landMs = driver === 'pro' ? proMs : wait.ms;
+    const lagMs = Math.max(0, Math.round(sentAt + landMs - (seenAt ?? sentAt))), limit = Number(slippageBps) / 10000;
     const newAccount = side === 'buy' && !accounts.has(mint) ? (tokenProgram === 'token2022' ? 'token2022' : 'token') : null;
     const modes = {};
     for (const m of MODES) {
@@ -105,9 +117,9 @@ export function createPaperReality({ cfg, connection, clock = () => null, file, 
       const held = side === 'sell' ? BigInt(shadow?.tokens ?? pos.tokens) : null;
       if (side === 'sell' && held <= 0n) { modes[m] = { failed: false, out: 0n, fees: 0n, skipped: true }; continue; }
       const part = side === 'buy' ? amount : BigInt(pos.tokens) > 0n ? held * amount / BigInt(pos.tokens) : 0n;
-      const quoted = outFor(state0, side, part), got = m === 'home' ? outFor(state1, side, part) : quoted;
+      const quoted = outFor(state0, side, part), got = m === 'home' ? outFor(state1, side, part) : m === 'pro' ? outFor(statePro, side, part) : quoted;
       const fee = fees(m, via, newAccount);
-      const failed = m === 'home' && quoted > 0n && Number(got) < Number(quoted) * (1 - limit);
+      const failed = m !== 'perfect' && quoted > 0n && Number(got) < Number(quoted) * (1 - limit);
       modes[m] = { failed, out: got, fees: fee, part, moved: quoted > 0n ? (1 - Number(got) / Number(quoted)) * 100 : 0 };
     }
     // A comparison mode whose trade failed would have been retried: count the wasted fee and keep the late fill.
@@ -116,7 +128,7 @@ export function createPaperReality({ cfg, connection, clock = () => null, file, 
       if (side === 'buy') Object.assign(modes[m], { out: 0n, fees: BASE_FEE + priority(via) });
       else modes[m].fees += BASE_FEE + priority(via);
     }
-    const result = { driver, modes, lagMs, landingMs: wait.ms, landingSource: wait.source };
+    const result = { driver, modes, lagMs, landingMs: landMs, landingSource: driver === 'pro' ? 'estimate for the $100 setup' : wait.source };
     if (modes[driver]?.failed) {
       noteFail(side, mint, modes[driver].moved);
       const failure = new Error(`Paper ${side} would have failed for real: the price moved ${modes[driver].moved.toFixed(1)}% in the ${(lagMs / 1000).toFixed(2)}s it took to land, past your ${limit * 100}% slippage limit. Failed trades still pay network fees.`);
