@@ -33,6 +33,7 @@ F('"every sell" mode mirrors a 50% sell', f.savedSellRule === false && /sold 50%
 F('Sell now', f.afterSellNow === 0, 'afterSellNow');
 F('cockpit layout shows sidebar, balance, hold-to-sell, wallets, missed, goal and feed', f.cockpitParts === true, 'cockpitParts');
 F('Ask SolBoy button never covers the sidebar buttons', f.sideNotCovered === true, 'sideNotCovered');
+F('🏠 is hidden unless it runs the paper wallet', f.homeHiddenOnPro === true, 'homeHiddenOnPro');
 F('dev-sell alert banner when a copied wallet sells', f.devAlertShown === true, 'devAlertShown');
 F('per-coin take profit override', f.coinTp === true, 'coinTp');
 F('one-tap 25% sell', f.quarterSold === true, 'quarterSold');

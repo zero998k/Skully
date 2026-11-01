@@ -938,16 +938,18 @@ function livePrice(p){
 }
 // Reality check: the same paper trades with no lag, on your setup, and on a faster paid setup (an estimate).
 const REALISM={home:['🏠','My setup'],pro:['🚀','$100 setup'],perfect:['✨','Perfect']};
+// 🏠 is still recorded for every trade but only shown while it runs the paper wallet.
+const realismShown=()=>(S.quick?.paperRealism??'home')==='home'?['perfect','home','pro']:['perfect','pro'];
 function renderReality(){
   const box=$('realityPanel'),r=S.reality,mode=S.quick?.paperRealism??'home';box.hidden=S.mode!=='paper';if(box.hidden)return;
   const sig=JSON.stringify([r,mode]);if(box.dataset.sig===sig)return;box.dataset.sig=sig;
   const tile=m=>`<div class="rtile${m===mode?' on':''}"><span>${REALISM[m][0]} ${REALISM[m][1]}${m==='pro'?' <small>estimate</small>':''}</span><b class="${cls(r?.[m]??0)}">${r?.trades?fmt(r[m])+' SOL':'–'}</b>${r?.trades?`<small>${usdValue(r[m])}</small>`:''}<button class="mini" data-realism="${m}" ${m===mode?'disabled':''}>${m===mode?'✓ In use':'Use this'}</button></div>`;
-  const lagCost=r?.trades?r.perfect-r.home-r.fees:0;
-  box.innerHTML=`<h2><span class="ic" style="background:var(--win)">🔍</span>Reality check <small style="font-weight:400;font-size:12px;color:var(--ink-3)">same trades, 3 ways</small></h2>
-    <div class="rgrid">${['perfect','home','pro'].map(tile).join('')}</div>
+  const shown=realismShown(),lagCost=r?.trades?r.perfect-r[mode==='perfect'?'pro':mode]-r.fees:0;
+  box.innerHTML=`<h2><span class="ic" style="background:var(--win)">🔍</span>Reality check <small style="font-weight:400;font-size:12px;color:var(--ink-3)">same trades, ${shown.length} ways</small></h2>
+    <div class="rgrid">${shown.map(tile).join('')}</div>
     ${r?.trades?`<div class="rfacts"><span>⏱️ Typical lag <b>${r.lagMedianMs==null?'–':(r.lagMedianMs/1000).toFixed(2)+'s'}</b></span><span>📉 Lag + price moves cost <b>${fmt(-Math.max(0,lagCost))} SOL</b></span><span>💸 Fees <b>${fmt(-r.fees)} SOL</b></span><span>❌ Would have failed <b>${r.failedBuys} buys · ${r.failedSells} sells</b></span></div>`
       :'<p class="hint">Starts with your next paper trade. Each one lands after your natural delay at the live price, pays real fees, and fails only if the price moves past your slippage limit.</p>'}
-    <p class="hint">🚀 is an estimate of a server + paid RPC + Jito tip setup. 🏠 uses your real lag. Real trades can still differ; a tiny real-money test is the final check.</p>`;
+    <p class="hint">🚀 is an estimate of a server + paid RPC + Jito tip setup.${shown.includes('home')?' 🏠 uses your real lag.':''} Real trades can still differ; a tiny real-money test is the final check.</p>`;
   box.querySelectorAll('[data-realism]').forEach(b=>b.onclick=async()=>{
     try{const out=await api('/api/settings',{setting:'paperRealism',value:b.dataset.realism});toast('win','Paper pricing changed',out.summary);quickSig=null;refresh();}catch(e){toast('loss',"Couldn't change it",e.message);}
   });
@@ -1230,7 +1232,7 @@ function renderHistory() {
   if (!S.trades.length) { $('history').innerHTML = '<div class="empty-msg">No trades yet. They show up here as soon as SolBoy copies something.</div>'; return; }
   $('history').innerHTML = `<table><tr><th>When</th><th>Action</th><th>Token</th><th>SOL</th><th>PnL</th><th>Why</th><th>Journal</th></tr>${S.trades.map((t) => {
     const sell = t.action.endsWith('sell'), failed = / failed /.test(` ${t.action} `), pnl = t.pnl_sol === '' ? null : Number(t.pnl_sol);
-    const ways = t.realism && !failed ? ['perfect','home','pro'].map(m => { const v = sell ? t[m+'_pnl'] : t[m+'_sol']; return v === '' || v == null ? '' : `${REALISM[m][0]} ${v === 'failed' ? 'failed' : sell ? fmt(Number(v)) : Number(v).toFixed(4)}`; }).filter(Boolean).join(' · ') : '';
+    const ways = t.realism && !failed ? realismShown().map(m => { const v = sell ? t[m+'_pnl'] : t[m+'_sol']; return v === '' || v == null ? '' : `${REALISM[m][0]} ${v === 'failed' ? 'failed' : sell ? fmt(Number(v)) : Number(v).toFixed(4)}`; }).filter(Boolean).join(' · ') : '';
     const extra = t.realism ? `<small class="ways">${ways}${ways ? ' · ' : ''}${t.lag_ms ? `lag ${(Number(t.lag_ms)/1000).toFixed(2)}s` : ''}${t.fees_sol ? ` · fees ${Number(t.fees_sol).toFixed(4)}` : ''}</small>` : '';
     return `<tr><td>${ago(t.time)}</td><td><span class="tag ${failed ? 'loss' : sell ? 'sell' : 'buy'}">${failed ? 'FAILED' : sell ? 'SELL' : 'BUY'}</span></td><td>${esc(t.name)}</td><td class="num">${Number(t.sol).toFixed(4)}</td><td class="num ${cls(pnl)}">${pnl == null ? '' : fmt(pnl)}</td><td>${esc(t.reason)}${extra}</td><td><button class="tagbtn${jtags[jkey(t)]?' on':''}" data-jtag="${esc(jkey(t))}">${esc(jtags[jkey(t)]??JTAGS[0])}</button></td></tr>`;
   }).join('')}</table><div class="hint">Full history: <code>${esc(S.tradeLogFile)}</code></div>`;

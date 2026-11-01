@@ -83,6 +83,7 @@ const until = async (fn, ms = 10000) => { const end = Date.now() + ms; for (;;) 
   // ---- 1.17.0 Cockpit: dev-sell alert, per-coin take profit, one-tap 25%, wallet rules, daily goal ----
   R.cockpitParts = await p.evaluate(() => ['side', 'topBal', 'sellAllHold', 'walletMini', 'missed', 'goalBar', 'feed'].every((id) => document.getElementById(id)?.offsetParent));
   R.sideNotCovered = await p.evaluate(() => { const s = document.getElementById('side'), b = document.getElementById('checkUpdBtn'); s.scrollTop = s.scrollHeight; const r = b.getBoundingClientRect(); return b.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)); });
+  R.homeHiddenOnPro = await p.evaluate(() => { const q = S.quick; S.quick = { ...q, paperRealism: 'pro' }; const pro = realismShown().join(); S.quick = { ...q, paperRealism: 'home' }; const home = realismShown().join(); S.quick = q; return pro === 'perfect,pro' && home === 'perfect,home,pro'; });
   R.devAlertShown = await until(async () => p.locator('#devAlert').isVisible());
   await p.locator('[data-coin-tp="30"]').first().click(); R.coinTp = await until(async () => (await p.evaluate(() => S.inventory[0]?.takeProfitPct)) === 30);
   const tokensBefore = await p.evaluate(() => S.inventory[0].tokens);

@@ -1,3 +1,7 @@
+## 1.18.4 — Cleaner Reality check
+
+- When the 🚀 $100 setup or ✨ Perfect runs your paper wallet, 🏠 My setup is hidden from the Reality check card and History. It's still recorded quietly in the background. You can switch back to 🏠 in Quick settings at any time, and it shows again.
+
 ## 1.18.3 — Update button uncovered
 
 - The floating Ask SolBoy button no longer covers the bottom sidebar buttons, including Check for updates. The sidebar now ends above it and scrolls if needed.
