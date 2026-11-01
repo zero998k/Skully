@@ -6,9 +6,11 @@ import path from 'node:path';
  *   perfect: the price SolBoy saw when it decided (what paper mode always showed), no costs.
  *   home:    your setup. The trade "lands" after the natural delay, at the live price of that moment,
  *            pays real network costs, and fails exactly when that price moved past your slippage limit.
- *   pro:     an estimate of a server + paid RPC + Jito setup. It lands sooner (fast send, usually the next
- *            slot thanks to the tip) but still not instantly: it fills at the live price of its own landing,
- *            pays real costs plus the tip, and fails past your slippage limit like any real trade.
+ *   pro:     an estimate of a server + paid RPC + Jito setup. It sends faster, and the tip buys a better place in
+ *            the queue, but it is never instant: its slot depends on how its tip and fee compare with the bots
+ *            competing for the same coin right now, some bundles get dropped and re-sent, and it fills at the
+ *            live price of its own landing, paying real costs plus the tip. Its trades fail past your slippage
+ *            limit like real ones. It gets no credit for spotting trades sooner, so it leans pessimistic.
  * One of them (cfg.paperRealism) drives the paper wallet; the other two are kept beside it for comparison.
  * Real-money trading never comes through here.
  */
@@ -17,6 +19,7 @@ const MODES = ['perfect', 'home', 'pro'];
 const BASE_FEE = 5000n;                                       // one signature
 const RENT = { token: 2_039_280n, token2022: 2_074_080n };    // a new token account in your wallet, kept until closed
 const CU = { curve: 150_000, jupiter: 300_000 };              // typical compute used, to compare priority fees
+const READ_LAG_MS = 100;                                      // a price read is itself a moment behind the chain
 
 export function createPaperReality({ cfg, connection, clock = () => null, file, now = Date.now, random = Math.random, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   let data = { landings: [], accounts: [], fails: [] };
@@ -33,23 +36,25 @@ export function createPaperReality({ cfg, connection, clock = () => null, file, 
   // How busy the network is around this coin right now: recent priority fees paid by trades
   // touching the same account, compared with the fee SolBoy pays. Cached briefly; never blocks a trade.
   const busy = new Map();
-  async function competition(account, via) {
+  // `extra` is lamports paid on top of the priority fee (the Jito tip), counted as part of the bid.
+  async function competition(account, via, extra = 0n) {
     const key = account?.toBase58?.() ?? 'all', hit = busy.get(key);
-    if (hit && now() - hit.at < 15_000) return hit.value;
-    let value = null;
-    try {
-      if (typeof connection?.getRecentPrioritizationFees === 'function') {
-        const rows = await Promise.race([connection.getRecentPrioritizationFees(account ? { lockedWritableAccounts: [account] } : undefined), sleep(1500).then(() => null)]);
-        const fees = (rows ?? []).map((r) => r.prioritizationFee).filter((f) => f > 0).sort((a, b) => a - b);
-        if (fees.length >= 5) {
-          const ours = Number(priority(via)) * 1e6 / CU[via === 'curve' ? 'curve' : 'jupiter'];
-          value = fees.filter((f) => f <= ours).length / fees.length; // share of recent trades we outbid
+    let fees = hit && now() - hit.at < 15_000 ? hit.fees : undefined;
+    if (fees === undefined) {
+      fees = null;
+      try {
+        if (typeof connection?.getRecentPrioritizationFees === 'function') {
+          const rows = await Promise.race([connection.getRecentPrioritizationFees(account ? { lockedWritableAccounts: [account] } : undefined), sleep(1500).then(() => null)]);
+          const list = (rows ?? []).map((r) => r.prioritizationFee).filter((f) => f > 0).sort((a, b) => a - b);
+          if (list.length >= 5) fees = list;
         }
-      }
-    } catch {}
-    busy.set(key, { at: now(), value });
-    if (busy.size > 300) busy.delete(busy.keys().next().value);
-    return value;
+      } catch {}
+      busy.set(key, { at: now(), fees });
+      if (busy.size > 300) busy.delete(busy.keys().next().value);
+    }
+    if (!fees) return null;
+    const ours = Number(priority(via) + extra) * 1e6 / CU[via === 'curve' ? 'curve' : 'jupiter'];
+    return fees.filter((f) => f <= ours).length / fees.length; // share of recent trades we outbid
   }
   const priority = (via) => BigInt(via === 'curve' ? Math.min(cfg.priorityFeeMaxLamports, 2_000_000) : cfg.priorityFeeMaxLamports);
   const tip = () => BigInt(Math.round((cfg.proTipSol ?? 0.001) * 1e9));
@@ -66,11 +71,15 @@ export function createPaperReality({ cfg, connection, clock = () => null, file, 
     return { ms: Math.round(150 + slots * slotMs()), slots, source: beat == null ? 'network estimate' : 'live network' };
   }
 
-  // The $100 setup: a server next to the validators sends in ~50ms and a Jito tip usually gets the trade
-  // into the next slot, sometimes one or two later. It never lands later than your own setup would.
-  function proLanding(homeMs) {
-    const r = random(), slots = 1 + (r < .6 ? 0 : r < .9 ? 1 : 2);
-    return Math.min(homeMs, Math.round(50 + slots * slotMs()));
+  // The $100 setup: a server next to the validators sends in ~50ms. Its slot depends on how the tip plus
+  // priority fee compares with the bots trading the same coin right now; with no fee data it assumes the
+  // next slot. Apart from a dropped bundle it never lands later than your own setup would. A dropped
+  // bundle (cfg.proDropRate, ~1 in 10) is noticed a few slots later and re-sent; it costs no fees.
+  async function proLanding(account, via, homeMs) {
+    const beat = await competition(account, via, tip()), r = random();
+    const slots = (beat == null || beat >= .9 ? 1 : beat >= .75 ? 2 : beat >= .5 ? 3 : 4) + (r < .7 ? 0 : r < .92 ? 1 : 2);
+    const dropped = random() < (cfg.proDropRate ?? 0.1);
+    return { ms: Math.min(homeMs, Math.round(50 + slots * slotMs())) + (dropped ? Math.round(50 + 3 * slotMs()) : 0), dropped };
   }
 
   // Coins out (buy) or lamports out (sell) for `amount`, from a curve or a quote of a nearby amount.
@@ -100,13 +109,14 @@ export function createPaperReality({ cfg, connection, clock = () => null, file, 
   async function land({ side, mint, amount, state0, readState, via, slippageBps, sentAt, seenAt, pos = null, account = null, tokenProgram = 'token' }) {
     const driver = mode();
     if (driver === 'perfect') return null;
-    const wait = await landing(account, via), proMs = proLanding(wait.ms);
-    // Read the market when each setup's trade would land: the $100 one first, then yours.
+    const wait = await landing(account, via), pro = await proLanding(account, via, wait.ms), proMs = pro.ms;
+    // Read the market when each setup's trade would land, in landing order, a moment late to cover the read's own lag.
     const readAt = async (ms) => {
-      if (sentAt + ms > now()) await sleep(sentAt + ms - now());
+      if (sentAt + ms + READ_LAG_MS > now()) await sleep(sentAt + ms + READ_LAG_MS - now());
       try { return (await readState()) ?? state0; } catch { return state0; }
     };
-    const statePro = await readAt(proMs), state1 = wait.ms > proMs ? await readAt(wait.ms) : statePro;
+    const first = await readAt(Math.min(proMs, wait.ms)), second = proMs === wait.ms ? first : await readAt(Math.max(proMs, wait.ms));
+    const statePro = proMs <= wait.ms ? first : second, state1 = proMs <= wait.ms ? second : first;
     const landMs = driver === 'pro' ? proMs : wait.ms;
     const lagMs = Math.max(0, Math.round(sentAt + landMs - (seenAt ?? sentAt))), limit = Number(slippageBps) / 10000;
     const newAccount = side === 'buy' && !accounts.has(mint) ? (tokenProgram === 'token2022' ? 'token2022' : 'token') : null;
@@ -128,7 +138,7 @@ export function createPaperReality({ cfg, connection, clock = () => null, file, 
       if (side === 'buy') Object.assign(modes[m], { out: 0n, fees: BASE_FEE + priority(via) });
       else modes[m].fees += BASE_FEE + priority(via);
     }
-    const result = { driver, modes, lagMs, landingMs: landMs, landingSource: driver === 'pro' ? 'estimate for the $100 setup' : wait.source };
+    const result = { driver, modes, lagMs, landingMs: landMs, landingSource: driver === 'pro' ? `estimate for the $100 setup${pro.dropped ? ', bundle dropped and re-sent' : ''}` : wait.source };
     if (modes[driver]?.failed) {
       noteFail(side, mint, modes[driver].moved);
       const failure = new Error(`Paper ${side} would have failed for real: the price moved ${modes[driver].moved.toFixed(1)}% in the ${(lagMs / 1000).toFixed(2)}s it took to land, past your ${limit * 100}% slippage limit. Failed trades still pay network fees.`);

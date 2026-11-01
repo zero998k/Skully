@@ -13,6 +13,7 @@ export const DEFAULTS = {
   priorityFeeMaxLamports: 1_000_000,
   paperRealism: 'home', // paper trades land with your real delay and fees ('pro' estimates a faster paid setup, 'perfect' = old paper)
   proTipSol: 0.001, // the per-trade Jito tip the 'pro' estimate pays
+  proDropRate: 0.1, // share of the 'pro' estimate's Jito bundles that get dropped and re-sent
   followSells: true,
   sellMode: 'mirror',
   onlyFirstBuy: true,

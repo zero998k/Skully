@@ -1,3 +1,14 @@
+## 1.18.5 — A tougher $100 setup estimate
+
+The 🚀 $100 setup paper mode now counts every part of a real trade it can:
+
+- **Busy coins:** your landing slot depends on how your tip and priority fee compare with what other bots are paying for that coin right now. When they pay more, you land later.
+- **Dropped trades:** about 1 in 10 Jito trades doesn't land. It gets re-sent a few slots later at the price at that point. Dropped trades cost no fees, the same as for real.
+- **Price-reading lag:** the price SolBoy reads is a moment behind the chain, so paper fills read a little later to stay on the safe side.
+- **The $100 a month:** the Reality check card shows your 🚀 result after paying for the setup, spread per day since your first realistic trade. Profit only counts once the setup has paid for itself.
+- Already counted: the delay, the price at landing, network and priority fees, the tip, the first-buy token account, and failed trades past your slippage limit.
+- Not counted on purpose: a paid setup also spots trades a bit sooner. Leaving that out keeps the estimate on the safe side.
+
 ## 1.18.4 — Cleaner Reality check
 
 - When the 🚀 $100 setup or ✨ Perfect runs your paper wallet, 🏠 My setup is hidden from the Reality check card and History. It's still recorded quietly in the background. You can switch back to 🏠 in Quick settings at any time, and it shows again.

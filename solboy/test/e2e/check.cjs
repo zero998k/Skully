@@ -34,6 +34,7 @@ F('Sell now', f.afterSellNow === 0, 'afterSellNow');
 F('cockpit layout shows sidebar, balance, hold-to-sell, wallets, missed, goal and feed', f.cockpitParts === true, 'cockpitParts');
 F('Ask SolBoy button never covers the sidebar buttons', f.sideNotCovered === true, 'sideNotCovered');
 F('🏠 is hidden unless it runs the paper wallet', f.homeHiddenOnPro === true, 'homeHiddenOnPro');
+F('🚀 shows its result after the $100/month setup cost', f.proAfterCost === true, 'proAfterCost');
 F('dev-sell alert banner when a copied wallet sells', f.devAlertShown === true, 'devAlertShown');
 F('per-coin take profit override', f.coinTp === true, 'coinTp');
 F('one-tap 25% sell', f.quarterSold === true, 'quarterSold');
@@ -184,7 +185,7 @@ check('live prices','Raydium and Meteora streaming checks ran',Object.keys(fl.ve
 for(const [name,ok]of Object.entries(fl.phoneUnit??{}))check('phone access',name,ok===true,ok);
 check('phone access','restart and permanent-link checks ran',Object.keys(fl.phoneUnit??{}).length===6,fl.phoneUnit);
 for(const [name,ok]of Object.entries(fl.realityUnit??{}))check('realistic paper',name,ok===true,ok);
-check('realistic paper','lag, fee, slippage and three-way checks ran',Object.keys(fl.realityUnit??{}).length===11,fl.realityUnit);
+check('realistic paper','lag, fee, slippage and three-way checks ran',Object.keys(fl.realityUnit??{}).length===13,fl.realityUnit);
 for(const name of ['phoneGuideOrPermanentLink','phoneWebSocketLive','phoneSellsSamePosition','phoneSetupFits','phoneRejectsWeakPassword','phoneLinkCreated','phoneRequiresLogin','phoneApiPrivate','phoneWrongPasswordRejected','phoneLiveState','phoneFits','phoneManifest','phoneSecretsBlocked','phoneLiveModeBlocked','phoneAssistantBlocked','phoneCannotOpenAnotherTunnel','phoneOriginProtected','phoneControlsSameBot','phoneLogoutRevokesSession','phoneStopRevokesLink','phoneSetupApiPrivate'])check('phone access',name,fl[name]===true,fl[name]);
 
 console.log(failed ? `\n${failed} check(s) FAILED. Details are in ${OUT}.` : '\nAll checks passed.');

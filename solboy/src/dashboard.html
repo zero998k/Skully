@@ -663,6 +663,7 @@ body.compact .slot{padding:10px}body.compact .slot .pnl{font-size:20px}body.comp
   .reality .rtile.on{border-color:var(--accent)}
   .reality .rtile span{font-weight:700;font-size:13px}.reality .rtile b{font-size:20px}.reality .rtile small{color:var(--ink-3);font-size:11px}
   .reality .rfacts{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px;font-size:13px}
+  .reality .rnet{margin:10px 0 0;padding:8px 10px;border:2px dashed var(--edge);border-radius:10px;font-size:14px}.reality .rnet small{color:var(--ink-3)}
   #history small.ways{display:block;color:var(--ink-3);font-size:11px;margin-top:2px}
   @media (max-width:560px){.reality .rgrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.reality .rtile{padding:8px;border-radius:12px}
     .reality .rtile span{font-size:11px}.reality .rtile b{font-size:15px;overflow-wrap:anywhere}.reality .rtile .mini{font-size:11px;padding:4px 6px}.reality .rfacts{font-size:12px}}
@@ -940,6 +941,12 @@ function livePrice(p){
 const REALISM={home:['🏠','My setup'],pro:['🚀','$100 setup'],perfect:['✨','Perfect']};
 // 🏠 is still recorded for every trade but only shown while it runs the paper wallet.
 const realismShown=()=>(S.quick?.paperRealism??'home')==='home'?['perfect','home','pro']:['perfect','pro'];
+// The 🚀 result only counts once the setup has paid for itself: $100 a month, spread per day since the first realistic trade.
+function proAfterCost(r){
+  const price=S?.solRate?.stale?null:S?.solRate?.price;if(!r?.trades||!r.since||!(price>0))return '';
+  const days=Math.max(1/24,(Date.now()-Date.parse(r.since))/864e5),usd=100*days/30.4,net=r.pro-usd/price;
+  return `<p class="rnet">🚀 after paying for the setup: <b class="${cls(net)}">${fmt(net)} SOL</b> <small>(${days<1?Math.round(days*24)+' hours':days.toFixed(1)+' days'} of $100/month ≈ $${usd.toFixed(2)})</small></p>`;
+}
 function renderReality(){
   const box=$('realityPanel'),r=S.reality,mode=S.quick?.paperRealism??'home';box.hidden=S.mode!=='paper';if(box.hidden)return;
   const sig=JSON.stringify([r,mode]);if(box.dataset.sig===sig)return;box.dataset.sig=sig;
@@ -947,6 +954,7 @@ function renderReality(){
   const shown=realismShown(),lagCost=r?.trades?r.perfect-r[mode==='perfect'?'pro':mode]-r.fees:0;
   box.innerHTML=`<h2><span class="ic" style="background:var(--win)">🔍</span>Reality check <small style="font-weight:400;font-size:12px;color:var(--ink-3)">same trades, ${shown.length} ways</small></h2>
     <div class="rgrid">${shown.map(tile).join('')}</div>
+    ${proAfterCost(r)}
     ${r?.trades?`<div class="rfacts"><span>⏱️ Typical lag <b>${r.lagMedianMs==null?'–':(r.lagMedianMs/1000).toFixed(2)+'s'}</b></span><span>📉 Lag + price moves cost <b>${fmt(-Math.max(0,lagCost))} SOL</b></span><span>💸 Fees <b>${fmt(-r.fees)} SOL</b></span><span>❌ Would have failed <b>${r.failedBuys} buys · ${r.failedSells} sells</b></span></div>`
       :'<p class="hint">Starts with your next paper trade. Each one lands after your natural delay at the live price, pays real fees, and fails only if the price moves past your slippage limit.</p>'}
     <p class="hint">🚀 is an estimate of a server + paid RPC + Jito tip setup.${shown.includes('home')?' 🏠 uses your real lag.':''} Real trades can still differ; a tiny real-money test is the final check.</p>`;

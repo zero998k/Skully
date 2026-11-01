@@ -107,11 +107,24 @@ const near=(a,b,eps=1e-6)=>Math.abs(Number(a)-Number(b))<eps;
 }
 // 6b. 🚀 is not instant: it lands sooner than 🏠 but still at a later price than the decision.
 {
- const f=setup({buySlippageBps:5000}),m=mint(),t0=Date.now();
+ const f=setup({buySlippageBps:5000,proDropRate:0}),m=mint(),t0=Date.now();
  f.connection.getAccountInfo=async()=>{f.curveReads++;const up=BigInt(1000+Math.round((Date.now()-t0)/50));return curveAccount(SOL0*up/1000n,TOK0*1000n/up);};
  await f.emit(m,'buy');const r=f.positions.get(m).reality,perfect=BigInt(r.perfect.tokens),pro=BigInt(r.pro.tokens),home=BigInt(r.home.tokens);
  assert(pro<perfect,`$100 setup pays for its delay too (${pro} vs ${perfect})`);assert(pro>=home,'$100 setup lands no later than yours');
  results.proSetupFillsAtItsOwnLandingPrice=true;
+}
+// 6c. On a busy coin where other bots outbid the tip, 🚀 waits for later slots.
+{
+ const f=setup({paperRealism:'pro',proDropRate:0}),m=mint();f.connection.getRecentPrioritizationFees=async()=>Array.from({length:20},()=>({slot:1,prioritizationFee:1e9}));
+ await f.emit(m,'buy');const row=readTrades(f.book.tradeLogFile)[0];assert(Number(row.lag_ms)>=850,`busy coin lands later (${row.lag_ms}ms)`);
+ results.proSetupQueuesBehindHigherTips=true;
+}
+// 6d. A dropped bundle is re-sent a few slots later and costs no extra fee.
+{
+ const f=setup({paperRealism:'pro',proDropRate:1,proTipSol:0.002}),m=mint();await f.emit(m,'buy');
+ const row=readTrades(f.book.tradeLogFile)[0],fees=(5000+1_000_000+2_039_280)/1e9;assert(Number(row.lag_ms)>=1700,`dropped bundle lands later (${row.lag_ms}ms)`);
+ assert(near(f.positions.get(m).solSpent,0.05+fees+0.002),'a dropped bundle pays nothing extra');
+ results.proSetupDroppedBundlesAreResent=true;
 }
 // 7. A dev's full sell read from an RPC node a moment behind no longer looks like a 50% sell.
 {

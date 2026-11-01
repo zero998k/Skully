@@ -66,5 +66,6 @@ export function reality(trades) {
     lagMedianMs: lags.length ? lags[Math.floor(lags.length / 2)] : null,
     failedBuys: failed.filter((t) => t.action.endsWith('buy')).length + missedBuys, failedSells: failed.filter((t) => t.action.endsWith('sell')).length,
     driver: rows.at(-1)?.realism ?? null,
+    since: rows[0]?.time ?? null,
   };
 }
